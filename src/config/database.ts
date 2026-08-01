@@ -7,7 +7,7 @@ export async function connectDatabase(): Promise<typeof mongoose> {
   const uri =
     process.env.MONGODB_URI ||
     process.env.MONGO_URI ||
-    `mongodb://${process.env.MONGO_HOST || "127.0.0.1"}:${process.env.MONGO_PORT || "27017"}/${process.env.MONGO_DATABASE || process.env.PGDATABASE || "soms"}`;
+    `mongodb://${process.env.MONGO_HOST || "127.0.0.1"}:${process.env.MONGO_PORT || "27017"}/${process.env.MONGO_DATABASE || "soms"}`;
 
   if (isConnected && mongoose.connection.readyState === 1) {
     return mongoose;
