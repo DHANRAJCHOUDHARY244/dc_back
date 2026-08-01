@@ -1,0 +1,22 @@
+import { Request, Response, NextFunction } from "express";
+import jwt from "jsonwebtoken";
+import { ReE } from "@services/generalHelper.service";
+import { UNAUTHORIZED_CODE } from "@constants/serverCode";
+import { AuthenticatedRequest } from "@constants/common.interface";
+
+export const bypassValidation = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const token = req.body.token || req.query.token || req.headers['token'];
+    try {
+        const bypass_token:any = req.query.bypass_token || req.params.bypass_token;
+        if (!bypass_token) {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET!);
+            req.user = decoded;
+        }
+        else {
+            req.bypass_token = decodeURIComponent(bypass_token);
+        }
+        next();
+    } catch (error) {
+        ReE(res, UNAUTHORIZED_CODE, "Invalid token");
+    }
+};

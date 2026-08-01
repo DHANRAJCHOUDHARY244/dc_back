@@ -1,0 +1,166 @@
+export enum OtpType {
+    FORGOT_PASSWORD = "FORGOT_PASSWORD",
+    VERIFY_EMAIL = "VERIFY_EMAIL",
+    RESET_PASSWORD = "RESET_PASSWORD"
+}
+
+export enum BasicStatus {
+	DISABLE = 0,
+	ENABLE = 1,
+}
+
+export enum PermissionType {
+	CATALOGUE = 0,
+	MENU = 1,
+	BUTTON = 2,
+}
+
+
+export enum PasswordRequestType{
+    RESET = "RESET",
+    FORGOT= "FORGOT"
+}
+
+export enum OtherGenderType {
+    TRANSGENDER = 'Transgender',
+    INTER_SEX = 'Inter-sex',
+    NON_BINARY = 'Non-binary',
+    PREFER_NOT_TO_SAY = 'Prefer not to say'
+ }
+ 
+ export enum GenderType {
+    MALE = "MALE",
+    FEMALE = "FEMALE"
+ }
+
+  export enum ResumeActionType{
+    UPDATE="UPDATE",
+    DELETE="DELETE",
+    ADD="ADD"
+  }
+
+export enum QuoteCustomerStatus {
+    PENDING = "PENDING",
+    ACCEPTED = "ACCEPTED",
+    REJECTED = "REJECTED",
+    EXPIRED = "EXPIRED",
+    DEAD="DEAD"
+}
+export enum PaymentStatus {
+   PENDING = "PENDING",
+   PAID = "PAID",
+   CANCELLED = "CANCELLED",
+   EXPIRED = "EXPIRED",
+   PARTIALLY_PAID = "PARTIALLY_PAID",
+   REFUNDED = "REFUNDED"
+}
+
+export enum QuoteKanbanStatus{
+    ACCEPTED="ACCEPTED",
+    SCHEDULED="SCHEDULED",
+    INSTALLED="INSTALLED",
+    PENDING="PENDING"
+}
+
+export enum StockStatus{
+    IN_STOCK="IN_STOCK",
+    OUT_OF_STOCK="OUT_OF_STOCK",
+    LOW_STOCK="LOW_STOCK",
+}
+
+export enum StockOrderStatus{
+    PENDING="PENDING",
+    ORDERED="ORDERED",
+    CONFIRMED="CONFIRMED",
+    DRIVER_ASSIGNED="DRIVER_ASSIGNED",
+    DELIVERED="DELIVERED",
+    CANCELLED="CANCELLED",
+    NOT_REQUIRED="NOT_REQUIRED"
+}
+
+export enum CompanyDesignationEnum {
+    CEO = "CEO",
+    COO = "COO",
+    CTO = "CTO",
+    CFO = "CFO",
+    MD = "MD",
+    DIRECTOR = "DIRECTOR",
+    MANAGER = "MANAGER",
+    TEAM_LEAD = "TEAM_LEAD",
+    SUPERVISOR = "SUPERVISOR",
+    STAFF = "STAFF",
+    INTERN = "INTERN",
+    HR = "HR",
+    ACCOUNTS = "ACCOUNTS",
+    SALES = "SALES",
+    MARKETING = "MARKETING",
+    SUPPORT = "SUPPORT",
+    OTHER = "OTHER",
+}
+
+export enum TimeEnum{
+    TODAY="TODAY",
+    YESTERDAY="YESTERDAY",
+    LAST_7_DAYS="LAST_7_DAYS",
+    LAST_30_DAYS="LAST_30_DAYS",
+    THIS_MONTH="THIS_MONTH",
+    LAST_MONTH="LAST_MONTH",
+    THIS_YEAR="THIS_YEAR",
+    LAST_YEAR="LAST_YEAR",
+    ALL_TIME="ALL_TIME"
+}
+
+export enum TaskType {
+  // ===== GENERIC =====
+  OTHER = "OTHER",
+
+  // ===== SALES / LEAD =====
+  LEAD_VISIT = "LEAD_VISIT",
+  LEAD_CONVERSION = "LEAD_CONVERSION",
+  LEAD_FOLLOW_UP = "LEAD_FOLLOW_UP",
+
+  // ===== INSTALLATION / OPS =====
+  INSTALLATION_VISIT = "INSTALLATION_VISIT",
+  INSTALLATION_SERVICE = "INSTALLATION_SERVICE",
+
+  // ===== SUPPORT =====
+  CUSTOMER_SUPPORT = "CUSTOMER_SUPPORT",
+
+  // ===== MARKETING =====
+  CONTENT_CREATION = "CONTENT_CREATION",
+  SEO_OPTIMIZATION = "SEO_OPTIMIZATION",
+  SOCIAL_MEDIA_POST = "SOCIAL_MEDIA_POST",
+
+  // ===== FINANCE =====
+  PAYMENT_FOLLOW_UP = "PAYMENT_FOLLOW_UP",
+
+  // ===== HR =====
+  INTERVIEW = "INTERVIEW",
+  ONBOARDING = "ONBOARDING",
+
+  // ===== TECH =====
+  BUG_FIX = "BUG_FIX",
+  FEATURE_DEVELOPMENT = "FEATURE_DEVELOPMENT",
+}
+
+export enum TaskStatus {
+    PENDING="PENDING", 
+    DONE="DONE", 
+    PARTIALLY_DONE="PARTIALLY_DONE"
+}
+
+export enum UploadCategory {
+  USER_PROFILE = "USER_PROFILE",
+  DOCUMENT = "DOCUMENT",
+  STOCK_CONFIRM = "STOCK_CONFIRM",
+  STOCK_DELIVERED = "STOCK_DELIVERED",
+  INVOICE = "INVOICE",
+  ACCOUNTS_STOCK_INVOICE = "ACCOUNTS_STOCK_INVOICE",
+  ALL_IN_ONE_JOB = "ALL_IN_ONE_JOB",
+  QUOTE = "QUOTE",
+  MISC = "MISC",
+  INSTALLER_SIGNATURE = "INSTALLER_SIGNATURE",
+  INSTALLER_DOCUMENT = "INSTALLER_DOCUMENT",
+  ASSESSMENT = "ASSESSMENT",
+  CRM_BRANDING = "CRM_BRANDING",
+}

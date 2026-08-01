@@ -1,0 +1,188 @@
+[
+  {
+    "id": "1",
+    "name": "Dashboard",
+    "parentId": null,
+    "label": "sys.menu.dashboard",
+    "icon": "ic-analysis",
+    "type": "0",
+    "route": "dashboard",
+    "order": "1",
+    "children": [
+      {
+        "id": "2",
+        "name": "Workbench",
+        "parentId": "1",
+        "label": "sys.menu.workbench",
+        "icon": null,
+        "type": "1",
+        "route": "workbench",
+        "order": null,
+        "children": [],
+        "component": "/dashboard/workbench/index.tsx",
+        "created_at": "2025-05-26 15:56:55",
+        "updated_at": "2025-05-26 15:56:55"
+      },
+      {
+        "id": "7",
+        "name": "Analysis",
+        "parentId": "1",
+        "label": "sys.menu.analysis",
+        "icon": null,
+        "type": "1",
+        "route": "analysis",
+        "order": null,
+        "children": [],
+        "component": "/dashboard/analysis/index.tsx",
+        "created_at": "2025-05-26 16:00:42",
+        "updated_at": "2025-05-26 16:00:42"
+      }
+    ],
+    "component": null,
+    "created_at": "2025-05-26 15:46:44",
+    "updated_at": "2025-05-26 15:46:44"
+  },
+  {
+    "id": "8",
+    "name": "Management",
+    "parentId": null,
+    "label": "sys.menu.management",
+    "icon": "ic-management",
+    "type": "0",
+    "route": "management",
+    "order": "2",
+    "children": [
+      {
+        "id": "9",
+        "name": "User",
+        "parentId": "8",
+        "label": "sys.menu.user.index",
+        "icon": null,
+        "type": "0",
+        "route": "user",
+        "order": null,
+        "children": [
+          {
+            "id": "10",
+            "name": "Profile",
+            "parentId": "9",
+            "label": "sys.menu.user.profile",
+            "icon": null,
+            "type": "1",
+            "route": "profile",
+            "order": null,
+            "children": [],
+            "component": "/management/user/profile/index.tsx",
+            "created_at": "2025-05-26 16:10:44",
+            "updated_at": "2025-05-26 16:10:44"
+          },
+          {
+            "id": "11",
+            "name": "Account",
+            "parentId": "9",
+            "label": "sys.menu.user.account",
+            "icon": null,
+            "type": "1",
+            "route": "account",
+            "order": null,
+            "children": [],
+            "component": "/management/user/account/index.tsx",
+            "created_at": "2025-05-26 16:11:32",
+            "updated_at": "2025-05-26 16:11:32"
+          }
+        ],
+        "component": null,
+        "created_at": "2025-05-26 16:09:00",
+        "updated_at": "2025-05-26 16:09:00"
+      },
+      {
+        "id": "12",
+        "name": "System",
+        "parentId": "8",
+        "label": "sys.menu.system.index",
+        "icon": null,
+        "type": "0",
+        "route": "system",
+        "order": null,
+        "children": [
+          {
+            "id": "13",
+            "name": "Organization",
+            "parentId": "12",
+            "label": "sys.menu.system.organization",
+            "icon": null,
+            "type": "1",
+            "route": "organization",
+            "order": null,
+            "children": [],
+            "component": "/management/system/organization/index.tsx",
+            "created_at": "2025-05-26 16:16:41",
+            "updated_at": "2025-05-26 16:16:41"
+          },
+          {
+            "id": "14",
+            "name": "Permission",
+            "parentId": "12",
+            "label": "sys.menu.system.permission",
+            "icon": null,
+            "type": "1",
+            "route": "permission",
+            "order": null,
+            "children": [],
+            "component": "/management/system/permission/index.tsx",
+            "created_at": "2025-05-26 16:17:50",
+            "updated_at": "2025-05-26 16:17:50"
+          },
+          {
+            "id": "17",
+            "name": "Role",
+            "parentId": "12",
+            "label": "sys.menu.system.role",
+            "icon": null,
+            "type": "1",
+            "route": "role",
+            "order": null,
+            "children": [],
+            "component": "/management/system/role/index.tsx",
+            "created_at": "2025-05-26 16:18:49",
+            "updated_at": "2025-05-26 16:18:49"
+          },
+          {
+            "id": "18",
+            "name": "User",
+            "parentId": "12",
+            "label": "sys.menu.system.user",
+            "icon": null,
+            "type": "1",
+            "route": "user",
+            "order": null,
+            "children": [],
+            "component": "/management/system/user/index.tsx",
+            "created_at": "2025-05-26 16:22:38",
+            "updated_at": "2025-05-26 16:22:38"
+          },
+          {
+            "id": "19",
+            "name": "User Detail",
+            "parentId": "12",
+            "label": "sys.menu.system.user_detail",
+            "icon": null,
+            "type": "1",
+            "route": "user/:id",
+            "order": null,
+            "children": [],
+            "component": "/management/system/user/detail.tsx",
+            "created_at": "2025-05-26 16:23:34",
+            "updated_at": "2025-05-26 16:23:34"
+          }
+        ],
+        "component": null,
+        "created_at": "2025-05-26 16:15:36",
+        "updated_at": "2025-05-26 16:15:36"
+      }
+    ],
+    "component": null,
+    "created_at": "2025-05-26 16:03:20",
+    "updated_at": "2025-05-26 16:03:20"
+  }
+]

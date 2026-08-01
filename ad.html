@@ -1,0 +1,122 @@
+export const advertisingEmailTemplate = (name) => {
+  return `
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Som's Energy</title>
+    <style>
+      body {
+        background-color: #f4f4f7;
+        font-family: "Segoe UI", Arial, sans-serif;
+        color: #333;
+        margin: 0;
+        padding: 0;
+      }
+
+      .container {
+        max-width: 600px;
+        background: #ffffff;
+        margin: 30px auto;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+      }
+
+      .header {
+        text-align: center;
+        padding: 20px;
+        background: #f9fafb;
+      }
+
+      .header img {
+        max-width: 180px;
+      }
+
+      .content {
+        padding: 30px;
+        line-height: 1.6;
+      }
+
+      .cta {
+        display: inline-block;
+        margin-top: 16px;
+        background: #219753;
+        color: #fff !important;
+        text-decoration: none;
+        padding: 12px 24px;
+        border-radius: 6px;
+        font-weight: 600;
+        transition: background 0.3s ease;
+      }
+
+      .cta:hover {
+        background: #1a7a43;
+      }
+
+      .footer {
+        font-size: 13px;
+        text-align: center;
+        color: #777;
+        background: #f9fafb;
+        padding: 15px;
+      }
+
+      .footer a {
+        color: #219753;
+        text-decoration: none;
+      }
+
+      @media only screen and (max-width: 600px) {
+        .content {
+          padding: 20px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="header">
+        <img src="https://somsenergy.com.au/wp-content/uploads/2025/03/Soms-Energy-Logo-Design-png-colored.png" alt="Som's Energy" />
+      </div>
+
+      <div class="content">
+        <p>Hi <strong>${name || "there"}</strong>,</p>
+
+        <p>
+          At <strong>Som’s Energy</strong>, we help Australian households lower their energy costs through efficient and reliable 
+          <strong>solar, battery, and heat pump</strong> solutions.
+        </p>
+
+        <p>
+          If you’re planning to upgrade your system or explore available rebates, our team would be happy to offer a 
+          <strong>free consultation</strong> — no obligation, just expert advice tailored to your home.
+        </p>
+
+        <p style="text-align:center;">
+          <a href="https://somsenergy.com.au/contact/" class="cta" target="_blank">Book Free Consultation</a>
+        </p>
+
+        <p style="margin-top:20px;">
+          Warm regards,<br/>
+          <strong>Som’s Energy Team</strong><br/>
+          <a href="mailto:info@somsenergy.com.au">info@somsenergy.com.au</a> | 
+          <a href="tel:+61300134410">1300 134 410</a>
+        </p>
+      </div>
+
+      <div class="footer">
+        <p>Som’s Energy | Suite 535/1 Queens Road, Melbourne VIC 3004</p>
+        <p><a href="https://somsenergy.com.au">somsenergy.com.au</a></p>
+        <p>
+          You’re receiving this message because you’ve interacted with Som’s Energy.  
+          <a href="#">Unsubscribe</a> to stop receiving updates.
+        </p>
+      </div>
+    </div>
+  </body>
+  </html>
+  `;
+};

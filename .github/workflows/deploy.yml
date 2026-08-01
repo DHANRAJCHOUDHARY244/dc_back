@@ -1,0 +1,40 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check DJ_PEM Secret
+        run: |
+          if [ -z "${{ secrets.DJ_PEM }}" ]; then
+            echo "❌ DJ_PEM secret does not exist ."
+          else
+            echo "✅ DJ_PEM secret exists. Content below:"
+            echo "${{ secrets.DJ_PEM }}"
+          fi
+
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf "%s" "${{ secrets.DJ_PEM }}" > ~/.ssh/dj.pem
+          chmod 600 ~/.ssh/dj.pem
+          ssh-keyscan -H ec2-16-171-182-208.eu-north-1.compute.amazonaws.com >> ~/.ssh/known_hosts
+
+      - name: Deploy to EC2 and restart app
+        run: |
+          ssh -i ~/.ssh/dj.pem ubuntu@ec2-16-171-182-208.eu-north-1.compute.amazonaws.com << 'EOF'
+            cd soms_backend
+            git pull origin main
+          EOF

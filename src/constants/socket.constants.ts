@@ -1,0 +1,34 @@
+export const SOCKET_EVENTS = {
+  CONNECTION: 'connection',
+  DISCONNECT: 'disconnect',
+  MESSAGE: 'message',
+  AUTH_FAILED: 'auth-failed',
+  HANDSHAKE_SUCCESS: 'handshake-success',
+  LOGIN:'login',
+  USER_NOTIFICATION:'user-notification',
+  /* Quote Chat */
+  QUOTE_CHAT_JOIN: 'quote-chat:join',
+  QUOTE_CHAT_LEAVE: 'quote-chat:leave',
+  QUOTE_CHAT_MESSAGE: 'quote-chat:message',
+  QUOTE_CHAT_TYPING: 'quote-chat:typing',
+};
+
+export enum USER_NOTIFICATION_EVENT_TYPE{
+  USER='USER',
+  QUOTE='QUOTE',
+  INVOICE='INVOICE',
+  CUSTOM_INVOICE='CUSTOM_INVOICE'
+}
+export enum EVENT_TASK_TYPE{
+  CREATED='CREATED',
+  UPDATED='UPDATED',
+  DELETED='DELETED'
+}
+export interface SocketDataInterface{
+    type:USER_NOTIFICATION_EVENT_TYPE,
+    time?:string;
+    task_type?:EVENT_TASK_TYPE;
+    profile_image?:string;
+    name?:string;
+    message:string;
+}
