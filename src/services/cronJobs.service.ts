@@ -3,6 +3,7 @@ import { CronEngine } from "./cron-engine.service";
 import { DAILY, HOURLY, MINUTE, MORNING, NIGHT } from "@constants/cron.constants";
 import quotesController from "@controllers/quotes.controller";
 import { deleteOldLogsCron } from "@utils/logSaver";
+import { runLeadSupervisor } from "@services/leadWorkflow.service";
 
 export const loadCrons = () => {
   
@@ -61,8 +62,12 @@ export const loadCrons = () => {
   CronEngine.register({
     name: "morning-9am",
     schedule: MORNING.AM_9,
-    functions: [],
-    enabled: false
+    functions: [
+      () => {
+        void runLeadSupervisor({ hours: 24 });
+      },
+    ],
+    enabled: true,
   });
 
   // NIGHT

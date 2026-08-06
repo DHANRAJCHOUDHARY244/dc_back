@@ -2,6 +2,7 @@ import { AuthenticatedRequest } from "@constants/common.interface";
 import { UploadCategory } from "@constants/common.enum";
 import { BAD_REQUEST_CODE, FORBIDDEN_CODE, SERVER_ERROR_CODE, SUCCESS_CODE } from "@constants/serverCode";
 import { accountsRebateRepository } from "@repositories";
+import { syncPipelineFromRebate } from "@services/accountsPipelineSync.service";
 import { ReE, ReS } from "@services/generalHelper.service";
 import { getRelativeFilePath, uploadFiles } from "@utils/fileUpload.helper";
 import { Response } from "express";
@@ -102,11 +103,18 @@ function sanitizeBody(body: Record<string, unknown>) {
 		"customer_phone",
 		"customer_address",
 		"customer_company",
+		"quote_id",
+		"claim_status",
 	] as const;
 
 	const out: Record<string, unknown> = {};
 	for (const key of allowed) {
 		if (body[key] !== undefined) out[key] = body[key];
+	}
+	if (out.quote_id != null && out.quote_id !== "") out.quote_id = Number(out.quote_id) || null;
+	else if (out.quote_id === "") out.quote_id = null;
+	if (out.claim_status && !["CLAIM_PENDING", "SUBMITTED", "RECEIVED"].includes(String(out.claim_status))) {
+		out.claim_status = "CLAIM_PENDING";
 	}
 
 	let items: ReturnType<typeof normalizeItem>[] = [];
@@ -145,6 +153,7 @@ function sanitizeBody(body: Record<string, unknown>) {
 	}
 	if (out.status === "PAID" && !out.paid_date) out.paid_date = new Date();
 	if (out.status === "UNPAID") out.paid_date = null;
+	if (out.status === "PAID") out.claim_status = "RECEIVED";
 	return out;
 }
 
@@ -371,6 +380,7 @@ class AccountsRebateController {
 				created_by: req.user?.id,
 				updated_by: req.user?.id,
 			});
+			await syncPipelineFromRebate(created as any, req.user?.id);
 			return ReS(res, SUCCESS_CODE, "Rebate created.", created);
 		} catch (err: any) {
 			return ReE(res, SERVER_ERROR_CODE, err.message || err);
@@ -391,6 +401,7 @@ class AccountsRebateController {
 			const updated = await accountsRebateRepository.updateById(id, {
 				$set: { ...data, updated_by: req.user?.id },
 			});
+			await syncPipelineFromRebate((updated as any) || { ...existing, ...data }, req.user?.id);
 			return ReS(res, SUCCESS_CODE, "Rebate updated.", updated);
 		} catch (err: any) {
 			return ReE(res, SERVER_ERROR_CODE, err.message || err);

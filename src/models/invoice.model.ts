@@ -18,6 +18,10 @@ const InvoiceSchema = new Schema(
     dateOfDue: { type: Date, required: true },
     paid_date: { type: Date },
     status_updated_date: { type: Date },
+    /** Event date for the current payment status (user-chosen). */
+    payment_status_date: { type: Date },
+    payment_notes: { type: String, default: "" },
+    payment_history: jsonArray,
     address: { type: String },
     progress: jsonArray,
   },

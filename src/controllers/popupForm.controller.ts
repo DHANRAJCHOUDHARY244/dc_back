@@ -3,6 +3,7 @@ import { popupFormRepository, roleRepository, userRepository } from "@repositori
 import { generate_Hash_Password, generateRandomString, ReE, ReS } from "@services/generalHelper.service";
 import { Request, Response } from "express";
 import { Roles } from "src/data/dataInserter";
+import { createEnquiryLead } from "@services/leadWorkflow.service";
 
 class PopupFormController {
     async addAppendUser(data: { address: string; email: string; mobile: string; name: string; }) {
@@ -40,8 +41,29 @@ class PopupFormController {
             const { address, email, mobile, name, message, product } = req.body;
             
             await this.addAppendUser({ address, email, mobile, name });
-            await popupFormRepository.create({ name, email, mobile, address, message, product });
-            return ReS(res, 200, "Form submitted successfully");
+            const saved: any = await popupFormRepository.create({ name, email, mobile, address, message, product });
+
+            let leadResult: any = null;
+            try {
+                leadResult = await createEnquiryLead({
+                    name,
+                    phone: mobile,
+                    email,
+                    address,
+                    source: "Landing Page",
+                    interested_in: product ? [String(product)] : [],
+                    note: message,
+                    preferred_contact: "WhatsApp",
+                    popup_id: saved?.id,
+                });
+            } catch (leadErr) {
+                console.error("Popup form → lead sync failed:", leadErr);
+            }
+
+            return ReS(res, 200, "Form submitted successfully", {
+                lead_id: leadResult?.lead?.id ?? null,
+                welcome_message: leadResult?.welcome_message ?? null,
+            });
         } catch (error) {
             return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);
         }

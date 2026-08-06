@@ -23,6 +23,10 @@ const StockOrderSchema = new Schema(
     driver_vehicle_no: { type: String },
     driver_email: { type: String },
     driver_mob: { type: String },
+    /** Expected delivery window shown to the customer */
+    expected_delivery_date: { type: Date },
+    expected_delivery_time: { type: String },
+    tracking_number: { type: String },
     company_id: { type: Number, required: true },
     emails_sent: { type: Schema.Types.Mixed, default: { to: "", cc: [], bcc: [] } },
     bypass_token: { type: Schema.Types.Mixed, default: { crm: "", company: "", driver: "" } },

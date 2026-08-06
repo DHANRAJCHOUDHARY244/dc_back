@@ -10,6 +10,7 @@ import {
 } from "@repositories";
 import { USER_NOTIFICATION_EVENT_TYPE } from "@constants/socket.constants";
 import { TimeEnum } from "@constants/common.enum";
+import { buildSalesPerformancePipeline } from "@services/salesPipeline.service";
 
 class DashboardController {
 
@@ -327,6 +328,24 @@ async getCustomInvoiceRevenueOverTime(req: AuthenticatedRequest, res: Response) 
     return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);
   }
 }
+
+  async getSalesPerformancePipeline(req: AuthenticatedRequest, res: Response) {
+    try {
+      const daysRaw = req.query.days;
+      const days =
+        daysRaw === undefined || daysRaw === null || daysRaw === "" || daysRaw === "all"
+          ? null
+          : Number(daysRaw);
+      const data = await buildSalesPerformancePipeline(
+        { id: req.user.id, role: req.user.role },
+        { days: Number.isNaN(days as any) ? null : days },
+      );
+      return ReS(res, SUCCESS_CODE, "Sales Performance Pipeline retrieved", data);
+    } catch (error) {
+      console.error("getSalesPerformancePipeline:", error);
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);
+    }
+  }
 
 }
 

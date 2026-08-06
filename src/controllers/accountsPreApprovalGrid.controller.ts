@@ -2,6 +2,7 @@ import { AuthenticatedRequest } from "@constants/common.interface";
 import { UploadCategory } from "@constants/common.enum";
 import { BAD_REQUEST_CODE, FORBIDDEN_CODE, SERVER_ERROR_CODE, SUCCESS_CODE } from "@constants/serverCode";
 import { accountsPreApprovalGridRepository } from "@repositories";
+import { syncPipelineFromPreApprovalGrid } from "@services/accountsPipelineSync.service";
 import { ReE, ReS } from "@services/generalHelper.service";
 import { getRelativeFilePath, uploadFiles } from "@utils/fileUpload.helper";
 import { Response } from "express";
@@ -39,6 +40,7 @@ function sanitizeBody(body: Record<string, unknown>) {
 		"customer_phone",
 		"customer_address",
 		"customer_company",
+		"quote_id",
 	] as const;
 
 	const out: Record<string, unknown> = {};
@@ -46,6 +48,8 @@ function sanitizeBody(body: Record<string, unknown>) {
 		if (body[key] !== undefined) out[key] = body[key];
 	}
 	if (out.amount != null) out.amount = Number(out.amount) || 0;
+	if (out.quote_id != null && out.quote_id !== "") out.quote_id = Number(out.quote_id) || null;
+	else if (out.quote_id === "") out.quote_id = null;
 	if (out.record_date) out.record_date = new Date(String(out.record_date));
 	if (out.paid_date) out.paid_date = new Date(String(out.paid_date));
 	else if (out.paid_date === null || out.paid_date === "") out.paid_date = null;
@@ -194,6 +198,7 @@ class AccountsPreApprovalGridController {
 				created_by: req.user?.id,
 				updated_by: req.user?.id,
 			});
+			await syncPipelineFromPreApprovalGrid(created as any, req.user?.id);
 			return ReS(res, SUCCESS_CODE, "Record created.", created);
 		} catch (err: any) {
 			return ReE(res, SERVER_ERROR_CODE, err.message || err);
@@ -211,6 +216,7 @@ class AccountsPreApprovalGridController {
 			const updated = await accountsPreApprovalGridRepository.updateById(id, {
 				$set: { ...data, updated_by: req.user?.id },
 			});
+			await syncPipelineFromPreApprovalGrid((updated as any) || { ...existing, ...data }, req.user?.id);
 			return ReS(res, SUCCESS_CODE, "Record updated.", updated);
 		} catch (err: any) {
 			return ReE(res, SERVER_ERROR_CODE, err.message || err);

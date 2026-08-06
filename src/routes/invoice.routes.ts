@@ -11,6 +11,7 @@ import { bypassValidation } from 'src/middleware/bypass_token.middleware';
 // 💳 Update payment status (Paid / Cancelled / Pending)
 router.post("/v1/add", invoiceController.createOrUpdateInvoice.bind(invoiceController));
 router.post("/v1/invoices",  invoiceController.getInvoices.bind(invoiceController));
+router.post("/v1/payment-status-counts", invoiceController.getPaymentStatusCounts.bind(invoiceController));
 router.get("/:id",bypassValidation, invoiceController.getInvoiceById.bind(invoiceController));
 router.delete("/v1/:id", invoiceController.deleteInvoice.bind(invoiceController));
 router.put("/v1/payment-status", invoiceController.updateInvoicePaymentStatus.bind(invoiceController));

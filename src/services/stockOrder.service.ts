@@ -1,10 +1,37 @@
 import { sendEventEmail } from "@services/email.service";
 import notificationController from "@controllers/notification.controller";
 import { followUpEmailTemplate } from "@template/followUpEmailTemplate";
+import { stockDeliveryScheduledTemplate } from "@template/stockDeliveryScheduled";
 import { getCompanyConfig } from "@services/crmSettings.service";
 import { sendEmail } from "@utils/email";
+import { quoteRepository } from "@repositories";
 
 const FRONT = process.env.FRONT_URL || "";
+
+function formatAuDate(value?: string | Date | null) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function buildProductListHtml(order: any): string {
+  const meta = order.stock_product_metadata;
+  const items = Array.isArray(meta)
+    ? meta
+    : Array.isArray(meta?.items)
+      ? meta.items
+      : [];
+  if (!items.length) return "<em>See order details</em>";
+  const rows = items
+    .map((item: any) => {
+      const name = item.name || item.product_name || item.description || "Item";
+      const qty = item.quantity != null ? ` × ${item.quantity}` : "";
+      return `<div>${name}${qty}</div>`;
+    })
+    .join("");
+  return rows || "<em>See order details</em>";
+}
 
 class StockOrderService {
   async sendCreatedNotification(order: any) {
@@ -65,6 +92,53 @@ class StockOrderService {
       });
     } catch (err) {
       console.error("sendConfirmedNotification error:", err);
+    }
+  }
+
+  /** Customer email: order confirmed + delivery scheduled (filled on confirm). */
+  async sendCustomerDeliveryScheduledEmail(order: any) {
+    try {
+      let quote: any = order?.quote;
+      if (!quote?.customer && order?.quote_id) {
+        quote = await quoteRepository.findOne(
+          { id: Number(order.quote_id) },
+          {
+            populate: { path: "customer", select: "id name email address mobile_no" },
+            lean: true,
+          },
+        );
+      }
+
+      const customerEmail = quote?.customer?.email || quote?.custEmail;
+      const customerName = quote?.name || quote?.customer?.name || quote?.custName || "Customer";
+
+      if (!customerEmail) {
+        console.warn(`sendCustomerDeliveryScheduledEmail: no customer email for stock #${order.id}`);
+        return;
+      }
+
+      const cfg = await getCompanyConfig();
+      const html = stockDeliveryScheduledTemplate(
+        {
+          customerName,
+          orderNumber: order.id,
+          productListHtml: buildProductListHtml(order),
+          orderDate: formatAuDate(order.stock_order_date || order.created_at),
+          deliveryDate: formatAuDate(order.expected_delivery_date || order.stock_confirm_date),
+          deliveryTime: order.expected_delivery_time || "—",
+          deliveryAddress: order.address || quote?.customer?.address || quote?.address || "—",
+          driverName: order.driver_name || "—",
+          driverPhone: order.driver_mob || "—",
+          vehicleNumber: order.driver_vehicle_no || "—",
+          trackingNumber: order.tracking_number || "—",
+        },
+        cfg,
+      );
+
+      const subject = `Your Order Has Been Confirmed & Delivery Scheduled – ${cfg.name}`;
+      await sendEmail(customerEmail, subject, html);
+    } catch (err) {
+      console.error("sendCustomerDeliveryScheduledEmail error:", err);
     }
   }
 

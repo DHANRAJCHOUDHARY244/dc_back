@@ -10,6 +10,7 @@
     "lint:fix": "eslint src --fix",
     "import:calculator-catalog": "ts-node -r tsconfig-paths/register src/scripts/importCalculatorCatalogFromProducts.ts",
     "import:calculator-products": "ts-node -r tsconfig-paths/register src/scripts/importCalculatorCatalogFromProducts.ts --products-only",
+    "migrate:quote-pipeline": "ts-node -r tsconfig-paths/register src/scripts/migrateQuotePipelineStatuses.ts",
     "cluster-mode": "pm2 start src/app.ts --interpreter ts-node -i 0",
     "cluster-mode-foreground": "pm2 start src/app.ts --interpreter ts-node --no-daemon -i 0",
     "stop-cluster": "pm2 stop all",
@@ -73,7 +74,7 @@
     "pdfkit": "^0.19.1",
     "pino-pretty": "^13.0.0",
     "slugify": "^1.6.6",
-    "socket.io": "^4.8.1",
+    "socket.io": "^4.8.3",
     "systeminformation": "^5.27.11",
     "tsconfig-paths": "^4.2.0",
     "xlsx": "^0.18.5"

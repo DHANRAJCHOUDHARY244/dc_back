@@ -17,6 +17,7 @@ import {
 } from "@services/generalHelper.service";
 import { Roles } from "src/data/dataInserter";
 import { AuthenticatedRequest } from "@constants/common.interface";
+import { createEnquiryLead } from "@services/leadWorkflow.service";
 
 class ContactFormController {
   async addAppendUser(data: ContactFormPayload) {
@@ -60,9 +61,32 @@ class ContactFormController {
         heard_about_us: payload.heard_about_us,
       });
       await this.addAppendUser(payload);
+
+      let leadResult: any = null;
+      try {
+        leadResult = await createEnquiryLead({
+          name: payload.name,
+          phone: payload.mobile,
+          email: payload.email,
+          address: payload.address,
+          postcode: payload.postcode,
+          state: payload.subsurb,
+          source: "Website",
+          property_type: payload.select_property_type,
+          interested_in: payload.interested_in,
+          note: payload.message,
+          preferred_contact: "WhatsApp",
+          cf_id: (saved as any)?.id,
+        });
+      } catch (leadErr) {
+        console.error("Contact form → lead sync failed:", leadErr);
+      }
+
       return ReS(res, SUCCESS_CODE, "DATA SAVED SUCCESSFULLY", {
         success: true,
         data: saved,
+        lead_id: leadResult?.lead?.id ?? null,
+        welcome_message: leadResult?.welcome_message ?? null,
       });
     } catch (error) {
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);

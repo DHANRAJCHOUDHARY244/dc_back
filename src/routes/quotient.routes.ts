@@ -28,4 +28,9 @@ router.post("/v1/get-kanban-quotes",quotesController.getKanbanQuotes.bind(quotes
 router.post("/v1/move-kanban",quotesController.updateKanbanMovement.bind(quotesController));
 router.get("/v1/get-sender-list",quotesController.quoteSenderNames.bind(quotesController));
 router.post("/v1/update-install-status",quotesController.updateInstallStatus.bind(quotesController));
+router.post("/v1/schedule-installation", quotesController.scheduleInstallation.bind(quotesController));
+router.post("/v1/reschedule-installation", quotesController.rescheduleInstallation.bind(quotesController));
+router.post("/v1/cancel-project", quotesController.cancelProject.bind(quotesController));
+router.post("/v1/pipeline-counts", quotesController.getPipelineCounts.bind(quotesController));
+router.post("/v1/close-job", quotesController.closeQuoteJob.bind(quotesController));
 export default router;

@@ -121,7 +121,7 @@ class StockOrderController {
     try {
       const { id, bypass_token }:any = req.params;
       const files = req.files as any;
-      const { confirm_date, driver_name, driver_vehicle_name, driver_vehicle_no, driver_email, driver_mob } = req.body;
+      const { confirm_date, driver_name, driver_vehicle_name, driver_vehicle_no, driver_email, driver_mob, expected_delivery_date, expected_delivery_time, tracking_number } = req.body;
 
       if (!id) return ReE(res, BAD_REQUEST_CODE, "Stock order id is required.");
 
@@ -180,15 +180,26 @@ class StockOrderController {
         driver_vehicle_name,
         driver_vehicle_no,
         driver_email,
-        driver_mob
+        driver_mob,
+        expected_delivery_time: expected_delivery_time || "",
+        tracking_number: tracking_number || "",
       };
+      if (expected_delivery_date) {
+        updateData.expected_delivery_date = new Date(expected_delivery_date);
+      }
 
       await stockOrderRepository.updateMany({ id: Number(id) }, { $set: updateData });
-      const updated = await stockOrderRepository.findById(Number(id));
+      const updated = await stockOrderRepository.findById(Number(id), {
+        populate: stockOrderDetailPopulate,
+        lean: true,
+      });
 
       StockOrderService.sendConfirmedNotification(updated).catch((e) => console.error("StockOrderService error:", e.message));
+      StockOrderService.sendCustomerDeliveryScheduledEmail(updated).catch((e) =>
+        console.error("Customer delivery email error:", e.message),
+      );
 
-      return ReS(res, SUCCESS_CODE, "Stock confirmed successfully.", updated);
+      return ReS(res, SUCCESS_CODE, "Stock confirmed successfully. Customer delivery email queued.", updated);
     } catch (error: any) {
       console.error("Error in confirmStock:", error);
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);

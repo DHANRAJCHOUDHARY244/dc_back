@@ -5,6 +5,8 @@ const router = Router();
 
 router.post("/v1/add",customInvoiceController.addNew.bind(customInvoiceController));
 router.put("/v1/update-custom-invoice", customInvoiceController.update.bind(customInvoiceController));
+router.put("/v1/payment-status", customInvoiceController.updatePaymentStatus.bind(customInvoiceController));
+router.post("/v1/payment-status-counts", customInvoiceController.getPaymentStatusCounts.bind(customInvoiceController));
 router.delete("/v1/custom-invoice/:id", customInvoiceController.deleteCustomInvoice.bind(customInvoiceController));
 router.get("/custom-invoice/:id",bypassValidation ,customInvoiceController.getCustomInvoiceById.bind(customInvoiceController));
 router.post("/v1/custom-invoices", customInvoiceController.getCustomInvoices.bind(customInvoiceController));

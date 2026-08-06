@@ -7,4 +7,5 @@ router.get('/workbench/top-jobs-quotes-invoices',dashboardController.getTopJobsI
 router.get('/workbench/top-installers-customers',dashboardController.getTopEntities.bind(dashboardController));
 router.get('/workbench/invoice-revenue',dashboardController.getRevenueOverTime.bind(dashboardController));
 router.get('/workbench/custom-invoice-revenue',dashboardController.getCustomInvoiceRevenueOverTime.bind(dashboardController));
+router.get('/sales-performance-pipeline', dashboardController.getSalesPerformancePipeline.bind(dashboardController));
 export default router;

@@ -26,6 +26,11 @@ import {
   visitorLogsRepository,
 } from "@repositories";
 import { PaymentStatus, QuoteCustomerStatus, UploadCategory } from "@constants/common.enum";
+import {
+  ALL_PIPELINE_STATUSES,
+  normalizePipelineStatus,
+  QuotePipelineStatus,
+} from "@constants/quotePipeline.constants";
 import { fileUpload } from "express-fileupload";
 import { s3Service } from "@services/s3.service";
 import { sendEventEmail } from "@services/email.service";
@@ -34,11 +39,78 @@ import { Roles } from "src/data/dataInserter";
 import notificationController from "./notification.controller";
 import { sendMasterQuoteEmail } from "@services/quoteMasterEmail.service";
 import { QuoteEmailType } from "@constants/quoteEmailconstants";
+import { advanceQuotePipeline } from "@services/quotePipeline.service";
+import { installationScheduledTemplate } from "@template/installationScheduled";
+import { installationRescheduledTemplate } from "@template/installationRescheduled";
+import { projectCancelledTemplate } from "@template/projectCancelled";
+import { getCompanyConfig } from "@services/crmSettings.service";
+import { sendEmail } from "@utils/email";
 
 import path  from 'path';
 import  fs  from 'fs';
 import mongoose from "mongoose";
 import { uploadFiles } from "@utils/fileUpload.helper";
+
+function formatAuDate(value?: string | Date | null) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function matchItemCategory(item: any, keywords: string[]) {
+  const hay = `${item?.category || ""} ${item?.name || ""} ${item?.description || ""} ${item?.brand || ""}`.toLowerCase();
+  return keywords.some((k) => hay.includes(k));
+}
+
+function summarizeItems(items: any[], keywords: string[]) {
+  const matched = (items || []).filter((it) => matchItemCategory(it, keywords));
+  if (!matched.length) return "N/A";
+  return matched
+    .map((it) => {
+      const name = it.name || it.description || "Item";
+      const qty = it.quantity != null ? ` × ${it.quantity}` : "";
+      return `${name}${qty}`;
+    })
+    .join(", ");
+}
+
+function buildProductListHtml(items: any[]) {
+  if (!Array.isArray(items) || !items.length) return "<em>See quote details</em>";
+  return items
+    .map((it) => {
+      const name = it.name || it.description || "Item";
+      const qty = it.quantity != null ? ` × ${it.quantity}` : "";
+      return `<div>${name}${qty}</div>`;
+    })
+    .join("");
+}
+
+/** Build kanban_status Mongo filter, including legacy SCHEDULED/INSTALLED. */
+function pipelineStatusFilter(raw?: string | null): string | { $in: string[] } | undefined {
+  if (!raw) return undefined;
+  const n = normalizePipelineStatus(raw);
+  if (!n) return raw;
+  if (n === QuotePipelineStatus.INSTALLATION_SCHEDULED) {
+    return { $in: [QuotePipelineStatus.INSTALLATION_SCHEDULED, "SCHEDULED"] };
+  }
+  if (n === QuotePipelineStatus.INSTALLATION_COMPLETED) {
+    return {
+      $in: [
+        QuotePipelineStatus.INSTALLATION_COMPLETED,
+        "INSTALLED",
+        "INVOICE_GENERATED",
+        "PAYMENT_PENDING",
+        "PAYMENT_COMPLETED",
+        "PRE_APPROVAL_PENDING",
+        "PRE_APPROVAL_APPROVED",
+        "GRID_CONNECTION_PENDING",
+        "GRID_CONNECTION_COMPLETED",
+      ],
+    };
+  }
+  return n;
+}
 
 const quoteListPopulate = [
   { path: "customer", select: "id name email mobile_no address profile_image" },
@@ -92,7 +164,8 @@ class QuotesController {
       loan_meta = null,
       manual_attachments,
       green_sketch,
-    } = data;
+      is_draft,
+    } = data as newQuote & { is_draft?: boolean };
 
     const payload: any = {
       distance,
@@ -119,6 +192,11 @@ class QuotesController {
     };
     if (manual_attachments !== undefined) payload.manual_attachments = manual_attachments;
     if (green_sketch !== undefined) payload.green_sketch = green_sketch;
+    if (!invoiceNumber) {
+      payload.kanban_status = is_draft
+        ? QuotePipelineStatus.DRAFT
+        : QuotePipelineStatus.PENDING;
+    }
 
     let quote;
     let isUpdate = false;
@@ -212,10 +290,13 @@ class QuotesController {
               role: adminData.role
             }
           })
-          await sendMasterQuoteEmail({
-            quote_id: quote.id,
-            type: isUpdate ? QuoteEmailType.UPDATED : QuoteEmailType.CREATED,
-          },body.isAttachAssessmentWithQuoteMail)
+          // Email only when explicitly requested (Send quote / Send to customer)
+          if (body.send_email === true || body.send_email === "true") {
+            await sendMasterQuoteEmail({
+              quote_id: quote.id,
+              type: isUpdate ? QuoteEmailType.UPDATED : QuoteEmailType.CREATED,
+            }, body.isAttachAssessmentWithQuoteMail)
+          }
         } catch (err) {
           console.error("Email sending failed:", err.message);
         }
@@ -244,7 +325,20 @@ class QuotesController {
         adminData.id,
         {}
       );
-      return ReS(res, SUCCESS_CODE, "Quote updated successfully", quote);
+      ReS(res, SUCCESS_CODE, "Quote updated successfully", quote);
+      if (body.send_email === true || body.send_email === "true") {
+        return (async () => {
+          try {
+            await sendMasterQuoteEmail({
+              quote_id: quote.id,
+              type: QuoteEmailType.UPDATED,
+            }, body.isAttachAssessmentWithQuoteMail);
+          } catch (err: any) {
+            console.error("Email sending failed:", err?.message);
+          }
+        })();
+      }
+      return;
     } catch (error) {
       console.error("Error in Update:", error);
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
@@ -265,6 +359,7 @@ class QuotesController {
         order_by = 'created_at',
         order_direction = 'DESC',
         kanban_status =null,
+        pipeline_status = null,
         year= null
       } = req.body;
       const parsedLimit = parseInt(limit as string, 10);
@@ -314,7 +409,8 @@ class QuotesController {
           $gte: new Date(start_date),
           $lte: new Date(end_date),
         };
-      if(kanban_status) filter.kanban_status=kanban_status
+      const pipelineFilter = pipelineStatusFilter(pipeline_status || kanban_status);
+      if (pipelineFilter) filter.kanban_status = pipelineFilter;
       
       if(year){
         const yearNumber = Number(year);
@@ -879,6 +975,25 @@ class QuotesController {
       }
 
       await quoteRepository.updateMany({ id }, { $set: updateData });
+
+      // Sync pipeline status from customer decision
+      if (status === QuoteCustomerStatus.ACCEPTED) {
+        await advanceQuotePipeline(Number(id), QuotePipelineStatus.ACCEPTED, {
+          reason: "customer_accepted",
+          actorId: existing.customer_id,
+        });
+      } else if (
+        status === QuoteCustomerStatus.REJECTED ||
+        status === QuoteCustomerStatus.EXPIRED ||
+        status === QuoteCustomerStatus.DEAD
+      ) {
+        await advanceQuotePipeline(Number(id), QuotePipelineStatus.DECLINED_CANCELLED, {
+          reason: `customer_${String(status).toLowerCase()}`,
+          actorId: existing.customer_id,
+          force: true,
+        });
+      }
+
       const emailData = {
         email: existing.customer.email,
         subject: `📄 Your Quote Status Has Been Updated to ${status}`,
@@ -1590,7 +1705,8 @@ class QuotesController {
         end_date,
         order_by = "updated_at",
         order_direction = "DESC",
-        kanban_status = null
+        kanban_status = null,
+        pipeline_status = null,
       } = req.body;
 
       const parsedLimit = parseInt(limit as string, 10);
@@ -1621,8 +1737,9 @@ class QuotesController {
           filter.$or = [{ sender_id: user.id }, { customer_id: user.id }];
       }
       if (customerIds) filter.customer_id = { $in: customerIds };
-      if (kanban_status) filter.kanban_status = kanban_status;
-      filter.customer_accepted = QuoteCustomerStatus.ACCEPTED;
+      const pipelineFilter = pipelineStatusFilter(pipeline_status || kanban_status);
+      if (pipelineFilter) filter.kanban_status = pipelineFilter;
+      // Do not force customer_accepted=ACCEPTED — pipeline columns include draft/pending/declined etc.
       if (start_date && end_date) {
         filter.updated_at = {
           $gte: new Date(start_date),
@@ -1660,11 +1777,14 @@ class QuotesController {
       const { taskId, from, to } = req.body;
       if (from == to) return ReE(res, FORBIDDEN_CODE, "from and to both are must not equal");
       if (!taskId || !to) return ReE(res, BAD_REQUEST_CODE, "TaskId and to Can't Be Null or undefined");
-      const updateResult = await quoteRepository.updateMany(
-        { id: taskId },
-        { $set: { kanban_status: to } },
-      );
-      if (updateResult.modifiedCount > 0) return ReS(res, SUCCESS_CODE, "Quote Updated SuccessFully");
+      const target = normalizePipelineStatus(to);
+      if (!target) return ReE(res, BAD_REQUEST_CODE, "Invalid pipeline status");
+      const result = await advanceQuotePipeline(Number(taskId), target, {
+        reason: "kanban_move",
+        actorId: req.user?.id,
+        force: true,
+      });
+      if (result.updated) return ReS(res, SUCCESS_CODE, "Quote Updated SuccessFully");
       ReS(res, SUCCESS_CODE, "Quote not updated");
     } catch (error) {
       console.error("Error in updateKanbanMovement:", error);
@@ -1673,19 +1793,363 @@ class QuotesController {
   }
   async updateInstallStatus(req: AuthenticatedRequest, res: Response){
      try {
-      const { id, status } = req.body;
+      const { id, status, notes, status_date, pipeline_status_date } = req.body;
       if (!id || !status) return ReE(res, BAD_REQUEST_CODE, "Id and status Can't Be Null or undefined");
-      const updateResult = await quoteRepository.updateMany(
-        { id },
-        { $set: { kanban_status: status } },
-      );
-      if (updateResult.modifiedCount > 0) return ReS(res, SUCCESS_CODE, "Quote Updated SuccessFully");
-      ReS(res, SUCCESS_CODE, "Quote not updated");
+      const target = normalizePipelineStatus(status);
+      if (!target) return ReE(res, BAD_REQUEST_CODE, "Invalid install/pipeline status");
+
+      const trimmedNotes = notes != null ? String(notes).trim() : "";
+      if (!trimmedNotes) {
+        return ReE(res, BAD_REQUEST_CODE, "Notes are required for pipeline status updates");
+      }
+      const eventDate = status_date || pipeline_status_date;
+      if (!eventDate) {
+        return ReE(res, BAD_REQUEST_CODE, "Status date is required for pipeline status updates");
+      }
+      const parsedDate = new Date(eventDate);
+      if (Number.isNaN(parsedDate.getTime())) {
+        return ReE(res, BAD_REQUEST_CODE, "Invalid status date");
+      }
+
+      const result = await advanceQuotePipeline(Number(id), target, {
+        reason: "install_status_update",
+        actorId: req.user?.id,
+        force: true,
+        notes: trimmedNotes,
+        statusDate: parsedDate,
+      });
+      if (result.updated) return ReS(res, SUCCESS_CODE, "Quote Updated SuccessFully", result.quote);
+      ReS(res, SUCCESS_CODE, "Quote not updated", result.quote);
     } catch (error) {
       console.error("Error in updateInstallStatus:", error);
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
     }
   }
+
+  /**
+   * Dedicated "Installation Scheduled" flow:
+   * save install details → pipeline INSTALLATION_SCHEDULED → email customer.
+   */
+  async scheduleInstallation(req: AuthenticatedRequest, res: Response) {
+    try {
+      const {
+        id,
+        installation_date,
+        installation_time,
+        estimated_duration,
+        installation_address,
+        installer_name,
+        installer_company,
+        installer_phone,
+        installer_email,
+        saa_number,
+        electrical_licence,
+        cec_number,
+        inverter,
+        panels,
+        battery,
+        ev_charger,
+        notes,
+      } = req.body;
+
+      if (!id) return ReE(res, BAD_REQUEST_CODE, "Quote id is required");
+      if (!installation_date) return ReE(res, BAD_REQUEST_CODE, "Installation date is required");
+      if (!String(installation_time || "").trim()) {
+        return ReE(res, BAD_REQUEST_CODE, "Installation time is required");
+      }
+      if (!String(installer_name || "").trim()) {
+        return ReE(res, BAD_REQUEST_CODE, "Installer name is required");
+      }
+      if (!String(installer_phone || "").trim()) {
+        return ReE(res, BAD_REQUEST_CODE, "Installer phone is required");
+      }
+
+      const parsedDate = new Date(installation_date);
+      if (Number.isNaN(parsedDate.getTime())) {
+        return ReE(res, BAD_REQUEST_CODE, "Invalid installation date");
+      }
+
+      const quote: any = await quoteRepository.findOne(
+        { id: Number(id) },
+        {
+          populate: { path: "customer", select: "id name email address mobile_no" },
+          lean: true,
+        },
+      );
+      if (!quote) return ReE(res, RESOURCE_NOT_FOUND, "Quote not found");
+
+      const items = Array.isArray(quote.items) ? quote.items : [];
+      const schedule = {
+        installation_date: parsedDate,
+        installation_time: String(installation_time).trim(),
+        estimated_duration: String(estimated_duration || "").trim() || "—",
+        installation_address:
+          String(installation_address || "").trim() || quote.address || quote.customer?.address || "",
+        installer_name: String(installer_name).trim(),
+        installer_company: String(installer_company || "").trim(),
+        installer_phone: String(installer_phone).trim(),
+        installer_email: String(installer_email || "").trim(),
+        saa_number: String(saa_number || "").trim(),
+        electrical_licence: String(electrical_licence || "").trim(),
+        cec_number: String(cec_number || "").trim(),
+        inverter: String(inverter || "").trim() || summarizeItems(items, ["inverter"]),
+        panels: String(panels || "").trim() || summarizeItems(items, ["panel", "module"]),
+        battery: String(battery || "").trim() || summarizeItems(items, ["battery", "bess"]),
+        ev_charger: String(ev_charger || "").trim() || summarizeItems(items, ["ev", "charger"]),
+        scheduled_at: new Date(),
+        scheduled_by: req.user?.id ?? null,
+      };
+
+      const noteText =
+        String(notes || "").trim() ||
+        `Installation scheduled for ${formatAuDate(parsedDate)} at ${schedule.installation_time} — ${schedule.installer_name}`;
+
+      await quoteRepository.updateMany(
+        { id: Number(id) },
+        { $set: { installation_schedule: schedule } },
+      );
+
+      const result = await advanceQuotePipeline(Number(id), QuotePipelineStatus.INSTALLATION_SCHEDULED, {
+        reason: "installation_scheduled",
+        actorId: req.user?.id,
+        force: true,
+        notes: noteText,
+        statusDate: parsedDate,
+      });
+
+      const customerEmail = quote.customer?.email;
+      const customerName = quote.name || quote.customer?.name || "Customer";
+
+      if (customerEmail) {
+        const cfg = await getCompanyConfig();
+        const html = installationScheduledTemplate(
+          {
+            customerName,
+            installationDate: formatAuDate(parsedDate),
+            installationTime: schedule.installation_time,
+            estimatedDuration: schedule.estimated_duration,
+            installationAddress: schedule.installation_address || "—",
+            installerName: schedule.installer_name,
+            installerCompany: schedule.installer_company || "—",
+            installerPhone: schedule.installer_phone,
+            installerEmail: schedule.installer_email || "—",
+            saaNumber: schedule.saa_number || "—",
+            electricalLicence: schedule.electrical_licence || "—",
+            cecNumber: schedule.cec_number || "—",
+            productListHtml: buildProductListHtml(items),
+            inverter: schedule.inverter,
+            panels: schedule.panels,
+            battery: schedule.battery,
+            evCharger: schedule.ev_charger,
+          },
+          cfg,
+        );
+        await sendEmail(
+          customerEmail,
+          `Your Solar Installation Has Been Scheduled – ${cfg.name}`,
+          html,
+        ).catch((e: any) => console.error("Installation schedule email failed:", e?.message));
+      } else {
+        console.warn(`scheduleInstallation: no customer email for quote #${id}`);
+      }
+
+      await notificationController.createNotification({
+        userId: req.user.id,
+        message: `Installation scheduled for Quote #${id} on ${formatAuDate(parsedDate)}.`,
+        route: `${process.env.FRONT_URL}/#/quote/customer-view/${quote.id}/${quote.bypass_token}`,
+        meta: {
+          type: "QUOTE",
+          customerId: quote.customer_id,
+          customerName,
+          senderName: req.user.name,
+          role: req.user.role,
+        },
+      });
+
+      const updatedQuote = await quoteRepository.findOne({ id: Number(id) }, { lean: true });
+      return ReS(res, SUCCESS_CODE, "Installation scheduled and customer emailed", {
+        quote: updatedQuote || result.quote,
+        installation_schedule: schedule,
+      });
+    } catch (error: any) {
+      console.error("Error in scheduleInstallation:", error);
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Reschedule existing installation → update details → email customer with reason.
+   */
+  async rescheduleInstallation(req: AuthenticatedRequest, res: Response) {
+    try {
+      const {
+        id,
+        installation_date,
+        installation_time,
+        estimated_duration,
+        installation_address,
+        installer_name,
+        installer_company,
+        installer_phone,
+        installer_email,
+        saa_number,
+        electrical_licence,
+        cec_number,
+        reason,
+        reason_other,
+        notes,
+      } = req.body;
+
+      if (!id) return ReE(res, BAD_REQUEST_CODE, "Quote id is required");
+      if (!installation_date) return ReE(res, BAD_REQUEST_CODE, "New installation date is required");
+      if (!String(installation_time || "").trim()) {
+        return ReE(res, BAD_REQUEST_CODE, "New installation time is required");
+      }
+
+      const reasonKey = String(reason || "").trim();
+      if (!reasonKey) return ReE(res, BAD_REQUEST_CODE, "Reason for reschedule is required");
+
+      const reasonLabel =
+        reasonKey === "Other"
+          ? String(reason_other || "").trim() || "Other"
+          : reasonKey;
+
+      if (reasonKey === "Other" && !String(reason_other || "").trim()) {
+        return ReE(res, BAD_REQUEST_CODE, "Please enter the reason when selecting Other");
+      }
+
+      const parsedDate = new Date(installation_date);
+      if (Number.isNaN(parsedDate.getTime())) {
+        return ReE(res, BAD_REQUEST_CODE, "Invalid installation date");
+      }
+
+      const quote: any = await quoteRepository.findOne(
+        { id: Number(id) },
+        {
+          populate: { path: "customer", select: "id name email address mobile_no" },
+          lean: true,
+        },
+      );
+      if (!quote) return ReE(res, RESOURCE_NOT_FOUND, "Quote not found");
+
+      const previous = quote.installation_schedule || {};
+      const previousDate = previous.installation_date || quote.pipeline_status_date || null;
+
+      const history = Array.isArray(previous.reschedule_history) ? [...previous.reschedule_history] : [];
+      history.push({
+        from_date: previousDate || null,
+        from_time: previous.installation_time || null,
+        to_date: parsedDate,
+        to_time: String(installation_time).trim(),
+        reason: reasonLabel,
+        at: new Date(),
+        by: req.user?.id ?? null,
+      });
+
+      const schedule = {
+        ...previous,
+        installation_date: parsedDate,
+        installation_time: String(installation_time).trim(),
+        estimated_duration:
+          String(estimated_duration || "").trim() || previous.estimated_duration || "—",
+        installation_address:
+          String(installation_address || "").trim() ||
+          previous.installation_address ||
+          quote.address ||
+          quote.customer?.address ||
+          "",
+        installer_name: String(installer_name || previous.installer_name || "").trim(),
+        installer_company: String(installer_company || previous.installer_company || "").trim(),
+        installer_phone: String(installer_phone || previous.installer_phone || "").trim(),
+        installer_email: String(installer_email || previous.installer_email || "").trim(),
+        saa_number: String(saa_number || previous.saa_number || "").trim(),
+        electrical_licence: String(electrical_licence || previous.electrical_licence || "").trim(),
+        cec_number: String(cec_number || previous.cec_number || "").trim(),
+        last_reschedule_reason: reasonLabel,
+        rescheduled_at: new Date(),
+        rescheduled_by: req.user?.id ?? null,
+        reschedule_history: history,
+      };
+
+      if (!schedule.installer_name) {
+        return ReE(res, BAD_REQUEST_CODE, "Installer name is required");
+      }
+      if (!schedule.installer_phone) {
+        return ReE(res, BAD_REQUEST_CODE, "Installer phone is required");
+      }
+
+      const noteText =
+        String(notes || "").trim() ||
+        `Installation rescheduled to ${formatAuDate(parsedDate)} at ${schedule.installation_time}. Reason: ${reasonLabel}`;
+
+      await quoteRepository.updateMany(
+        { id: Number(id) },
+        { $set: { installation_schedule: schedule } },
+      );
+
+      const result = await advanceQuotePipeline(Number(id), QuotePipelineStatus.INSTALLATION_SCHEDULED, {
+        reason: "installation_rescheduled",
+        actorId: req.user?.id,
+        force: true,
+        notes: noteText,
+        statusDate: parsedDate,
+      });
+
+      const customerEmail = quote.customer?.email;
+      const customerName = quote.name || quote.customer?.name || "Customer";
+
+      if (customerEmail) {
+        const cfg = await getCompanyConfig();
+        const html = installationRescheduledTemplate(
+          {
+            customerName,
+            reason: reasonLabel,
+            previousInstallationDate: formatAuDate(previousDate),
+            newInstallationDate: formatAuDate(parsedDate),
+            newInstallationTime: schedule.installation_time,
+            estimatedDuration: schedule.estimated_duration,
+            installationAddress: schedule.installation_address || "—",
+            installerName: schedule.installer_name,
+            installerCompany: schedule.installer_company || "—",
+            installerPhone: schedule.installer_phone,
+            saaNumber: schedule.saa_number || "—",
+            electricalLicence: schedule.electrical_licence || "—",
+          },
+          cfg,
+        );
+        await sendEmail(
+          customerEmail,
+          `Your Installation Schedule Has Been Updated – ${cfg.name}`,
+          html,
+        ).catch((e: any) => console.error("Installation reschedule email failed:", e?.message));
+      } else {
+        console.warn(`rescheduleInstallation: no customer email for quote #${id}`);
+      }
+
+      await notificationController.createNotification({
+        userId: req.user.id,
+        message: `Installation rescheduled for Quote #${id} to ${formatAuDate(parsedDate)}.`,
+        route: `${process.env.FRONT_URL}/#/quote/customer-view/${quote.id}/${quote.bypass_token}`,
+        meta: {
+          type: "QUOTE",
+          customerId: quote.customer_id,
+          customerName,
+          senderName: req.user.name,
+          role: req.user.role,
+        },
+      });
+
+      const updatedQuote = await quoteRepository.findOne({ id: Number(id) }, { lean: true });
+      return ReS(res, SUCCESS_CODE, "Installation rescheduled and customer emailed", {
+        quote: updatedQuote || result.quote,
+        installation_schedule: schedule,
+      });
+    } catch (error: any) {
+      console.error("Error in rescheduleInstallation:", error);
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
+    }
+  }
+
   async markDeadQuotesCron() {
     try {
       console.log("🔄 markDeadQuotesCron started");
@@ -1712,6 +2176,13 @@ class QuotesController {
         { id: { $in: ids } },
         { $set: { customer_accepted: QuoteCustomerStatus.DEAD, status_updated_date: new Date() } },
       );
+
+      for (const id of ids) {
+        await advanceQuotePipeline(Number(id), QuotePipelineStatus.DECLINED_CANCELLED, {
+          reason: "cron_mark_dead",
+          force: true,
+        });
+      }
 
       console.log(`⚡ Updated ${updateResult.modifiedCount} quotes → DEAD`);
 
@@ -1794,6 +2265,242 @@ class QuotesController {
 
     } catch (e) {
       return ReE(res, SERVER_ERROR_CODE, e);
+    }
+  }
+
+  /** Counts per pipeline status for CRM filter chips. */
+  async getPipelineCounts(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { user } = req;
+      const {
+        sender_name = "",
+        cust_name = null,
+        cust_email = null,
+        start_date,
+        end_date,
+        year = null,
+      } = req.body || {};
+
+      const filter: Record<string, unknown> = { is_solar_sketch: { $ne: true } };
+      if (user.role !== Roles.SUPER_ADMIN && user.role !== Roles.CUSTOMER_SUPPORT_EXECUTIVE) {
+        if (user.id !== 299) filter.$or = [{ sender_id: user.id }, { customer_id: user.id }];
+      }
+
+      if (cust_name || cust_email) {
+        const userFilter: Record<string, unknown>[] = [];
+        if (cust_name) userFilter.push({ name: { $regex: cust_name, $options: "i" } });
+        if (cust_email) userFilter.push({ email: { $regex: cust_email, $options: "i" } });
+        const customers: any[] = await userRepository.find({ $or: userFilter }, { select: "id", lean: true });
+        if (!customers.length) {
+          const empty: Record<string, number> = { ALL: 0 };
+          for (const s of ALL_PIPELINE_STATUSES) empty[s] = 0;
+          return ReS(res, SUCCESS_CODE, "Pipeline counts", empty);
+        }
+        filter.customer_id = { $in: customers.map((c) => c.id) };
+      }
+
+      if (sender_name) {
+        const senders: any[] = await userRepository.find(
+          { name: { $regex: sender_name, $options: "i" } },
+          { select: "id", lean: true },
+        );
+        if (!senders.length) {
+          const empty: Record<string, number> = { ALL: 0 };
+          for (const s of ALL_PIPELINE_STATUSES) empty[s] = 0;
+          return ReS(res, SUCCESS_CODE, "Pipeline counts", empty);
+        }
+        filter.sender_id = { $in: senders.map((s) => s.id) };
+      }
+
+      if (start_date && end_date) {
+        filter.created_at = { $gte: new Date(start_date), $lte: new Date(end_date) };
+      }
+      if (year) {
+        const yearNumber = Number(year);
+        if (!isNaN(yearNumber)) {
+          filter.created_at = {
+            ...(filter.created_at as object || {}),
+            $gte: new Date(yearNumber, 0, 1),
+            $lt: new Date(yearNumber + 1, 0, 1),
+          };
+        }
+      }
+
+      const rows = await quoteRepository.aggregateRaw([
+        { $match: { ...filter, deleted_at: null } },
+        { $group: { _id: "$kanban_status", count: { $sum: 1 } } },
+      ]);
+
+      const counts: Record<string, number> = { ALL: 0 };
+      for (const s of ALL_PIPELINE_STATUSES) counts[s] = 0;
+
+      for (const row of rows || []) {
+        const raw = row._id || QuotePipelineStatus.PENDING;
+        const normalized = normalizePipelineStatus(raw) || raw;
+        const n = Number(row.count) || 0;
+        counts.ALL += n;
+        if (counts[normalized] != null) counts[normalized] += n;
+        else counts[normalized] = n;
+      }
+
+      return ReS(res, SUCCESS_CODE, "Pipeline counts", counts);
+    } catch (error: any) {
+      console.error("getPipelineCounts Error:", error);
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
+    }
+  }
+
+  /** Explicitly close a job → JOB_CLOSED. */
+  async closeQuoteJob(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { quoteId, id } = req.body;
+      const qid = Number(quoteId || id);
+      if (!qid) return ReE(res, BAD_REQUEST_CODE, "quoteId is required");
+      const existing = await quoteRepository.findOne({ id: qid }, { lean: true });
+      if (!existing) return ReE(res, RESOURCE_NOT_FOUND, "Quote not found");
+      const result = await advanceQuotePipeline(qid, QuotePipelineStatus.JOB_CLOSED, {
+        reason: "job_closed",
+        actorId: req.user?.id,
+        force: true,
+      });
+      return ReS(res, SUCCESS_CODE, "Job closed", result);
+    } catch (error: any) {
+      console.error("closeQuoteJob Error:", error);
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Cancel project → DECLINED_CANCELLED + customer cancellation email.
+   * User mainly selects cancellation reason; CRM auto-fills quote/job/customer.
+   */
+  async cancelProject(req: AuthenticatedRequest, res: Response) {
+    try {
+      const {
+        id,
+        cancellation_reason,
+        reason_other,
+        cancellation_date,
+        deposit_amount,
+        refund_status,
+        refund_date,
+        notes,
+      } = req.body;
+
+      if (!id) return ReE(res, BAD_REQUEST_CODE, "Quote id is required");
+
+      const reasonKey = String(cancellation_reason || "").trim();
+      if (!reasonKey) return ReE(res, BAD_REQUEST_CODE, "Cancellation reason is required");
+
+      const reasonLabel =
+        reasonKey === "Other" ? String(reason_other || "").trim() || "Other" : reasonKey;
+
+      if (reasonKey === "Other" && !String(reason_other || "").trim()) {
+        return ReE(res, BAD_REQUEST_CODE, "Please enter the reason when selecting Other");
+      }
+
+      const cancelDate = cancellation_date ? new Date(cancellation_date) : new Date();
+      if (Number.isNaN(cancelDate.getTime())) {
+        return ReE(res, BAD_REQUEST_CODE, "Invalid cancellation date");
+      }
+
+      const quote: any = await quoteRepository.findOne(
+        { id: Number(id) },
+        {
+          populate: { path: "customer", select: "id name email address mobile_no" },
+          lean: true,
+        },
+      );
+      if (!quote) return ReE(res, RESOURCE_NOT_FOUND, "Quote not found");
+
+      const workflow: any = await quoteWorkflowRepository.findOne(
+        { quote_id: Number(id) },
+        { select: "id", lean: true },
+      );
+
+      const details = {
+        quote_number: quote.id,
+        job_number: workflow?.id ?? quote.id,
+        cancellation_date: cancelDate,
+        cancellation_reason: reasonLabel,
+        deposit_amount: deposit_amount != null && deposit_amount !== "" ? String(deposit_amount) : "N/A",
+        refund_status: String(refund_status || "Not Applicable").trim() || "Not Applicable",
+        refund_date: refund_date ? new Date(refund_date) : null,
+        cancelled_at: new Date(),
+        cancelled_by: req.user?.id ?? null,
+        notes: String(notes || "").trim(),
+      };
+
+      const noteText =
+        String(notes || "").trim() || `Project cancelled. Reason: ${reasonLabel}`;
+
+      await quoteRepository.updateMany(
+        { id: Number(id) },
+        {
+          $set: {
+            cancellation_details: details,
+            customer_accepted: QuoteCustomerStatus.REJECTED,
+            reason: reasonLabel,
+          },
+        },
+      );
+
+      const result = await advanceQuotePipeline(Number(id), QuotePipelineStatus.DECLINED_CANCELLED, {
+        reason: "project_cancelled",
+        actorId: req.user?.id,
+        force: true,
+        notes: noteText,
+        statusDate: cancelDate,
+      });
+
+      const customerEmail = quote.customer?.email;
+      const customerName = quote.name || quote.customer?.name || "Customer";
+
+      if (customerEmail) {
+        const cfg = await getCompanyConfig();
+        const html = projectCancelledTemplate(
+          {
+            customerName,
+            quoteNumber: details.quote_number,
+            jobNumber: details.job_number,
+            cancellationDate: formatAuDate(cancelDate),
+            cancellationReason: reasonLabel,
+            depositAmount: details.deposit_amount,
+            refundStatus: details.refund_status,
+            refundDate: details.refund_date ? formatAuDate(details.refund_date) : "—",
+          },
+          cfg,
+        );
+        await sendEmail(
+          customerEmail,
+          `Your Solar Project Has Been Cancelled – ${cfg.name}`,
+          html,
+        ).catch((e: any) => console.error("Project cancellation email failed:", e?.message));
+      } else {
+        console.warn(`cancelProject: no customer email for quote #${id}`);
+      }
+
+      await notificationController.createNotification({
+        userId: req.user.id,
+        message: `Quote #${id} cancelled — ${reasonLabel}`,
+        route: `${process.env.FRONT_URL}/#/quote/customer-view/${quote.id}/${quote.bypass_token}`,
+        meta: {
+          type: "QUOTE",
+          customerId: quote.customer_id,
+          customerName,
+          senderName: req.user.name,
+          role: req.user.role,
+        },
+      });
+
+      const updatedQuote = await quoteRepository.findOne({ id: Number(id) }, { lean: true });
+      return ReS(res, SUCCESS_CODE, "Project cancelled and customer emailed", {
+        quote: updatedQuote || result.quote,
+        cancellation_details: details,
+      });
+    } catch (error: any) {
+      console.error("Error in cancelProject:", error);
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
     }
   }
 

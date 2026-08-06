@@ -42,12 +42,45 @@ const QuoteSchema = new Schema(
     accepted_date: { type: Date },
     signed_date: { type: Date },
     status_updated_date: { type: Date },
+    /** Date tied to current pipeline stage (e.g. scheduled install date). */
+    pipeline_status_date: { type: Date },
+    /** Notes for the current pipeline stage update. */
+    pipeline_notes: { type: String, default: "" },
     quote_close_date: { type: Date },
     kanban_status: {
       type: String,
       default: "PENDING",
-      enum: ["PENDING", "ACCEPTED", "INSTALLED", "SCHEDULED"],
+      enum: [
+        "DRAFT",
+        "PENDING",
+        "ACCEPTED",
+        "DECLINED_CANCELLED",
+        "INSTALLATION_SCHEDULED",
+        "INSTALLATION_IN_PROGRESS",
+        "INSTALLATION_COMPLETED",
+        "REBATE_CLAIM_PENDING",
+        "REBATE_SUBMITTED",
+        "REBATE_RECEIVED",
+        "JOB_CLOSED",
+        // legacy values still readable until migration
+        "SCHEDULED",
+        "INSTALLED",
+        "INVOICE_GENERATED",
+        "PAYMENT_PENDING",
+        "PAYMENT_COMPLETED",
+        "PRE_APPROVAL_PENDING",
+        "PRE_APPROVAL_APPROVED",
+        "GRID_CONNECTION_PENDING",
+        "GRID_CONNECTION_COMPLETED",
+      ],
+      index: true,
     },
+    /** Audit trail for pipeline advances */
+    pipeline_history: jsonArray,
+    /** Customer install booking details (date/time/installer credentials). */
+    installation_schedule: { type: Schema.Types.Mixed, default: null },
+    /** Project cancellation details + email audit. */
+    cancellation_details: { type: Schema.Types.Mixed, default: null },
     assessment_id: { type: Number },
     progress: jsonArray,
     distance: { type: Number },

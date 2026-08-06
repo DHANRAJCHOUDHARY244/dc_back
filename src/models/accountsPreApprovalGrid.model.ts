@@ -45,6 +45,9 @@ const AccountsPreApprovalGridSchema = new Schema(
 		customer_address: { type: String, default: "" },
 		customer_company: { type: String, default: "" },
 
+		/** Optional link to CRM quote pipeline */
+		quote_id: { type: Number, index: true },
+
 		/** Photo / PDF attachments */
 		attachments: jsonArray,
 

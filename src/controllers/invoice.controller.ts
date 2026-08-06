@@ -244,14 +244,92 @@ class InvoiceController {
     }
   }
 
+  async getPaymentStatusCounts(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { customer_name, customer_email, start_date, end_date } = req.body || {};
+      const filter: Record<string, unknown> = {};
+
+      if (customer_name || customer_email) {
+        const userFilter: Record<string, unknown> = {};
+        if (customer_name) userFilter.name = { $regex: customer_name, $options: "i" };
+        if (customer_email) userFilter.email = { $regex: customer_email, $options: "i" };
+        const customers = await userRepository.find(userFilter, { select: "id", lean: true });
+        if (!customers.length) {
+          const empty: Record<string, number> = { ALL: 0 };
+          for (const s of Object.values(PaymentStatus)) empty[s] = 0;
+          return ReS(res, SUCCESS_CODE, "Payment status counts", empty);
+        }
+        const quotes = await quoteRepository.find(
+          { customer_id: { $in: customers.map((c: any) => c.id) } },
+          { select: "id", lean: true },
+        );
+        filter.quote_id = { $in: quotes.map((q: any) => q.id) };
+      }
+
+      if (start_date && end_date) {
+        filter.created_at = { $gte: new Date(start_date), $lte: new Date(end_date) };
+      } else if (start_date) {
+        filter.created_at = { $gte: new Date(start_date) };
+      } else if (end_date) {
+        filter.created_at = { $lte: new Date(end_date) };
+      }
+
+      const rows = await invoiceRepository.aggregateRaw([
+        { $match: { ...filter, deleted_at: null } },
+        { $group: { _id: "$pay_status", count: { $sum: 1 } } },
+      ]);
+
+      const counts: Record<string, number> = { ALL: 0 };
+      for (const s of Object.values(PaymentStatus)) counts[s] = 0;
+
+      for (const row of rows || []) {
+        const key = row._id || PaymentStatus.PENDING;
+        const n = Number(row.count) || 0;
+        counts.ALL += n;
+        if (counts[key] != null) counts[key] += n;
+        else counts[key] = n;
+      }
+
+      return ReS(res, SUCCESS_CODE, "Payment status counts", counts);
+    } catch (error: any) {
+      console.error("getPaymentStatusCounts Error:", error);
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
+    }
+  }
+
   async updateInvoicePaymentStatus(req: AuthenticatedRequest, res: Response) {
     try {
-      const { id, pay_status, dateOfDue, partialAmount = null,address, name, mobile_no } = req.body;
+      const {
+        id,
+        pay_status,
+        dateOfDue,
+        partialAmount = null,
+        address,
+        name,
+        mobile_no,
+        payment_notes,
+        notes,
+        payment_status_date,
+        status_date,
+      } = req.body;
 
       if (!id || !pay_status) return ReE(res, FORBIDDEN_CODE, "Missing id or pay_status");
 
       if (![PaymentStatus.PAID, PaymentStatus.CANCELLED, PaymentStatus.PENDING, PaymentStatus.EXPIRED, PaymentStatus.PARTIALLY_PAID, PaymentStatus.REFUNDED].includes(pay_status)) {
         return ReE(res, FORBIDDEN_CODE, "Invalid payment status");
+      }
+
+      const trimmedNotes = String(payment_notes ?? notes ?? "").trim();
+      if (!trimmedNotes) {
+        return ReE(res, BAD_REQUEST_CODE, "Notes are required for payment status updates");
+      }
+      const eventDateRaw = payment_status_date || status_date;
+      if (!eventDateRaw) {
+        return ReE(res, BAD_REQUEST_CODE, "Status date is required for payment status updates");
+      }
+      const parsedStatusDate = new Date(eventDateRaw);
+      if (Number.isNaN(parsedStatusDate.getTime())) {
+        return ReE(res, BAD_REQUEST_CODE, "Invalid status date");
       }
 
       const invoice: any = await invoiceRepository.findById(Number(id), {
@@ -263,9 +341,25 @@ class InvoiceController {
       if (!invoice) return ReE(res, SERVER_ERROR_CODE, "Invoice not found");
 
       const now = new Date();
+      const previousStatus = invoice.pay_status;
+      const history = Array.isArray(invoice.payment_history) ? [...invoice.payment_history] : [];
+      history.push({
+        from: previousStatus,
+        to: pay_status,
+        reason: "payment_status_update",
+        at: now,
+        by: req.user?.id ?? null,
+        notes: trimmedNotes,
+        status_date: parsedStatusDate,
+        partialAmount: pay_status === PaymentStatus.PARTIALLY_PAID ? partialAmount : null,
+      });
+
       const updateData: Record<string, unknown> = {
         pay_status,
         status_updated_date: now,
+        payment_notes: trimmedNotes,
+        payment_status_date: parsedStatusDate,
+        payment_history: history,
         address,
         partialAmount,
       };
@@ -290,6 +384,7 @@ class InvoiceController {
         event: EVENT_TASK_TYPE.UPDATED
       };
       ReS(res, SUCCESS_CODE, "Payment status updated successfully", updated);
+
       await notificationController.createNotification({
         userId: req.user.id,
         message: `Invoice payment status updated to ${pay_status}`,

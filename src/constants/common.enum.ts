@@ -55,11 +55,22 @@ export enum PaymentStatus {
    REFUNDED = "REFUNDED"
 }
 
-export enum QuoteKanbanStatus{
-    ACCEPTED="ACCEPTED",
-    SCHEDULED="SCHEDULED",
-    INSTALLED="INSTALLED",
-    PENDING="PENDING"
+/** @deprecated Prefer QuotePipelineStatus — kept for import compatibility; values mirror full pipeline. */
+export enum QuoteKanbanStatus {
+	DRAFT = "DRAFT",
+	PENDING = "PENDING",
+	ACCEPTED = "ACCEPTED",
+	DECLINED_CANCELLED = "DECLINED_CANCELLED",
+	INSTALLATION_SCHEDULED = "INSTALLATION_SCHEDULED",
+	INSTALLATION_IN_PROGRESS = "INSTALLATION_IN_PROGRESS",
+	INSTALLATION_COMPLETED = "INSTALLATION_COMPLETED",
+	REBATE_CLAIM_PENDING = "REBATE_CLAIM_PENDING",
+	REBATE_SUBMITTED = "REBATE_SUBMITTED",
+	REBATE_RECEIVED = "REBATE_RECEIVED",
+	JOB_CLOSED = "JOB_CLOSED",
+	/** Legacy aliases (still accepted by normalizePipelineStatus) */
+	SCHEDULED = "SCHEDULED",
+	INSTALLED = "INSTALLED",
 }
 
 export enum StockStatus{

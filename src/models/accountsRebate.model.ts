@@ -60,6 +60,20 @@ const AccountsRebateSchema = new Schema(
 		customer_address: { type: String, default: "" },
 		customer_company: { type: String, default: "" },
 
+		/** Optional link to CRM quote pipeline */
+		quote_id: { type: Number, index: true },
+
+		/**
+		 * Rebate claim lifecycle for quote pipeline:
+		 * CLAIM_PENDING | SUBMITTED | RECEIVED
+		 */
+		claim_status: {
+			type: String,
+			default: "CLAIM_PENDING",
+			enum: ["CLAIM_PENDING", "SUBMITTED", "RECEIVED"],
+			index: true,
+		},
+
 		attachments: jsonArray,
 
 		created_by: { type: Number },

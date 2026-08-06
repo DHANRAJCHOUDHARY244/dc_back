@@ -2,7 +2,8 @@ import { AuthenticatedRequest } from "@constants/common.interface";
 import { newCustomInvoice } from "@constants/customInvoice.constants";
 import { customInvoiceRepository, roleRepository, userRepository } from "@repositories";
 import { generate_Hash_Password, generateRandomString, generateUUID, ReE, ReS } from "@services/generalHelper.service";
-import { SERVER_ERROR_CODE, SUCCESS_CODE } from "@constants/serverCode";
+import { BAD_REQUEST_CODE, SERVER_ERROR_CODE, SUCCESS_CODE } from "@constants/serverCode";
+import { PaymentStatus } from "@constants/common.enum";
 import { EVENT_TASK_TYPE } from "@constants/socket.constants";
 import notificationController from "./notification.controller";
 import { sendEventEmail } from "@services/email.service";
@@ -327,6 +328,149 @@ class CustomInvoiceController {
             return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
         }
     }
+
+    async getPaymentStatusCounts(req: AuthenticatedRequest, res: Response) {
+        try {
+            const { user } = req;
+            const {
+                cust_name = null,
+                cust_email = null,
+                start_date,
+                end_date,
+            } = req.body || {};
+
+            const filter: any = {};
+            if (user.role !== Roles.SUPER_ADMIN && user.role !== Roles.CUSTOMER_SUPPORT_EXECUTIVE) {
+                if (user.id !== 299) filter.$or = [{ sender_id: user.id }, { customer_id: user.id }];
+            }
+
+            if (start_date && end_date) {
+                filter.created_at = {
+                    $gte: new Date(start_date),
+                    $lte: new Date(end_date),
+                };
+            }
+
+            const needsCustomerFilter = cust_name || cust_email;
+            if (needsCustomerFilter) {
+                const customerFilter: Record<string, unknown> = {};
+                if (cust_name) customerFilter.name = { $regex: cust_name, $options: "i" };
+                if (cust_email) customerFilter.email = { $regex: cust_email, $options: "i" };
+                const matchingCustomers = await userRepository.find(customerFilter, {
+                    select: "id",
+                    lean: true,
+                });
+                if (!matchingCustomers.length) {
+                    const empty: Record<string, number> = { ALL: 0 };
+                    for (const s of Object.values(PaymentStatus)) empty[s] = 0;
+                    return ReS(res, SUCCESS_CODE, "Payment status counts", empty);
+                }
+                filter.customer_id = { $in: matchingCustomers.map((c: any) => c.id) };
+            }
+
+            const rows = await customInvoiceRepository.aggregateRaw([
+                { $match: { ...filter, deleted_at: null } },
+                { $group: { _id: "$pay_status", count: { $sum: 1 } } },
+            ]);
+
+            const counts: Record<string, number> = { ALL: 0 };
+            for (const s of Object.values(PaymentStatus)) counts[s] = 0;
+
+            for (const row of rows || []) {
+                const key = row._id || PaymentStatus.PENDING;
+                const n = Number(row.count) || 0;
+                counts.ALL += n;
+                if (counts[key] != null) counts[key] += n;
+                else counts[key] = n;
+            }
+
+            return ReS(res, SUCCESS_CODE, "Payment status counts", counts);
+        } catch (error: any) {
+            console.error("Error in getPaymentStatusCounts:", error);
+            return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
+        }
+    }
+
+    async updatePaymentStatus(req: AuthenticatedRequest, res: Response) {
+        try {
+            const {
+                id,
+                pay_status,
+                partialAmount = null,
+                payment_notes,
+                notes,
+                payment_status_date,
+                status_date,
+            } = req.body;
+
+            if (!id || !pay_status) {
+                return ReE(res, BAD_REQUEST_CODE, "Missing id or pay_status");
+            }
+
+            const validStatuses = [
+                PaymentStatus.PAID,
+                PaymentStatus.CANCELLED,
+                PaymentStatus.PENDING,
+                PaymentStatus.EXPIRED,
+                PaymentStatus.PARTIALLY_PAID,
+                PaymentStatus.REFUNDED,
+            ];
+            if (!validStatuses.includes(pay_status)) {
+                return ReE(res, BAD_REQUEST_CODE, "Invalid payment status");
+            }
+
+            const trimmedNotes = String(payment_notes ?? notes ?? "").trim();
+            if (!trimmedNotes) {
+                return ReE(res, BAD_REQUEST_CODE, "Notes are required for payment status updates");
+            }
+            const eventDateRaw = payment_status_date || status_date;
+            if (!eventDateRaw) {
+                return ReE(res, BAD_REQUEST_CODE, "Status date is required for payment status updates");
+            }
+            const parsedStatusDate = new Date(eventDateRaw);
+            if (Number.isNaN(parsedStatusDate.getTime())) {
+                return ReE(res, BAD_REQUEST_CODE, "Invalid status date");
+            }
+
+            const invoice: any = await customInvoiceRepository.findOne({ id: Number(id) });
+            if (!invoice) {
+                return ReE(res, SERVER_ERROR_CODE, "CustomInvoice not found");
+            }
+
+            const now = new Date();
+            const previousStatus = invoice.pay_status;
+            const history = Array.isArray(invoice.payment_history) ? [...invoice.payment_history] : [];
+            history.push({
+                from: previousStatus,
+                to: pay_status,
+                reason: "payment_status_update",
+                at: now,
+                by: req.user?.id ?? null,
+                notes: trimmedNotes,
+                status_date: parsedStatusDate,
+                partialAmount: pay_status === PaymentStatus.PARTIALLY_PAID ? partialAmount : null,
+            });
+
+            const updateData: Record<string, unknown> = {
+                pay_status,
+                status_updated_date: now,
+                payment_notes: trimmedNotes,
+                payment_status_date: parsedStatusDate,
+                payment_history: history,
+            };
+            if (pay_status === PaymentStatus.PAID) updateData.paid_date = now;
+            if (pay_status === PaymentStatus.PARTIALLY_PAID) {
+                updateData.partialAmount = partialAmount;
+            }
+
+            const updated = await customInvoiceRepository.updateById(Number(id), { $set: updateData });
+            return ReS(res, SUCCESS_CODE, "Payment status updated successfully", updated);
+        } catch (error: any) {
+            console.error("Error in updatePaymentStatus:", error);
+            return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
+        }
+    }
+
     async addAttachments(req: AuthenticatedRequest, res: Response) {
         try {
             const attachments: any[] = [];
