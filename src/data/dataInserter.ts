@@ -224,6 +224,7 @@ export const seedRoles = async () => {
 
   await seedFinanceAccountsPermission();
   await seedAllInOnePermission();
+  await seedHrAttendancePermissions();
 
   // await importAdvertisingData();
   // await sendMarketingEmails()
@@ -361,3 +362,118 @@ export const seedAllInOnePermission = async () => {
     console.error("seedAllInOnePermission failed", err);
   }
 };
+
+/** Idempotent: HR & Employees menu + children + role grants (uses DB counter after sync to max id) */
+export const seedHrAttendancePermissions = async () => {
+  try {
+    const existing = await permissionRepository.findOne({ route: "hr", parentId: null });
+    if (existing) return;
+
+    // Keep counter ahead of real max so new ids never collide with legacy catalogue rows
+    const { Counter } = await import("@db/counter.model");
+    const maxAgg: any[] = await permissionRepository.aggregate([
+      { $group: { _id: null, maxId: { $max: "$id" } } },
+    ]);
+    const maxId = Number(maxAgg[0]?.maxId || 0);
+    await Counter.collection.updateOne({ name: "permissions" }, { $set: { seq: maxId } }, { upsert: true });
+
+    const upMax: any[] = await userPermissionRepository.aggregate([
+      { $group: { _id: null, maxId: { $max: "$id" } } },
+    ]);
+    await Counter.collection.updateOne(
+      { name: "user_permissions" },
+      { $set: { seq: Number(upMax[0]?.maxId || 0) } },
+      { upsert: true },
+    );
+
+    const catalogue = await permissionRepository.create({
+      name: "HR & Employees",
+      parentId: null,
+      label: "sys.menu.hr.index",
+      icon: "mdi:account-group-outline",
+      type: 0,
+      route: "hr",
+      order: 4,
+    });
+    const catId = (catalogue as any).id;
+
+    const children = [
+      { name: "Employees", route: "hr/employees", label: "sys.menu.hr.employees", component: "/hr/employees/EmployeesPage.tsx" },
+      { name: "Attendance", route: "hr/attendance", label: "sys.menu.hr.attendance", component: "/hr/attendance/AttendancePage.tsx" },
+      { name: "Leave Management", route: "hr/leave", label: "sys.menu.hr.leave", component: "/hr/leave/LeavePage.tsx" },
+      { name: "Attendance Corrections", route: "hr/corrections", label: "sys.menu.hr.corrections", component: "/hr/corrections/CorrectionsPage.tsx" },
+      { name: "Attendance Reports", route: "hr/reports", label: "sys.menu.hr.reports", component: "/hr/reports/ReportsPage.tsx" },
+      { name: "Attendance Analytics", route: "hr/analytics", label: "sys.menu.hr.analytics", component: "/hr/analytics/AnalyticsPage.tsx" },
+      { name: "Payroll", route: "hr/payroll", label: "sys.menu.hr.payroll", component: "/hr/payroll/PayrollPage.tsx" },
+      { name: "Salary Slips", route: "hr/salary-slips", label: "sys.menu.hr.salary_slips", component: "/hr/salary-slips/SalarySlipsPage.tsx" },
+      { name: "Holidays", route: "hr/holidays", label: "sys.menu.hr.holidays", component: "/hr/holidays/HolidaysPage.tsx" },
+      { name: "Shift Management", route: "hr/shifts", label: "sys.menu.hr.shifts", component: "/hr/shifts/ShiftsPage.tsx" },
+      { name: "Attendance Settings", route: "hr/settings", label: "sys.menu.hr.settings", component: "/hr/settings/SettingsPage.tsx" },
+      { name: "Audit Logs", route: "hr/audit", label: "sys.menu.hr.audit", component: "/hr/audit/AuditLogsPage.tsx" },
+    ];
+
+    const permissionIds = [catId];
+    for (const c of children) {
+      const p = await permissionRepository.create({
+        name: c.name,
+        parentId: catId,
+        label: c.label,
+        type: 1,
+        route: c.route,
+        component: c.component,
+      });
+      permissionIds.push((p as any).id);
+    }
+
+    const roles = await roleRepository.find();
+    const fullAccess = new Set([
+      Roles.SUPER_ADMIN,
+      Roles.CEO,
+      Roles.ADMIN,
+      Roles.HR_EXECUTIVE,
+      Roles.MANAGER,
+      Roles.OPERATIONS_MANAGER,
+    ]);
+    const selfAccess = new Set([
+      ...fullAccess,
+      Roles.SALES_PERSON,
+      Roles.SENIOR_SALES_EXECUTIVE,
+      Roles.SALES_EXECUTIVE,
+      Roles.INSTALLER,
+      Roles.CUSTOMER_SUPPORT_EXECUTIVE,
+      Roles.ACCOUNTS_MANAGER,
+      Roles.TECHNICAL_SUPPORT,
+      Roles.QA,
+      Roles.DATA_ANALYST,
+      Roles.WEBSITE_DEVELOPER,
+      Roles.SEO_MANAGER,
+      Roles.DIGITAL_MARKETING_EXECUTIVE,
+      Roles.LEAD_GENERATION_EXECUTIVE,
+      Roles.CONTENT_WRITER,
+      Roles.SOCIAL_MEDIA_MANAGER,
+      Roles.GRAPHIC_DESIGNER,
+      Roles.BUSINESS_DEVELOPMENT_EXECUTIVE,
+    ]);
+
+    for (const role of roles as any[]) {
+      if (role.name === Roles.CUSTOMER) continue;
+      const isFull = fullAccess.has(role.name);
+      const enabled = selfAccess.has(role.name) || isFull;
+      for (const permission_id of permissionIds) {
+        await userPermissionRepository.create({
+          role_id: role.id,
+          permission_id,
+          enable: enabled,
+          create: isFull,
+          can_update: isFull,
+          delete: role.name === Roles.SUPER_ADMIN || role.name === Roles.ADMIN || role.name === Roles.HR_EXECUTIVE,
+          is_user_specific: false,
+        });
+      }
+    }
+    console.log("Seeded HR & Employees permissions with ids:", permissionIds);
+  } catch (err) {
+    console.error("seedHrAttendancePermissions failed", err);
+  }
+};
+

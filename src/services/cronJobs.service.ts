@@ -4,6 +4,7 @@ import { DAILY, HOURLY, MINUTE, MORNING, NIGHT } from "@constants/cron.constants
 import quotesController from "@controllers/quotes.controller";
 import { deleteOldLogsCron } from "@utils/logSaver";
 import { runLeadSupervisor } from "@services/leadWorkflow.service";
+import { finalizeMissingAbsents } from "@services/hrAttendance.service";
 
 export const loadCrons = () => {
   
@@ -11,7 +12,13 @@ export const loadCrons = () => {
   CronEngine.register({
     name: "daily-midnight",
     schedule: DAILY.MIDNIGHT,
-    functions: [quotesController.markDeadQuotesCron,deleteOldLogsCron],
+    functions: [
+      quotesController.markDeadQuotesCron,
+      deleteOldLogsCron,
+      () => {
+        void finalizeMissingAbsents(new Date(Date.now() - 86400000));
+      },
+    ],
     enabled: true
   });
 

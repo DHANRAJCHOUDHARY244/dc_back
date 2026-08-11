@@ -97,11 +97,13 @@ class ChatController {
 
           const lastMessage: any = await messageRepository.findOne(
             { chatId: chat.id },
-            { sort: { createdAt: -1 }, lean: true },
+            { sort: { created_at: -1 }, lean: true },
           );
 
           const formatTime = (dateString: string): string => {
+            if (!dateString) return "";
             const date = new Date(dateString);
+            if (Number.isNaN(date.getTime())) return "";
             let hours = date.getHours();
             const minutes = date.getMinutes().toString().padStart(2, "0");
             const ampm = hours >= 12 ? "PM" : "AM";
@@ -109,13 +111,34 @@ class ChatController {
             return `${hours}:${minutes} ${ampm}`;
           };
 
+          const attachments = Array.isArray(lastMessage?.attachments) ? lastMessage.attachments : [];
+          const text = String(lastMessage?.content || "").trim();
+          let preview = text;
+          if (!preview && attachments.length) {
+            const kinds = attachments.map((a: any) => a.kind);
+            if (kinds.every((k: string) => k === "image")) preview = kinds.length > 1 ? `📷 ${kinds.length} photos` : "📷 Photo";
+            else if (kinds.every((k: string) => k === "video")) preview = "🎬 Video";
+            else if (kinds.every((k: string) => k === "audio")) preview = "🎵 Audio";
+            else preview = `📎 ${attachments[0]?.original_name || "Attachment"}`;
+          }
+          if (!preview) preview = "No messages yet";
+
           return {
             id: chat.id.toString(),
             name,
             avatar,
             type: chat.type,
-            content: lastMessage?.content || "Hi there :)",
+            content: preview,
             timestamp: lastMessage ? formatTime(lastMessage.created_at) : "",
+            lastMessage: lastMessage
+              ? {
+                  id: String(lastMessage.id),
+                  content: preview,
+                  createdAt: lastMessage.created_at,
+                  messageType: lastMessage.messageType || "text",
+                }
+              : undefined,
+            status: "read",
           };
         }),
       );

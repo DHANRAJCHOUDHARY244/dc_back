@@ -13,6 +13,12 @@ import { sendEventEmail } from "@services/email.service";
 import { SocketService } from "@services/socket.service";
 import notificationController from "./notification.controller";
 import { Roles } from './../data/dataInserter';
+import {
+  applyInvoicePaymentChipFilter,
+  computeInvoicePaymentChipCounts,
+  emptyInvoicePaymentCounts,
+  UPDATABLE_PAYMENT_STATUSES,
+} from "@services/invoicePaymentChips.service";
 
 const invoiceListPopulate = [
   {
@@ -137,7 +143,7 @@ class InvoiceController {
 
       const filter: Record<string, unknown> = {};
 
-      if (pay_status) filter.pay_status = pay_status;
+      if (pay_status) applyInvoicePaymentChipFilter(filter, pay_status, { supportDiscountFields: false });
 
       if (customer_name || customer_email) {
         const userFilter: Record<string, unknown> = {};
@@ -255,9 +261,7 @@ class InvoiceController {
         if (customer_email) userFilter.email = { $regex: customer_email, $options: "i" };
         const customers = await userRepository.find(userFilter, { select: "id", lean: true });
         if (!customers.length) {
-          const empty: Record<string, number> = { ALL: 0 };
-          for (const s of Object.values(PaymentStatus)) empty[s] = 0;
-          return ReS(res, SUCCESS_CODE, "Payment status counts", empty);
+          return ReS(res, SUCCESS_CODE, "Payment status counts", emptyInvoicePaymentCounts());
         }
         const quotes = await quoteRepository.find(
           { customer_id: { $in: customers.map((c: any) => c.id) } },
@@ -274,23 +278,12 @@ class InvoiceController {
         filter.created_at = { $lte: new Date(end_date) };
       }
 
-      const rows = await invoiceRepository.aggregateRaw([
-        { $match: { ...filter, deleted_at: null } },
-        { $group: { _id: "$pay_status", count: { $sum: 1 } } },
-      ]);
+      const rows: any[] = await invoiceRepository.find(
+        { ...filter },
+        { select: "pay_status dateOfDue", lean: true },
+      );
 
-      const counts: Record<string, number> = { ALL: 0 };
-      for (const s of Object.values(PaymentStatus)) counts[s] = 0;
-
-      for (const row of rows || []) {
-        const key = row._id || PaymentStatus.PENDING;
-        const n = Number(row.count) || 0;
-        counts.ALL += n;
-        if (counts[key] != null) counts[key] += n;
-        else counts[key] = n;
-      }
-
-      return ReS(res, SUCCESS_CODE, "Payment status counts", counts);
+      return ReS(res, SUCCESS_CODE, "Payment status counts", computeInvoicePaymentChipCounts(rows));
     } catch (error: any) {
       console.error("getPaymentStatusCounts Error:", error);
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
@@ -315,7 +308,7 @@ class InvoiceController {
 
       if (!id || !pay_status) return ReE(res, FORBIDDEN_CODE, "Missing id or pay_status");
 
-      if (![PaymentStatus.PAID, PaymentStatus.CANCELLED, PaymentStatus.PENDING, PaymentStatus.EXPIRED, PaymentStatus.PARTIALLY_PAID, PaymentStatus.REFUNDED].includes(pay_status)) {
+      if (![...UPDATABLE_PAYMENT_STATUSES].includes(pay_status)) {
         return ReE(res, FORBIDDEN_CODE, "Invalid payment status");
       }
 

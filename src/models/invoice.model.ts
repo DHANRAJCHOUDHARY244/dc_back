@@ -12,7 +12,17 @@ const InvoiceSchema = new Schema(
     pay_status: {
       type: String,
       default: "PENDING",
-      enum: ["PAID", "CANCELLED", "PENDING", "EXPIRED", "PARTIALLY_PAID", "REFUNDED"],
+      enum: [
+        "DRAFT",
+        "PENDING",
+        "PAID",
+        "CANCELLED",
+        "EXPIRED",
+        "PARTIALLY_PAID",
+        "REFUNDED",
+        "DISCOUNT",
+        "CLOSED",
+      ],
     },
     partialAmount: { type: Number },
     dateOfDue: { type: Date, required: true },

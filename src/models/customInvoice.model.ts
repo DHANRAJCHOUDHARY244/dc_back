@@ -26,7 +26,17 @@ const CustomInvoiceSchema = new Schema(
     pay_status: {
       type: String,
       default: "PENDING",
-      enum: ["PENDING", "PAID", "CANCELLED", "EXPIRED", "PARTIALLY_PAID", "REFUNDED"],
+      enum: [
+        "DRAFT",
+        "PENDING",
+        "PAID",
+        "CANCELLED",
+        "EXPIRED",
+        "PARTIALLY_PAID",
+        "REFUNDED",
+        "DISCOUNT",
+        "CLOSED",
+      ],
     },
     partialAmount: { type: Number },
     loan_enabled: { type: Boolean, required: true, default: false },

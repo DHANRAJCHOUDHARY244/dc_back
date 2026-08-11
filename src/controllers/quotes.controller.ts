@@ -43,6 +43,7 @@ import { advanceQuotePipeline } from "@services/quotePipeline.service";
 import { installationScheduledTemplate } from "@template/installationScheduled";
 import { installationRescheduledTemplate } from "@template/installationRescheduled";
 import { projectCancelledTemplate } from "@template/projectCancelled";
+import { stockDeliveryScheduledTemplate } from "@template/stockDeliveryScheduled";
 import { getCompanyConfig } from "@services/crmSettings.service";
 import { sendEmail } from "@utils/email";
 
@@ -1793,7 +1794,7 @@ class QuotesController {
   }
   async updateInstallStatus(req: AuthenticatedRequest, res: Response){
      try {
-      const { id, status, notes, status_date, pipeline_status_date } = req.body;
+      const { id, status, notes, status_date, pipeline_status_date, stage_details } = req.body;
       if (!id || !status) return ReE(res, BAD_REQUEST_CODE, "Id and status Can't Be Null or undefined");
       const target = normalizePipelineStatus(status);
       if (!target) return ReE(res, BAD_REQUEST_CODE, "Invalid install/pipeline status");
@@ -1818,10 +1819,213 @@ class QuotesController {
         notes: trimmedNotes,
         statusDate: parsedDate,
       });
+
+      if (stage_details && typeof stage_details === "object") {
+        const quote: any = await quoteRepository.findOne({ id: Number(id) }, { lean: true });
+        const existing =
+          quote?.pipeline_stage_details && typeof quote.pipeline_stage_details === "object"
+            ? { ...quote.pipeline_stage_details }
+            : {};
+        existing[target] = {
+          ...stage_details,
+          updated_at: new Date(),
+          updated_by: req.user?.id ?? null,
+        };
+        await quoteRepository.updateMany(
+          { id: Number(id) },
+          { $set: { pipeline_stage_details: existing } },
+        );
+        if (result.quote) {
+          (result.quote as any).pipeline_stage_details = existing;
+        }
+      }
+
       if (result.updated) return ReS(res, SUCCESS_CODE, "Quote Updated SuccessFully", result.quote);
       ReS(res, SUCCESS_CODE, "Quote not updated", result.quote);
     } catch (error) {
       console.error("Error in updateInstallStatus:", error);
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Manual "Stock Ordered" flow (NOT Stock Order module):
+   * fill delivery details → pipeline STOCK_ORDERED → email customer.
+   */
+  async markStockOrdered(req: AuthenticatedRequest, res: Response) {
+    try {
+      const {
+        id,
+        order_date,
+        products_summary,
+        expected_delivery_date,
+        expected_delivery_time,
+        delivery_address,
+        driver_name,
+        driver_phone,
+        vehicle_number,
+        tracking_number,
+        notes,
+        send_email = true,
+      } = req.body;
+
+      if (!id) return ReE(res, BAD_REQUEST_CODE, "Quote id is required");
+      if (!order_date) return ReE(res, BAD_REQUEST_CODE, "Order date is required");
+      if (!expected_delivery_date) {
+        return ReE(res, BAD_REQUEST_CODE, "Expected delivery date is required");
+      }
+      if (!String(expected_delivery_time || "").trim()) {
+        return ReE(res, BAD_REQUEST_CODE, "Expected delivery time is required");
+      }
+      if (!String(delivery_address || "").trim()) {
+        return ReE(res, BAD_REQUEST_CODE, "Delivery address is required");
+      }
+      if (!String(driver_name || "").trim()) {
+        return ReE(res, BAD_REQUEST_CODE, "Driver name is required");
+      }
+      if (!String(driver_phone || "").trim()) {
+        return ReE(res, BAD_REQUEST_CODE, "Driver contact is required");
+      }
+
+      const parsedOrderDate = new Date(order_date);
+      const parsedDeliveryDate = new Date(expected_delivery_date);
+      if (Number.isNaN(parsedOrderDate.getTime())) {
+        return ReE(res, BAD_REQUEST_CODE, "Invalid order date");
+      }
+      if (Number.isNaN(parsedDeliveryDate.getTime())) {
+        return ReE(res, BAD_REQUEST_CODE, "Invalid delivery date");
+      }
+
+      const quote: any = await quoteRepository.findOne(
+        { id: Number(id) },
+        {
+          populate: { path: "customer", select: "id name email address mobile_no" },
+          lean: true,
+        },
+      );
+      if (!quote) return ReE(res, RESOURCE_NOT_FOUND, "Quote not found");
+
+      const items = Array.isArray(quote.items) ? quote.items : [];
+      const productsText = String(products_summary || "").trim();
+      const productListHtml = productsText
+        ? productsText
+            .split(/\n+/)
+            .map((line: string) => line.trim())
+            .filter(Boolean)
+            .map((line: string) => `<div>${line}</div>`)
+            .join("") || `<div>${productsText}</div>`
+        : buildProductListHtml(items);
+
+      const stageDetails = {
+        mode: "manual",
+        order_date: parsedOrderDate,
+        products_summary: productsText,
+        expected_delivery_date: parsedDeliveryDate,
+        expected_delivery_time: String(expected_delivery_time).trim(),
+        delivery_address: String(delivery_address).trim(),
+        driver_name: String(driver_name).trim(),
+        driver_phone: String(driver_phone).trim(),
+        vehicle_number: String(vehicle_number || "").trim(),
+        tracking_number: String(tracking_number || "").trim(),
+        notes: String(notes || "").trim(),
+        status_date: parsedOrderDate,
+        updated_at: new Date(),
+        updated_by: req.user?.id ?? null,
+        email_sent: false,
+      };
+
+      const noteText =
+        String(notes || "").trim() ||
+        `Stock ordered — delivery ${formatAuDate(parsedDeliveryDate)} at ${stageDetails.expected_delivery_time} — ${stageDetails.driver_name}`;
+
+      const existingDetails =
+        quote?.pipeline_stage_details && typeof quote.pipeline_stage_details === "object"
+          ? { ...quote.pipeline_stage_details }
+          : {};
+      existingDetails[QuotePipelineStatus.STOCK_ORDERED] = stageDetails;
+
+      await quoteRepository.updateMany(
+        { id: Number(id) },
+        { $set: { pipeline_stage_details: existingDetails } },
+      );
+
+      const result = await advanceQuotePipeline(Number(id), QuotePipelineStatus.STOCK_ORDERED, {
+        reason: "stock_ordered_manual",
+        actorId: req.user?.id,
+        force: true,
+        notes: noteText,
+        statusDate: parsedOrderDate,
+      });
+
+      const customerEmail = quote.customer?.email || quote.custEmail;
+      const customerName = quote.name || quote.customer?.name || quote.custName || "Customer";
+      const shouldEmail = send_email === true || send_email === "true";
+      let emailQueued = false;
+
+      if (shouldEmail && customerEmail) {
+        const cfg = await getCompanyConfig();
+        const html = stockDeliveryScheduledTemplate(
+          {
+            customerName,
+            orderNumber: quote.id,
+            productListHtml,
+            orderDate: formatAuDate(parsedOrderDate),
+            deliveryDate: formatAuDate(parsedDeliveryDate),
+            deliveryTime: stageDetails.expected_delivery_time,
+            deliveryAddress: stageDetails.delivery_address,
+            driverName: stageDetails.driver_name,
+            driverPhone: stageDetails.driver_phone,
+            vehicleNumber: stageDetails.vehicle_number || "—",
+            trackingNumber: stageDetails.tracking_number || "—",
+          },
+          cfg,
+        );
+        await sendEmail(
+          customerEmail,
+          `Your Order Has Been Confirmed & Delivery Scheduled – ${cfg.name}`,
+          html,
+        ).catch((e: any) => console.error("Stock ordered customer email failed:", e?.message));
+        emailQueued = true;
+        existingDetails[QuotePipelineStatus.STOCK_ORDERED] = {
+          ...stageDetails,
+          email_sent: true,
+          email_sent_at: new Date(),
+        };
+        await quoteRepository.updateMany(
+          { id: Number(id) },
+          { $set: { pipeline_stage_details: existingDetails } },
+        );
+      } else if (shouldEmail && !customerEmail) {
+        console.warn(`markStockOrdered: no customer email for quote #${id}`);
+      }
+
+      await notificationController.createNotification({
+        userId: req.user.id,
+        message: `Stock ordered for Quote #${id} — delivery ${formatAuDate(parsedDeliveryDate)}.`,
+        route: `${process.env.FRONT_URL}/#/quote/customer-view/${quote.id}/${quote.bypass_token}`,
+        meta: {
+          type: "QUOTE",
+          customerId: quote.customer_id,
+          customerName,
+          senderName: req.user.name,
+          role: req.user.role,
+        },
+      });
+
+      const updatedQuote = await quoteRepository.findOne({ id: Number(id) }, { lean: true });
+      return ReS(
+        res,
+        SUCCESS_CODE,
+        emailQueued
+          ? "Stock ordered and customer emailed"
+          : "Stock ordered (no customer email sent)",
+        {
+          quote: updatedQuote || result.quote,
+          stage_details: existingDetails[QuotePipelineStatus.STOCK_ORDERED],
+        },
+      );
+    } catch (error: any) {
+      console.error("Error in markStockOrdered:", error);
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
     }
   }

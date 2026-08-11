@@ -13,6 +13,12 @@ const SalarySchema = new Schema(
     bonus: { type: Number, default: 0 },
     tds: { type: Number, default: 0 },
     pf: { type: Number, default: 0 },
+    attendance_summary: jsonObject,
+    attendance_deduction: { type: Number, default: 0 },
+    incentives: { type: Number, default: 0 },
+    overtime_amount: { type: Number, default: 0 },
+    other_deductions: { type: Number, default: 0 },
+    net_salary: { type: Number, default: null },
   },
   collectionOptions("salary"),
 );

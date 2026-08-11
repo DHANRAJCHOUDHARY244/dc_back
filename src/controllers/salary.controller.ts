@@ -18,7 +18,7 @@ import { CreateSalaryBody } from "@constants/salary.constants";
 class SalaryController {
   async saveBankDetails(req: AuthenticatedRequest, res: Response) {
     try {
-      if (![Roles.ADMIN, Roles.SUPER_ADMIN].includes(req.user.role)) {
+      if (![Roles.ADMIN, Roles.SUPER_ADMIN, Roles.HR_EXECUTIVE].includes(req.user.role)) {
         return ReE(res, SERVER_ERROR_CODE, "Unauthorized Access");
       }
 
@@ -43,7 +43,7 @@ class SalaryController {
 
   async createSalary(req: DocumentsAuthenticatedRequest, res: Response) {
     try {
-      if (![Roles.ADMIN, Roles.SUPER_ADMIN].includes(req.user.role)) {
+      if (![Roles.ADMIN, Roles.SUPER_ADMIN, Roles.HR_EXECUTIVE].includes(req.user.role)) {
         return ReE(res, SERVER_ERROR_CODE, "Unauthorized Access");
       }
 
@@ -88,6 +88,42 @@ class SalaryController {
 
       const salarySlipFile = req.files.salary_slip as UploadedFile;
 
+      let attendance_summary: any = req.body.attendance_summary;
+      if (typeof attendance_summary === "string") {
+        try {
+          attendance_summary = JSON.parse(attendance_summary);
+        } catch {
+          attendance_summary = null;
+        }
+      }
+      if (!attendance_summary) {
+        try {
+          const { computeSalaryAttendance } = await import("@services/hrAttendance.service");
+          attendance_summary = await computeSalaryAttendance(
+            Number(user_id),
+            d.getFullYear(),
+            d.getMonth() + 1,
+          );
+        } catch {
+          attendance_summary = {};
+        }
+      }
+      const attendance_deduction = Number(
+        req.body.attendance_deduction ?? attendance_summary?.salary_deduction ?? 0,
+      );
+      const incentives = Number(req.body.incentives || 0);
+      const overtime_amount = Number(req.body.overtime_amount || 0);
+      const other_deductions = Number(req.body.other_deductions || 0);
+      const net_salary =
+        Number(basic) +
+        Number(bonus || 0) +
+        incentives +
+        overtime_amount -
+        Number(tds || 0) -
+        Number(pf || 0) -
+        attendance_deduction -
+        other_deductions;
+
       const salary = await salaryRepository.create({
         user_id,
         date,
@@ -98,6 +134,12 @@ class SalaryController {
         pf,
         creator_id: req.user.id,
         bank_details: parsedBankDetails,
+        attendance_summary,
+        attendance_deduction,
+        incentives,
+        overtime_amount,
+        other_deductions,
+        net_salary,
       });
 
       const ccList: string[] = Array.isArray(cc)

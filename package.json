@@ -11,6 +11,8 @@
     "import:calculator-catalog": "ts-node -r tsconfig-paths/register src/scripts/importCalculatorCatalogFromProducts.ts",
     "import:calculator-products": "ts-node -r tsconfig-paths/register src/scripts/importCalculatorCatalogFromProducts.ts --products-only",
     "migrate:quote-pipeline": "ts-node -r tsconfig-paths/register src/scripts/migrateQuotePipelineStatuses.ts",
+    "migrate:hr-attendance": "ts-node -r tsconfig-paths/register src/scripts/migrateHrAttendance.ts",
+    "seed:hr-permissions": "ts-node -r tsconfig-paths/register src/scripts/seedHrPermissionsFromSeq.ts",
     "cluster-mode": "pm2 start src/app.ts --interpreter ts-node -i 0",
     "cluster-mode-foreground": "pm2 start src/app.ts --interpreter ts-node --no-daemon -i 0",
     "stop-cluster": "pm2 stop all",

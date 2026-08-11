@@ -11,6 +11,12 @@ import { Response } from "express";
 import { fileUpload } from 'express-fileupload';
 import { s3Service } from "@services/s3.service";
 import { Roles } from "src/data/dataInserter";
+import {
+    applyInvoicePaymentChipFilter,
+    computeInvoicePaymentChipCounts,
+    emptyInvoicePaymentCounts,
+    UPDATABLE_PAYMENT_STATUSES,
+} from "@services/invoicePaymentChips.service";
 
 const customInvoiceListPopulate = [
   { path: "customer", select: "id name email mobile_no address" },
@@ -286,7 +292,7 @@ class CustomInvoiceController {
                 if(user.id !==299)
                  filter.$or = [{ sender_id: user.id }, { customer_id: user.id }]
             }
-            if (pay_status) filter.pay_status = pay_status;
+            if (pay_status) applyInvoicePaymentChipFilter(filter, pay_status, { supportDiscountFields: true });
             if (start_date && end_date) {
                 filter.created_at = {
                     $gte: new Date(start_date),
@@ -361,30 +367,22 @@ class CustomInvoiceController {
                     lean: true,
                 });
                 if (!matchingCustomers.length) {
-                    const empty: Record<string, number> = { ALL: 0 };
-                    for (const s of Object.values(PaymentStatus)) empty[s] = 0;
-                    return ReS(res, SUCCESS_CODE, "Payment status counts", empty);
+                    return ReS(res, SUCCESS_CODE, "Payment status counts", emptyInvoicePaymentCounts());
                 }
                 filter.customer_id = { $in: matchingCustomers.map((c: any) => c.id) };
             }
 
-            const rows = await customInvoiceRepository.aggregateRaw([
-                { $match: { ...filter, deleted_at: null } },
-                { $group: { _id: "$pay_status", count: { $sum: 1 } } },
-            ]);
+            const invoices: any[] = await customInvoiceRepository.find(filter, {
+                select: "pay_status dateOfDue discountAmount discountRate",
+                lean: true,
+            });
 
-            const counts: Record<string, number> = { ALL: 0 };
-            for (const s of Object.values(PaymentStatus)) counts[s] = 0;
-
-            for (const row of rows || []) {
-                const key = row._id || PaymentStatus.PENDING;
-                const n = Number(row.count) || 0;
-                counts.ALL += n;
-                if (counts[key] != null) counts[key] += n;
-                else counts[key] = n;
-            }
-
-            return ReS(res, SUCCESS_CODE, "Payment status counts", counts);
+            return ReS(
+                res,
+                SUCCESS_CODE,
+                "Payment status counts",
+                computeInvoicePaymentChipCounts(invoices),
+            );
         } catch (error: any) {
             console.error("Error in getPaymentStatusCounts:", error);
             return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
@@ -407,14 +405,7 @@ class CustomInvoiceController {
                 return ReE(res, BAD_REQUEST_CODE, "Missing id or pay_status");
             }
 
-            const validStatuses = [
-                PaymentStatus.PAID,
-                PaymentStatus.CANCELLED,
-                PaymentStatus.PENDING,
-                PaymentStatus.EXPIRED,
-                PaymentStatus.PARTIALLY_PAID,
-                PaymentStatus.REFUNDED,
-            ];
+            const validStatuses = [...UPDATABLE_PAYMENT_STATUSES];
             if (!validStatuses.includes(pay_status)) {
                 return ReE(res, BAD_REQUEST_CODE, "Invalid payment status");
             }

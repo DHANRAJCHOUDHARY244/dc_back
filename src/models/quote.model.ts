@@ -55,14 +55,22 @@ const QuoteSchema = new Schema(
         "PENDING",
         "ACCEPTED",
         "DECLINED_CANCELLED",
+        "STOCK_ORDERED",
+        "STOCK_DELIVERED",
         "INSTALLATION_SCHEDULED",
+        "PRE_APPROVAL",
         "INSTALLATION_IN_PROGRESS",
         "INSTALLATION_COMPLETED",
+        "GRID_PROCESS",
+        "CX_PAYMENT_PENDING",
+        "CX_PAYMENT_RECEIVED",
+        "REBATE_CLAIM_SUBMIT",
+        "REBATE_RECEIVED",
+        "FEEDBACK_REFERRAL",
+        "JOB_CLOSED",
+        // legacy / previous pipeline values
         "REBATE_CLAIM_PENDING",
         "REBATE_SUBMITTED",
-        "REBATE_RECEIVED",
-        "JOB_CLOSED",
-        // legacy values still readable until migration
         "SCHEDULED",
         "INSTALLED",
         "INVOICE_GENERATED",
@@ -77,6 +85,8 @@ const QuoteSchema = new Schema(
     },
     /** Audit trail for pipeline advances */
     pipeline_history: jsonArray,
+    /** Manual stage details (stock ordered/delivered, pre-approval, grid, payment, rebate, etc.) — not StockOrder module */
+    pipeline_stage_details: { type: Schema.Types.Mixed, default: {} },
     /** Customer install booking details (date/time/installer credentials). */
     installation_schedule: { type: Schema.Types.Mixed, default: null },
     /** Project cancellation details + email audit. */

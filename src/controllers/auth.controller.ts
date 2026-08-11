@@ -108,6 +108,16 @@ class AuthController {
         role_id: roleId,
       });
 
+      try {
+        const roleName = role ? Roles[role] : Roles.CUSTOMER;
+        if (roleName !== Roles.CUSTOMER && user?.id) {
+          const { ensureEmployeeProfile } = await import("@services/hrAttendance.service");
+          await ensureEmployeeProfile(user.id);
+        }
+      } catch (profileErr: any) {
+        console.error("HR profile provision failed:", profileErr?.message);
+      }
+
       if (is_signup) {
         const cfg = await getCompanyConfig();
         const emailPayload = {

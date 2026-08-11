@@ -77,3 +77,35 @@ export { QuoteBuilderSettingsRepository, quoteBuilderSettingsRepository } from "
 
 export { AnalyticsRepository } from "./analytics.repository";
 export { default as analyticsRepository } from "./analytics.repository";
+
+export {
+	employeeProfileRepository,
+	shiftRepository,
+	holidayRepository,
+	attendanceRecordRepository,
+	attendanceSettingsRepository,
+	leaveTypeRepository,
+	leaveBalanceRepository,
+	leaveRequestRepository,
+	attendanceCorrectionRepository,
+	attendanceMonthLockRepository,
+	attendanceAuditLogRepository,
+} from "./hr.repository";
+
+export {
+	trainingCategoryRepository,
+	trainingResourceRepository,
+	trainingCourseRepository,
+	trainingAssignmentRepository,
+	trainingProgressRepository,
+	trainingVersionRepository,
+	trainingSettingsRepository,
+} from "./training.repository";
+
+export {
+	feedbackCaseRepository,
+	feedbackMessageRepository,
+	feedbackInternalNoteRepository,
+	feedbackAuditLogRepository,
+	feedbackSettingsRepository,
+} from "./feedback.repository";

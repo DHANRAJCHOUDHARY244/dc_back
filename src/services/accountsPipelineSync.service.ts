@@ -57,9 +57,9 @@ export async function syncPipelineFromRebate(
 	const paid = String(doc.status || "").toUpperCase() === "PAID";
 	const claim = String(doc.claim_status || "CLAIM_PENDING").toUpperCase();
 
-	let target = QuotePipelineStatus.REBATE_CLAIM_PENDING;
+	let target = QuotePipelineStatus.REBATE_CLAIM_SUBMIT;
 	if (paid || claim === "RECEIVED") target = QuotePipelineStatus.REBATE_RECEIVED;
-	else if (claim === "SUBMITTED") target = QuotePipelineStatus.REBATE_SUBMITTED;
+	else if (claim === "SUBMITTED") target = QuotePipelineStatus.REBATE_CLAIM_SUBMIT;
 
 	await advanceQuotePipeline(quoteId, target, {
 		reason: "accounts_rebate",

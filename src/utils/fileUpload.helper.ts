@@ -66,6 +66,18 @@ const resolveUploadPath = (
       subPath = `crm/branding`;
       break;
 
+    case UploadCategory.CHAT:
+      subPath = `chats/${entityId}`;
+      break;
+
+    case UploadCategory.TRAINING:
+      subPath = `training/${entityId}`;
+      break;
+
+    case UploadCategory.FEEDBACK:
+      subPath = `feedback/${entityId}`;
+      break;
+
     default:
       subPath = `misc`;
   }

@@ -45,6 +45,30 @@ import Task from "./task.model";
 import User from "./users.model";
 import UserPermission from "./userPermissions.model";
 import VisitorLogs from "./visitorLogs.model";
+import EmployeeProfile from "./employeeProfile.model";
+import Shift from "./shift.model";
+import Holiday from "./holiday.model";
+import AttendanceRecord from "./attendanceRecord.model";
+import AttendanceSettings from "./attendanceSettings.model";
+import { LeaveType, LeaveBalance, LeaveRequest } from "./leave.model";
+import AttendanceCorrection from "./attendanceCorrection.model";
+import { AttendanceMonthLock, AttendanceAuditLog } from "./attendanceMeta.model";
+import {
+	TrainingCategory,
+	TrainingResource,
+	TrainingCourse,
+	TrainingAssignment,
+	TrainingProgress,
+	TrainingVersion,
+	TrainingSettings,
+} from "./training.model";
+import {
+	FeedbackCase,
+	FeedbackMessage,
+	FeedbackInternalNote,
+	FeedbackAuditLog,
+	FeedbackSettings,
+} from "./feedback.model";
 
 /** Alias avoids clash with DOM Document type in some tooling */
 const DocumentModel = Document;
@@ -97,4 +121,27 @@ export {
   User,
   UserPermission,
   VisitorLogs,
+  EmployeeProfile,
+  Shift,
+  Holiday,
+  AttendanceRecord,
+  AttendanceSettings,
+  LeaveType,
+  LeaveBalance,
+  LeaveRequest,
+  AttendanceCorrection,
+  AttendanceMonthLock,
+  AttendanceAuditLog,
+  TrainingCategory,
+  TrainingResource,
+  TrainingCourse,
+  TrainingAssignment,
+  TrainingProgress,
+  TrainingVersion,
+  TrainingSettings,
+  FeedbackCase,
+  FeedbackMessage,
+  FeedbackInternalNote,
+  FeedbackAuditLog,
+  FeedbackSettings,
 };
