@@ -109,3 +109,15 @@ export {
 	feedbackAuditLogRepository,
 	feedbackSettingsRepository,
 } from "./feedback.repository";
+
+export {
+	slaStageConfigRepository,
+	slaDelayReasonRepository,
+	slaStageRunRepository,
+} from "./sla.repository";
+
+export {
+	taskTypeCatalogRepository,
+	escalationRuleRepository,
+	crmFollowUpRepository,
+} from "./masterTask.repository";

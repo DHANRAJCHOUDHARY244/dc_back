@@ -2,6 +2,7 @@ import {
 	AttendanceSource,
 	AttendanceStatus,
 	DEFAULT_LEAVE_TYPES,
+	EmploymentStatus,
 	HR_ADMIN_ROLES,
 	HR_MANAGER_ROLES,
 	dayKey,
@@ -27,6 +28,7 @@ import {
 } from "@repositories";
 import { Roles } from "src/data/dataInserter";
 import notificationController from "@controllers/notification.controller";
+import { displayEmployeeCode, resolveEmployeeCode } from "@services/employeeId.service";
 
 type AnyUser = { id: number; role?: string; name?: string };
 
@@ -106,22 +108,41 @@ export async function ensureLeaveTypes() {
 
 export async function ensureEmployeeProfile(userId: number) {
 	let profile: any = await employeeProfileRepository.findOne({ user_id: userId }, { lean: true });
-	if (profile) return profile;
+	const displayCode = displayEmployeeCode(userId);
+	if (profile) {
+		const expected = resolveEmployeeCode(userId, profile.employee_code);
+		if (profile.employee_code !== expected) {
+			profile = await employeeProfileRepository.updateById(profile.id, {
+				$set: { employee_code: expected },
+			});
+			profile = profile?.toObject?.() || profile;
+		}
+		return profile;
+	}
 	const shift = await ensureDefaultShift();
 	const user: any = await userRepository.findOne({ id: userId }, { lean: true });
 	profile = await employeeProfileRepository.create({
 		user_id: userId,
-		employee_code: `EMP-${String(userId).padStart(4, "0")}`,
+		employee_code: displayCode,
 		department: "",
 		designation: user?.role || "",
 		joining_date: user?.created_at || new Date(),
 		shift_id: shift.id,
 		weekly_off_days: [0],
 		attendance_enabled: true,
-		employment_status: "ACTIVE",
+		employment_status: EmploymentStatus.ACTIVE,
 		monthly_salary: 0,
 	});
 	return profile.toObject ? profile.toObject() : profile;
+}
+
+function assertEmploymentActive(profile: any) {
+	const blocked = [EmploymentStatus.INACTIVE, EmploymentStatus.TERMINATED];
+	if (blocked.includes(profile?.employment_status)) {
+		throw new Error(
+			`Employee ${profile?.employee_code || ""} is ${profile.employment_status}. Attendance is disabled for former/inactive staff.`,
+		);
+	}
 }
 
 export async function migrateEmployeeProfiles() {
@@ -145,7 +166,9 @@ export async function migrateEmployeeProfiles() {
 			created += 1;
 		}
 	}
-	return { users: users.length, created };
+	const { syncAllEmployeeDisplayCodes } = await import("@services/employeeId.service");
+	const codes = await syncAllEmployeeDisplayCodes();
+	return { users: users.length, created, codes_updated: codes.updated };
 }
 
 export async function isMonthLocked(year: number, month: number) {
@@ -250,6 +273,7 @@ export async function checkIn(user: AnyUser, ip = "") {
 	await assertMonthEditable(now, user.role);
 	const profile = await ensureEmployeeProfile(user.id);
 	if (!profile.attendance_enabled) throw new Error("Attendance is disabled for this employee");
+	assertEmploymentActive(profile);
 
 	const settings = await getSettings();
 	const shift = await getShiftForUser(profile, settings);
@@ -271,6 +295,7 @@ export async function checkIn(user: AnyUser, ip = "") {
 	const metrics = computePunchMetrics(now, null, shift, settings);
 	const payload = {
 		user_id: user.id,
+		employee_code: profile.employee_code || displayEmployeeCode(user.id),
 		date: startOfDay(now),
 		date_key: key,
 		status: metrics.status,
@@ -321,6 +346,7 @@ export async function checkOut(user: AnyUser, ip = "") {
 	const now = new Date();
 	await assertMonthEditable(now, user.role);
 	const profile = await ensureEmployeeProfile(user.id);
+	assertEmploymentActive(profile);
 	const settings = await getSettings();
 	const shift = await getShiftForUser(profile, settings);
 	const key = dayKey(now);
@@ -399,6 +425,7 @@ export async function hrMarkAttendance(actor: AnyUser, body: any) {
 
 	const payload = {
 		user_id: userId,
+		employee_code: profile.employee_code || displayEmployeeCode(userId),
 		date: startOfDay(date),
 		date_key: key,
 		status,

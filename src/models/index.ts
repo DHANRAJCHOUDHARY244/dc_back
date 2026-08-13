@@ -69,6 +69,8 @@ import {
 	FeedbackAuditLog,
 	FeedbackSettings,
 } from "./feedback.model";
+import { SlaStageConfig, SlaDelayReason, SlaStageRun } from "./sla.model";
+import { TaskTypeCatalog, EscalationRule, CrmFollowUp } from "./masterTask.model";
 
 /** Alias avoids clash with DOM Document type in some tooling */
 const DocumentModel = Document;
@@ -144,4 +146,10 @@ export {
   FeedbackInternalNote,
   FeedbackAuditLog,
   FeedbackSettings,
+  SlaStageConfig,
+  SlaDelayReason,
+  SlaStageRun,
+  TaskTypeCatalog,
+  EscalationRule,
+  CrmFollowUp,
 };

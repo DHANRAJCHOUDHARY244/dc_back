@@ -5,6 +5,7 @@ import {
 	type QuotePipelineStatus as PipelineStatus,
 } from "@constants/quotePipeline.constants";
 import { quoteRepository } from "@repositories";
+import { onPipelineStageChange } from "@services/sla.service";
 
 export type AdvancePipelineMeta = {
 	reason?: string;
@@ -91,6 +92,16 @@ export async function advanceQuotePipeline(
 	}
 
 	await quoteRepository.updateMany({ id: Number(quoteId) }, { $set });
+
+	if (statusChanged) {
+		void onPipelineStageChange({
+			quoteId: Number(quoteId),
+			from: current,
+			to: target,
+			actorId: meta.actorId ?? null,
+			statusChanged: true,
+		});
+	}
 
 	return {
 		updated: true,

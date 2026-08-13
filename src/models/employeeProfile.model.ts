@@ -6,7 +6,7 @@ const EmployeeProfileSchema = new Schema(
 	{
 		id: { type: Number, unique: true, index: true },
 		user_id: { type: Number, required: true, unique: true, index: true },
-		employee_code: { type: String, default: "" },
+		employee_code: { type: String, default: "", unique: true, sparse: true, index: true },
 		department: { type: String, default: "" },
 		designation: { type: String, default: "" },
 		team: { type: String, default: "" },

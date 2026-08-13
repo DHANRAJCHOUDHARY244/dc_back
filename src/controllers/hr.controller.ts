@@ -30,6 +30,7 @@ import {
 	userRepository,
 } from "@repositories";
 import * as hr from "@services/hrAttendance.service";
+import { displayEmployeeCode } from "@services/employeeId.service";
 import notificationController from "@controllers/notification.controller";
 
 function actor(req: AuthenticatedRequest) {
@@ -133,7 +134,7 @@ class HrController {
 				{
 					lean: true,
 					populate: [
-						{ path: "user", select: "id name email username profile_image mobile_no" },
+						{ path: "user", select: "id name email username profile_image mobile_no mobile_country_code" },
 						{ path: "manager", select: "id name email" },
 						{ path: "team_leader", select: "id name email" },
 						{ path: "shift" },
@@ -153,7 +154,6 @@ class HrController {
 			if (!userId) return ReE(res, BAD_REQUEST_CODE, "user_id required");
 			const existing = await hr.ensureEmployeeProfile(userId);
 			const allowed = [
-				"employee_code",
 				"department",
 				"designation",
 				"team",
@@ -171,6 +171,8 @@ class HrController {
 			];
 			const patch: any = {};
 			for (const k of allowed) if (req.body[k] !== undefined) patch[k] = req.body[k];
+			// employee_code is display-only (SE-{user_id}) — never manually edited
+			patch.employee_code = displayEmployeeCode(userId);
 			const updated = await employeeProfileRepository.updateById(existing.id, { $set: patch });
 			await hr.writeAudit({
 				actor_id: req.user.id,

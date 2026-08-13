@@ -6,6 +6,7 @@ const AttendanceRecordSchema = new Schema(
 	{
 		id: { type: Number, unique: true, index: true },
 		user_id: { type: Number, required: true, index: true },
+		employee_code: { type: String, default: "", index: true },
 		date: { type: Date, required: true, index: true },
 		date_key: { type: String, required: true, index: true },
 		status: {

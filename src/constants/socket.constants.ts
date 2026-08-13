@@ -6,6 +6,10 @@ export const SOCKET_EVENTS = {
   HANDSHAKE_SUCCESS: 'handshake-success',
   LOGIN:'login',
   USER_NOTIFICATION:'user-notification',
+  /** Role-scoped room: `role-{roleId}` */
+  ROLE_ROOM_PREFIX: 'role-',
+  /** Broadcast when role permissions change — clients refresh menus without logout */
+  PERMISSION_UPDATED: 'permission-updated',
   /* Quote Chat */
   QUOTE_CHAT_JOIN: 'quote-chat:join',
   QUOTE_CHAT_LEAVE: 'quote-chat:leave',
@@ -17,7 +21,8 @@ export enum USER_NOTIFICATION_EVENT_TYPE{
   USER='USER',
   QUOTE='QUOTE',
   INVOICE='INVOICE',
-  CUSTOM_INVOICE='CUSTOM_INVOICE'
+  CUSTOM_INVOICE='CUSTOM_INVOICE',
+  PERMISSION='PERMISSION',
 }
 export enum EVENT_TASK_TYPE{
   CREATED='CREATED',

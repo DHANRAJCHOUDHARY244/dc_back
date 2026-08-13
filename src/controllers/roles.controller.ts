@@ -7,6 +7,7 @@ import {
 } from "@repositories";
 import { ReE, ReS } from "@services/generalHelper.service";
 import { buildMenuTreePermissionGrp } from "@services/permissionArrange.service";
+import { notifyRolePermissionChange } from "@services/permissionNotify.service";
 import { Response } from "express";
 
 class RolesController {
@@ -79,17 +80,18 @@ class RolesController {
     try {
       const { role_id, permission } = req.body;
 
-      if (!role_id || !permission || typeof permission.id !== 'number') {
+      if (!role_id || !permission || permission.id == null || permission.id === "") {
         return ReE(res, BAD_REQUEST_CODE, "Missing role_id or invalid permission data");
       }
 
       const role = await roleRepository.findById(Number(role_id));
       if (!role) return ReE(res, BAD_REQUEST_CODE, "Role not found");
 
+      const permissionRowId = Number(permission.id);
       const existingPermission = await userPermissionRepository.findOne({
         role_id,
         permission_id: permission.permissions_id,
-        id: permission.id,
+        id: permissionRowId,
       });
 
       const payload = {
@@ -107,6 +109,9 @@ class RolesController {
       } else {
         await userPermissionRepository.create(payload);
       }
+
+      // Live CRM: connected users with this role refresh menus without logout
+      notifyRolePermissionChange(role_id);
 
       return ReS(res, SUCCESS_CODE, "Permission saved successfully");
     } catch (error) {

@@ -51,6 +51,8 @@ import calculatorPricingRoutes from './calculatorPricing.routes';
 import crmCompanyUnitRoutes from './crmCompanyUnit.routes';
 import crmSettingsController from '@controllers/crmSettings.controller';
 import crmCompanyUnitController from '@controllers/crmCompanyUnit.controller';
+import slaRoutes from './sla.routes';
+import masterTaskRoutes from './masterTask.routes';
 router.get('/',(req,res)=>{
     res.send("OK")
 })
@@ -103,7 +105,10 @@ router.use('/site-info',siteInfoRoutes);
 router.use('/v1/products',productRoutes);
 router.use('/v1/workflows',quoteWorkflowRoutes)
 router.use('/v1/solar', solarRoutes);
+/* ── CRM core (branding, companies, SLA, master tasks) ── */
 router.use('/v1/crm-settings', crmSettingsRoutes);
 router.use('/v1/crm-companies', crmCompanyUnitRoutes);
 router.use('/v1/calculator', calculatorPricingRoutes);
+router.use('/v1/sla', slaRoutes);
+router.use('/v1/master-tasks', masterTaskRoutes);
 export default router;

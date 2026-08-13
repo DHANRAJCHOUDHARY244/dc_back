@@ -8,6 +8,7 @@ import {
 } from "@repositories";
 import { Response } from "express";
 import { buildMenuTree } from "@services/permissionArrange.service";
+import { notifyRolePermissionChange } from "@services/permissionNotify.service";
 
 class PermissionController {
     async addPermission(req: AuthenticatedRequest, res: Response) {
@@ -31,6 +32,11 @@ class PermissionController {
                     })
                 )
             );
+
+            // Menu tree changed — refresh connected users for every role
+            for (const role of roles as any[]) {
+              if (role?.id != null) notifyRolePermissionChange(role.id);
+            }
 
             return ReS(res, SUCCESS_CODE, "Permission added successfully!", permission);
         } catch (error) {
@@ -76,6 +82,11 @@ class PermissionController {
               },
             });
 
+            const roles = await roleRepository.find({}, { select: "id", lean: true });
+            for (const role of roles as any[]) {
+              if (role?.id != null) notifyRolePermissionChange(role.id);
+            }
+
             return ReS(res, SUCCESS_CODE, "Permission updated successfully", updated);
         } catch (error) {
             return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);
@@ -95,6 +106,11 @@ class PermissionController {
 
             await userPermissionRepository.deleteMany({ permission_id: Number(id) });
             await permissionRepository.deleteById(Number(id));
+
+            const roles = await roleRepository.find({}, { select: "id", lean: true });
+            for (const role of roles as any[]) {
+              if (role?.id != null) notifyRolePermissionChange(role.id);
+            }
 
             return ReS(res, SUCCESS_CODE, "Permission deleted successfully");
         } catch (error) {

@@ -53,6 +53,19 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   try {
     await connectDatabase();
     await seedRoles();
+    try {
+      const { ensureSlaSeeds, backfillActiveQuotes } = await import("@services/sla.service");
+      await ensureSlaSeeds();
+      await backfillActiveQuotes();
+    } catch (e) {
+      console.error("SLA seed/backfill:", e);
+    }
+    try {
+      const { ensureMasterTaskSeeds } = await import("@services/masterTask.service");
+      await ensureMasterTaskSeeds();
+    } catch (e) {
+      console.error("Master task seed:", e);
+    }
     setDbReady(true);
     overrideLoggerMethods();
     dbRelation();

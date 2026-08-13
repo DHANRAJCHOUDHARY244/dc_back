@@ -1,7 +1,8 @@
 export enum TaskType {
   OTHER = "OTHER",
   LEAD_VISIT = "LEAD_VISIT",
-  LEAD_CONVERSION = "LEAD_CONVERSION"
+  LEAD_CONVERSION = "LEAD_CONVERSION",
+  SLA_DELAY_RESOLVE = "SLA_DELAY_RESOLVE",
 }
 
 export enum TaskStatus {

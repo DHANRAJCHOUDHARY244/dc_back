@@ -1,8 +1,8 @@
 import { SOCKET_EVENTS } from "@constants/socket.constants";
+import { roleRoom } from "@services/permissionNotify.service";
 import { SocketService } from "@services/socket.service";
 import { Server, Socket } from "socket.io";
 import { socketAuthenticate } from "src/middleware/socketAuth.middleware";
-
 
 export const setupSocket = (httpServer: any) => {
   const io = new Server(httpServer);
@@ -12,14 +12,22 @@ export const setupSocket = (httpServer: any) => {
   io.on(SOCKET_EVENTS.CONNECTION, (socket: Socket) => {
     const user = (socket as any).user;
     console.log(`✅ Socket connected: ${user?.email || socket.id}`);
-    socket.emit(SOCKET_EVENTS.USER_NOTIFICATION + `${user?.id}`,
-      {
-        time: new Date().toISOString(),
-        ...user,
-        message: `Socket Connected id: ${socket.id}`,
-        type: SOCKET_EVENTS.CONNECTION,
-        task_type:SOCKET_EVENTS.HANDSHAKE_SUCCESS
-      });
+
+    /* Join personal + role rooms so permission / CRM pushes reach this user live */
+    if (user?.id != null) {
+      socket.join(`user-${user.id}`);
+    }
+    if (user?.role_id != null) {
+      socket.join(roleRoom(user.role_id));
+    }
+
+    socket.emit(SOCKET_EVENTS.USER_NOTIFICATION + `${user?.id}`, {
+      time: new Date().toISOString(),
+      ...user,
+      message: `Socket Connected id: ${socket.id}`,
+      type: SOCKET_EVENTS.CONNECTION,
+      task_type: SOCKET_EVENTS.HANDSHAKE_SUCCESS,
+    });
 
     /* ── Quote Chat Rooms ── */
     socket.on(SOCKET_EVENTS.QUOTE_CHAT_JOIN, (quoteId: number | string) => {
