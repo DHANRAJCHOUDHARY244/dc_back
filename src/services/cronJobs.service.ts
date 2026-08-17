@@ -78,6 +78,11 @@ export const loadCrons = () => {
 					logger.error(`Missed follow-ups: ${e?.message || e}`),
 				);
 			},
+			() => {
+				void runLeadSupervisor({ hours: 2 }).catch((e) =>
+					logger.error(`Lead supervisor: ${e?.message || e}`),
+				);
+			},
 		],
 		enabled: true,
 	});

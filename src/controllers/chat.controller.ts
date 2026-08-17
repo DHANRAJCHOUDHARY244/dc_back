@@ -5,6 +5,31 @@ import { SUCCESS_CODE, SERVER_ERROR_CODE } from "@constants/serverCode";
 import { chatRepository, messageRepository, userRepository } from "@repositories";
 import { SocketService } from "@services/socket.service";
 
+function formatChatTime(dateString?: string | Date): string {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "";
+  let hours = date.getHours();
+  const minutes = date.getMinutes().toString().padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+  return `${hours}:${minutes} ${ampm}`;
+}
+
+function lastMessagePreview(lastMessage: any): string {
+  const attachments = Array.isArray(lastMessage?.attachments) ? lastMessage.attachments : [];
+  const text = String(lastMessage?.content || "").trim();
+  if (text) return text;
+  if (attachments.length) {
+    const kinds = attachments.map((a: any) => a.kind);
+    if (kinds.every((k: string) => k === "image")) return kinds.length > 1 ? `📷 ${kinds.length} photos` : "📷 Photo";
+    if (kinds.every((k: string) => k === "video")) return "🎬 Video";
+    if (kinds.every((k: string) => k === "audio")) return "🎵 Audio";
+    return `📎 ${attachments[0]?.original_name || "Attachment"}`;
+  }
+  return "No messages yet";
+}
+
 class ChatController {
   async createChat(req: AuthenticatedRequest, res: Response) {
     try {
@@ -18,13 +43,13 @@ class ChatController {
 
       let chat: any;
       if (type === "direct") {
-        const directChats: any = await chatRepository.find({ type: "direct" }, { lean: true });
-
-        const existingChat = directChats.find((c: any) => {
-          const m = Array.isArray(c.members) ? c.members : [];
-          return JSON.stringify([...m].sort((a: number, b: number) => a - b)) ===
-            JSON.stringify(uniqueSortedMembers);
-        });
+        const existingChat: any = await chatRepository.findOne(
+          {
+            type: "direct",
+            members: { $all: uniqueSortedMembers, $size: uniqueSortedMembers.length },
+          },
+          { lean: true },
+        );
 
         if (existingChat) {
           return ReS(res, SUCCESS_CODE, "Direct chat already exists", existingChat);
@@ -69,25 +94,64 @@ class ChatController {
       const userId = req.user?.id;
       if (!userId) return ReE(res, SERVER_ERROR_CODE, "User ID missing");
 
-      const chats: any = await chatRepository.find(
+      const chats: any[] = await chatRepository.find(
         { members: userId },
-        { sort: { updatedAt: -1 }, lean: true },
+        { sort: { updated_at: -1, created_at: -1 }, lean: true },
       );
 
-      const result = await Promise.all(
-        chats.map(async (chat: any) => {
-          const memberIds = chat.members || [];
+      if (!chats.length) {
+        return ReS(res, SUCCESS_CODE, "Chats loaded", []);
+      }
 
-          let name = "";
-          let avatar = "";
+      const otherUserIds = [
+        ...new Set(
+          chats
+            .filter((chat) => chat.type !== "group")
+            .map((chat) => (chat.members || []).find((id: number) => id !== userId))
+            .filter((id: number | undefined) => id != null),
+        ),
+      ];
+      const chatIds = chats.map((chat) => chat.id).filter((id: number | undefined) => id != null);
+
+      const [users, lastMessages] = await Promise.all([
+        otherUserIds.length
+          ? userRepository.find(
+              { id: { $in: otherUserIds } },
+              { select: "id name profile_image", lean: true },
+            )
+          : Promise.resolve([]),
+        chatIds.length
+          ? messageRepository.aggregate([
+              { $match: { chatId: { $in: chatIds } } },
+              { $sort: { created_at: -1 } },
+              {
+                $group: {
+                  _id: "$chatId",
+                  id: { $first: "$id" },
+                  content: { $first: "$content" },
+                  created_at: { $first: "$created_at" },
+                  messageType: { $first: "$messageType" },
+                  attachments: { $first: "$attachments" },
+                },
+              },
+            ])
+          : Promise.resolve([]),
+      ]);
+
+      const userById = new Map((users as any[]).map((u) => [u.id, u]));
+      const lastByChatId = new Map((lastMessages as any[]).map((m) => [m._id, m]));
+
+      const result = chats
+        .filter((chat) => chat.id != null)
+        .map((chat) => {
+          const memberIds = chat.members || [];
           const isGroup = chat.type === "group";
+          let name = "";
+          let avatar: string | null = "";
 
           if (!isGroup) {
             const otherUserId = memberIds.find((id: number) => id !== userId);
-            const user: any = await userRepository.findById(otherUserId, {
-              select: "name profile_image",
-              lean: true,
-            });
+            const user = userById.get(otherUserId);
             name = user?.name || "Unknown";
             avatar = user?.profile_image ?? null;
           } else {
@@ -95,41 +159,16 @@ class ChatController {
             avatar = null;
           }
 
-          const lastMessage: any = await messageRepository.findOne(
-            { chatId: chat.id },
-            { sort: { created_at: -1 }, lean: true },
-          );
-
-          const formatTime = (dateString: string): string => {
-            if (!dateString) return "";
-            const date = new Date(dateString);
-            if (Number.isNaN(date.getTime())) return "";
-            let hours = date.getHours();
-            const minutes = date.getMinutes().toString().padStart(2, "0");
-            const ampm = hours >= 12 ? "PM" : "AM";
-            hours = hours % 12 || 12;
-            return `${hours}:${minutes} ${ampm}`;
-          };
-
-          const attachments = Array.isArray(lastMessage?.attachments) ? lastMessage.attachments : [];
-          const text = String(lastMessage?.content || "").trim();
-          let preview = text;
-          if (!preview && attachments.length) {
-            const kinds = attachments.map((a: any) => a.kind);
-            if (kinds.every((k: string) => k === "image")) preview = kinds.length > 1 ? `📷 ${kinds.length} photos` : "📷 Photo";
-            else if (kinds.every((k: string) => k === "video")) preview = "🎬 Video";
-            else if (kinds.every((k: string) => k === "audio")) preview = "🎵 Audio";
-            else preview = `📎 ${attachments[0]?.original_name || "Attachment"}`;
-          }
-          if (!preview) preview = "No messages yet";
+          const lastMessage = lastByChatId.get(chat.id);
+          const preview = lastMessagePreview(lastMessage);
 
           return {
-            id: chat.id.toString(),
+            id: String(chat.id),
             name,
             avatar,
             type: chat.type,
             content: preview,
-            timestamp: lastMessage ? formatTime(lastMessage.created_at) : "",
+            timestamp: lastMessage ? formatChatTime(lastMessage.created_at) : "",
             lastMessage: lastMessage
               ? {
                   id: String(lastMessage.id),
@@ -139,11 +178,15 @@ class ChatController {
                 }
               : undefined,
             status: "read",
+            _sortAt: lastMessage?.created_at
+              ? new Date(lastMessage.created_at).getTime()
+              : new Date(chat.updated_at || chat.created_at || 0).getTime(),
           };
-        }),
-      );
+        })
+        .sort((a, b) => b._sortAt - a._sortAt)
+        .map(({ _sortAt, ...chat }) => chat);
 
-      return ReS(res, SUCCESS_CODE, "Chats loaded", result.filter(Boolean));
+      return ReS(res, SUCCESS_CODE, "Chats loaded", result);
     } catch (error) {
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);
     }

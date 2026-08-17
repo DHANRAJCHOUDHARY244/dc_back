@@ -34,6 +34,14 @@ export {
 } from "./accountsSalesCommission.repository";
 export { ContactFormRepository, contactFormRepository } from "./contactForm.repository";
 export { LeadRepository, leadRepository } from "./lead.repository";
+export {
+	LeadAgentRepository,
+	leadAgentRepository,
+	LeadServiceAreaRepository,
+	leadServiceAreaRepository,
+	LeadDistributionSettingsRepository,
+	leadDistributionSettingsRepository,
+} from "./leadOps.repository";
 export { AdvertisingRepository, advertisingRepository } from "./advertising.repository";
 export { PopupFormRepository, popupFormRepository } from "./popupForm.repository";
 export { QuoteRepository, quoteRepository } from "./quote.repository";

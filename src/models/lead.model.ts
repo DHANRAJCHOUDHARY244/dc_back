@@ -61,6 +61,50 @@ const LeadSchema = new Schema(
     call_logs: jsonArray,
     timeline: jsonArray,
 
+    suburb: { type: String },
+    country: { type: String, default: "Australia" },
+    campaign_name: { type: String },
+    ad_name: { type: String },
+    landing_page: { type: String },
+    public_id: { type: String, index: true },
+    created_by: { type: Number, index: true },
+    team_leader_id: { type: Number, index: true },
+    previous_owner_id: { type: Number },
+
+    solar_requirement: { type: String },
+    battery_requirement: { type: String },
+    solar_system_size: { type: String },
+    battery_size: { type: String },
+    existing_inverter: { type: String },
+    installation_location: { type: String },
+    customer_type: { type: String },
+    purchase_timeframe: { type: String },
+    estimated_system_value: { type: Number, default: 0 },
+    estimated_sales_value: { type: Number, default: 0 },
+
+    buying_intent: { type: String },
+    conversion_probability: { type: Number, default: 0 },
+    ai_summary: { type: String },
+    recommended_action: { type: String },
+    recommended_follow_up_at: { type: Date },
+    customer_objections: jsonArray,
+
+    first_contacted_at: { type: Date },
+    opened_at: { type: Date },
+    received_at: { type: Date },
+    response_seconds: { type: Number },
+
+    notes: jsonArray,
+    transfers: jsonArray,
+    audit_log: jsonArray,
+    linked_lead_ids: jsonArray,
+    merged_into_id: { type: Number, index: true },
+
+    external_id: { type: String, index: true },
+    utm_source: { type: String },
+    utm_campaign: { type: String },
+    utm_medium: { type: String },
+
     cf_id: { type: Number },
     popup_id: { type: Number },
     quote_id: { type: Number },
@@ -78,6 +122,20 @@ LeadSchema.virtual("uploader", {
 LeadSchema.virtual("owner", {
   ref: "User",
   localField: "owner_id",
+  foreignField: "id",
+  justOne: true,
+});
+
+LeadSchema.virtual("team_leader", {
+  ref: "User",
+  localField: "team_leader_id",
+  foreignField: "id",
+  justOne: true,
+});
+
+LeadSchema.virtual("creator", {
+  ref: "User",
+  localField: "created_by",
   foreignField: "id",
   justOne: true,
 });

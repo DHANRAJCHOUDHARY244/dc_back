@@ -68,6 +68,9 @@ export enum PermissionKey {
   DOCUMENT_CENTER = "Documents Center",
   DOCUMENT_LETTER_PAD = "Letter pad",
   DOCUMENT_JOINING_LETTER = "Joining letter",
+  DOCUMENT_OFFER_LETTER = "Offer letter",
+  DOCUMENT_APPOINTMENT_LETTER = "Appointment letter",
+  DOCUMENT_PRICE_AGREEMENT = "Price agreement",
   DOCUMENT_USER_LIST = "User Document List",
   DOCUMENT_USER_VIEW = "User Document View",
 

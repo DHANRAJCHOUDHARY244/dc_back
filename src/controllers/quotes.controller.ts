@@ -46,6 +46,7 @@ import { projectCancelledTemplate } from "@template/projectCancelled";
 import { stockDeliveryScheduledTemplate } from "@template/stockDeliveryScheduled";
 import { getCompanyConfig } from "@services/crmSettings.service";
 import { sendEmail } from "@utils/email";
+import { isQuoteAdmin } from "@services/adminPermission.service";
 
 import path  from 'path';
 import  fs  from 'fs';
@@ -398,8 +399,8 @@ class QuotesController {
       }
 
       const filter: Record<string, unknown> = { is_solar_sketch: { $ne: true } };
-      if (user.role !== Roles.SUPER_ADMIN && user.role!== Roles.CUSTOMER_SUPPORT_EXECUTIVE ) {
-        if(user.id !==299)
+      if (!(await isQuoteAdmin(user))) {
+        
         filter.$or = [{ sender_id: user.id }, { customer_id: user.id }]
       }
       if (customerIds) filter.customer_id = { $in: customerIds };
@@ -1463,7 +1464,7 @@ class QuotesController {
       const parsedPage = parseInt(page as string, 10);
 
       const filter: Record<string, unknown> = { is_solar_sketch: true };
-      if (user.role !== Roles.SUPER_ADMIN && user.role !== Roles.CUSTOMER_SUPPORT_EXECUTIVE) {
+      if (!(await isQuoteAdmin(user))) {
         if (user.id !== 299) filter.$or = [{ sender_id: user.id }, { customer_id: user.id }];
       }
       if (cust_name) {
@@ -1733,8 +1734,8 @@ class QuotesController {
       }
 
       const filter: Record<string, unknown> = { is_solar_sketch: { $ne: true } };
-    if (user.role !== Roles.SUPER_ADMIN && user.role!== Roles.CUSTOMER_SUPPORT_EXECUTIVE )  {
-         if(user.id !==299)
+    if (!(await isQuoteAdmin(user)))  {
+         
           filter.$or = [{ sender_id: user.id }, { customer_id: user.id }];
       }
       if (customerIds) filter.customer_id = { $in: customerIds };
@@ -2486,7 +2487,7 @@ class QuotesController {
       } = req.body || {};
 
       const filter: Record<string, unknown> = { is_solar_sketch: { $ne: true } };
-      if (user.role !== Roles.SUPER_ADMIN && user.role !== Roles.CUSTOMER_SUPPORT_EXECUTIVE) {
+      if (!(await isQuoteAdmin(user))) {
         if (user.id !== 299) filter.$or = [{ sender_id: user.id }, { customer_id: user.id }];
       }
 

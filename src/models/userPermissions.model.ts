@@ -12,6 +12,7 @@ const UserPermissionSchema = new Schema(
     delete: { type: Boolean, required: true, default: false },
     can_update: { type: Boolean, required: true, default: false },
     is_user_specific: { type: Boolean, required: true, default: false },
+    is_admin: { type: Boolean, required: true, default: false },
   },
   collectionOptions("user_permissions"),
 );

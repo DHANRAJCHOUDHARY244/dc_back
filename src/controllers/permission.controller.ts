@@ -29,6 +29,7 @@ class PermissionController {
                         can_update: role.name === "SUPER_ADMIN",
                         delete: role.name === "SUPER_ADMIN",
                         is_user_specific: false,
+                        is_admin: role.name === "SUPER_ADMIN",
                     })
                 )
             );
@@ -124,7 +125,7 @@ class PermissionController {
                   { populate: { path: "permission" } },
                 );
                 const permissionList = rolePermissions.map((entry: any) => {
-                  const {create,can_update,enable,delete:is_deleted,is_user_specific} = entry.toJSON();
+                  const {create,can_update,enable,delete:is_deleted,is_user_specific,is_admin} = entry.toJSON();
                   const permission = entry.permission?.toJSON?.() || {};
             
                   return {
@@ -133,6 +134,7 @@ class PermissionController {
                     delete: is_deleted,
                     can_update,
                     is_user_specific,
+                    is_admin,
                     enable
                   };
                 });

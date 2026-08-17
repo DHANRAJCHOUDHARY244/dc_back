@@ -289,7 +289,7 @@ class CustomInvoiceController {
 
             const filter: any = {};
            if (user.role !== Roles.SUPER_ADMIN && user.role!== Roles.CUSTOMER_SUPPORT_EXECUTIVE ) {
-                if(user.id !==299)
+                
                  filter.$or = [{ sender_id: user.id }, { customer_id: user.id }]
             }
             if (pay_status) applyInvoicePaymentChipFilter(filter, pay_status, { supportDiscountFields: true });

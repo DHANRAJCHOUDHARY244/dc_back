@@ -222,9 +222,10 @@ export const seedRoles = async () => {
   console.log("Inserted:", newRoles.map(r => r.name));
   console.log("Already exists:", [...existingNames]);
 
-  await seedFinanceAccountsPermission();
-  await seedAllInOnePermission();
-  await seedHrAttendancePermissions();
+  // await seedFinanceAccountsPermission();
+  // await seedAllInOnePermission();
+  // await seedHrAttendancePermissions();
+  // await seedDocumentLetterPermissions();
 
   // await importAdvertisingData();
   // await sendMarketingEmails()
@@ -474,6 +475,70 @@ export const seedHrAttendancePermissions = async () => {
     console.log("Seeded HR & Employees permissions with ids:", permissionIds);
   } catch (err) {
     console.error("seedHrAttendancePermissions failed", err);
+  }
+};
+
+const EXTRA_LETTER_MENUS = [
+  {
+    name: "Offer letter",
+    route: "offer-letter",
+    label: "sys.menu.document.offer_letter",
+    component: "/documents/offerLetter/OfferLetter.tsx",
+  },
+  {
+    name: "Appointment letter",
+    route: "appointment-letter",
+    label: "sys.menu.document.appointment_letter",
+    component: "/documents/appointmentLetter/AppointmentLetter.tsx",
+  },
+  {
+    name: "Price agreement",
+    route: "price-agreement",
+    label: "sys.menu.document.price_agreement",
+    component: "/documents/priceAgreement/PriceAgreementLetter.tsx",
+  },
+];
+
+export const seedDocumentLetterPermissions = async () => {
+  try {
+    const parent = await permissionRepository.findOne({ route: "document-center", parentId: null });
+    if (!parent) return;
+
+    const roles = await roleRepository.find();
+    for (const menu of EXTRA_LETTER_MENUS) {
+      let permission: any = await permissionRepository.findOne({ route: menu.route, parentId: (parent as any).id });
+      if (!permission) {
+        permission = await permissionRepository.create({
+          name: menu.name,
+          parentId: (parent as any).id,
+          label: menu.label,
+          type: 1,
+          route: menu.route,
+          component: menu.component,
+        });
+      }
+      for (const role of roles as any[]) {
+        const exists = await userPermissionRepository.findOne({
+          role_id: role.id,
+          permission_id: permission.id,
+        });
+        if (exists) continue;
+        const isSuper = role.name === Roles.SUPER_ADMIN;
+        await userPermissionRepository.create({
+          role_id: role.id,
+          permission_id: permission.id,
+          enable: isSuper,
+          create: isSuper,
+          can_update: isSuper,
+          delete: isSuper,
+          is_user_specific: false,
+          is_admin: isSuper,
+        });
+      }
+    }
+    console.log("Seeded extra Document Center letter permissions");
+  } catch (err) {
+    console.error("seedDocumentLetterPermissions failed", err);
   }
 };
 

@@ -221,6 +221,7 @@ export async function listMasterTasks(filters: Record<string, any>, viewer: { id
 		page,
 		limit,
 		sort: { [sortField]: sortDir, created_at: -1 } as any,
+		lean: true,
 		populate: [
 			{ path: "user", select: "id name email" },
 			{ path: "creator", select: "id name" },
@@ -230,13 +231,17 @@ export async function listMasterTasks(filters: Record<string, any>, viewer: { id
 
 	const now = Date.now();
 	const data = (rows as any[]).map((t) => {
-		const due = t.due_date ? new Date(t.due_date).getTime() : null;
-		const overdue = due != null && due < now && TASK_OPEN_STATUSES.includes(t.status);
+		const raw = t?.toObject?.({ virtuals: true }) ?? t;
+		const due = raw.due_date ? new Date(raw.due_date).getTime() : null;
+		const overdue = due != null && due < now && TASK_OPEN_STATUSES.includes(raw.status);
+		const id = raw.id;
 		return {
-			...t,
+			...raw,
+			id,
+			task_code: raw.task_code || (id != null ? `TASK#${id}` : null),
 			is_overdue: overdue,
 			countdown_ms: due != null ? due - now : null,
-			display_title: t.title || t.name,
+			display_title: raw.title || raw.name,
 		};
 	});
 

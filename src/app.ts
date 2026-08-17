@@ -29,7 +29,7 @@ const app = express();
 const httpServer = createServer(app);
 
 app.use(cors());
-app.use(fileUpload());
+app.use(fileUpload({ limits: { fileSize: 40 * 1024 * 1024 }, abortOnLimit: true }));
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ limit: "100mb", extended: false }));
 app.use(reqResLogger);

@@ -102,6 +102,7 @@ class RolesController {
         can_update: permission.can_update,
         delete: permission.delete,
         is_user_specific: permission.is_user_specific,
+        is_admin: permission.is_admin,
       };
 
       if (existingPermission) {
@@ -162,6 +163,7 @@ class RolesController {
               can_update: isSuperAdmin,
               delete: isSuperAdmin,
               is_user_specific: false,
+              is_admin: isSuperAdmin,
             })
           )
         );
@@ -185,6 +187,7 @@ class RolesController {
                 can_update: isSuperAdmin,
                 delete: isSuperAdmin,
                 is_user_specific: false,
+                is_admin: isSuperAdmin,
               })
             )
           );

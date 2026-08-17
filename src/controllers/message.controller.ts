@@ -136,6 +136,8 @@ class MessageController {
       const payload = formatMessage(message, sender);
       const notifyText = previewText(content, attachments);
 
+      await chatRepository.updateById(chatId, { $set: { updated_at: new Date() } }).catch(() => undefined);
+
       members.forEach((m: number) => {
         if (m === userId) return;
         SocketService.emit(`message_created_${chatId}_${m}`, {

@@ -53,6 +53,7 @@ import crmSettingsController from '@controllers/crmSettings.controller';
 import crmCompanyUnitController from '@controllers/crmCompanyUnit.controller';
 import slaRoutes from './sla.routes';
 import masterTaskRoutes from './masterTask.routes';
+import letterStudioRoutes from './letterStudio.routes';
 router.get('/',(req,res)=>{
     res.send("OK")
 })
@@ -86,6 +87,8 @@ router.use('/stock-order',stockOrderRoutes);
 router.use('/v1/system-logs',logsRoutes);
 router.use('/v1/system',systemRoutes);
 router.post('/leads/public-enquiry', leadsController.publicEnquiry.bind(leadsController));
+router.get('/leads/webhooks/:channel', leadsController.ingestWebhook.bind(leadsController));
+router.post('/leads/webhooks/:channel', leadsController.ingestWebhook.bind(leadsController));
 router.use('/v1/leads',leadsRoutes);
 router.use('/v1/tasks',taskRoutes);
 router.use('/v1/activity-tracker',activityTrackerRoutes);
@@ -111,4 +114,5 @@ router.use('/v1/crm-companies', crmCompanyUnitRoutes);
 router.use('/v1/calculator', calculatorPricingRoutes);
 router.use('/v1/sla', slaRoutes);
 router.use('/v1/master-tasks', masterTaskRoutes);
+router.use('/v1/letter-studio', letterStudioRoutes);
 export default router;

@@ -26,6 +26,9 @@ import InstallerAgreement from "./installerAgreement.model";
 import InstallerDocument from "./installerDocument.model";
 import Invoice from "./invoice.model";
 import Lead from "./lead.model";
+import LeadAgent from "./leadAgent.model";
+import LeadServiceArea from "./leadServiceArea.model";
+import LeadDistributionSettings from "./leadDistributionSettings.model";
 import Message from "./message.model";
 import Notification from "./notifications";
 import PaymentHistory from "./paymentHistory.model";
@@ -104,6 +107,9 @@ export {
   InstallerDocument,
   Invoice,
   Lead,
+  LeadAgent,
+  LeadServiceArea,
+  LeadDistributionSettings,
   Message,
   Notification,
   PaymentHistory,
