@@ -22,4 +22,5 @@ export interface newCustomInvoice {
     partialAmount?:number;
     loan_enabled?:boolean;  
     loan_meta?:any;
+    notes?: string;
 }

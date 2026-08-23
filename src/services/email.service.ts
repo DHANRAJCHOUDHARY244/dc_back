@@ -8,6 +8,16 @@ import { marketingSendEmail, sendEmail } from "@utils/email";
 import { getCompanyConfig } from "@services/crmSettings.service";
 import logger from "@utils/pino";
 
+/** Fire-and-forget email task — logs failures, never throws to the HTTP handler */
+export function runEmailInBackground(
+  task: () => Promise<unknown>,
+  label = "Email",
+): void {
+  void task().catch((error: any) => {
+    logger.error(`${label} failed: ${error?.message || error}`);
+  });
+}
+
 export const sendEmailRegistration = async (email: string) => {
     try {
         const template = emailTemplate(registrationContent(email));
@@ -43,6 +53,13 @@ export const sendEmailRegSignOtp = async ({ email, subject, client_name, id, typ
         throw new Error(`Internal Server Error! 😞 ${error?.message || error}`);
     }
 }
+
+export const sendEmailRegSignOtpAsync = (
+  payload: SendEmailRegSignOtp,
+  label = "OTP email",
+): void => {
+  runEmailInBackground(() => sendEmailRegSignOtp(payload), label);
+};
 
 
 export const sendEventEmail = async (

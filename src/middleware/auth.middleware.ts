@@ -22,6 +22,6 @@ export const authenticate = async (req: AuthenticatedRequest, res: Response, nex
 
     next();
   } catch (error) {
-    ReE(res,UNAUTHORIZED_CODE,"Invalid token");
+    return ReE(res, UNAUTHORIZED_CODE, "Invalid token");
   }
 };

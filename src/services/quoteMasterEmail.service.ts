@@ -43,7 +43,10 @@ export const sendMasterQuoteEmail = async (
     const customerName = name || sender?.name;
     const customerEmail = customer?.email;
 
-    const link = `${process.env.FRONT_URL}/#/quote/customer-view/${quote_id}/${bypass_token}`;
+    const objectId = quote._id ? String(quote._id) : "";
+    const link = quote.is_solar_sketch && objectId
+      ? `${process.env.FRONT_URL}/#/green-sketch/proposal/${objectId}/${quote_id}`
+      : `${process.env.FRONT_URL}/#/quote/customer-view/${quote_id}/${bypass_token}`;
 
     let ccList = [...cc];
     let bccList = [...bcc];

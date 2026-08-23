@@ -20,7 +20,7 @@ class InstallerController {
   async addNew(req: Request, res: Response) {
     try {
       req.body.is_signup = false;
-      authController.register(req, res);
+      await authController.register(req, res);
     } catch (error) {
       ReE(res, SERVER_ERROR_CODE, `Server Error:${error}`);
     }

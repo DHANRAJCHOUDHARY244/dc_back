@@ -5,11 +5,19 @@ import  bcrypt  from 'bcrypt';
 import  jwt  from 'jsonwebtoken';
 
 export function ReS (res: Response, status: number, message: string, data?: any)  {
+  if (res.headersSent) {
+    console.error("ReS skipped — response already sent:", message);
+    return;
+  }
   const res_obj: ResponseData = { status, message, data };
   res.status(status).json(res_obj);
 };
 
 export function ReE (res:Response, status: number, message: string) {
+  if (res.headersSent) {
+    console.error("ReE skipped — response already sent:", message);
+    return;
+  }
   const res_obj: ResponseData = { status, message };
   res.status(status).json(res_obj);
 }

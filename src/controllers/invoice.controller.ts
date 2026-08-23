@@ -73,6 +73,11 @@ class InvoiceController {
       if (quote.customer_accepted !== QuoteCustomerStatus.ACCEPTED)
         return ReE(res, BAD_REQUEST_CODE, "Quote is not accepted by customer");
 
+      const customerData = quote.customer;
+      if (!customerData?.email) {
+        return ReE(res, BAD_REQUEST_CODE, "Quote customer email is required to create an invoice");
+      }
+
       const existingInvoice = await invoiceRepository.findOne({
         quote_id, sender_id,
       });
@@ -87,7 +92,6 @@ class InvoiceController {
         mobile_no: quote.mobile_no,
         status_updated_date: new Date(),
       });
-      const customerData = quote.customer;
       const emailPayload = {
         email: customerData.email,
         subject: "📄 Your Invoice Has Been Created",
@@ -325,13 +329,26 @@ class InvoiceController {
         return ReE(res, BAD_REQUEST_CODE, "Invalid status date");
       }
 
-      const invoice: any = await invoiceRepository.findById(Number(id), {
+      const invoiceFilter: Record<string, unknown> = { id: Number(id) };
+      if (req.user.role !== Roles.SUPER_ADMIN) {
+        invoiceFilter.sender_id = req.user.id;
+      }
+
+      const invoice: any = await invoiceRepository.findOne(invoiceFilter, {
         populate: {
           path: "quote",
           populate: { path: "customer", select: "id name email" },
         },
       });
-      if (!invoice) return ReE(res, SERVER_ERROR_CODE, "Invoice not found");
+      if (!invoice) return ReE(res, SERVER_ERROR_CODE, "Invoice not found or access denied");
+
+      const quote = invoice.quote as { customer?: { id?: number; name?: string; email?: string }; custEmail?: string; email?: string; name?: string } | undefined;
+      const customerData = quote?.customer ?? null;
+      const customerEmail = String(
+        customerData?.email ?? quote?.custEmail ?? quote?.email ?? "",
+      ).trim();
+      const customerName = customerData?.name ?? quote?.name ?? invoice.name ?? "Customer";
+      const customerId = customerData?.id ?? null;
 
       const now = new Date();
       const previousStatus = invoice.pay_status;
@@ -363,48 +380,61 @@ class InvoiceController {
 
       const updated = await invoiceRepository.updateById(Number(id), { $set: updateData });
       const plain: any = updated?.toObject?.() ?? updated;
-      const customerData = plain?.quote?.customer ?? plain?.quote;
-      const emailPayload = {
-        email: customerData.email,
-        subject: "📄 Your Invoice Has Been Updated",
-        client_name: customerData.name,
-        id: plain.id,
-        type: "INVOICE",
-        title: `Invoice #${plain.id}`,
-        status: pay_status,
-        due_date: dateOfDue,
-        link: `${process.env.FRONT_URL}/#/invoice/customer-view/${plain.id}/${plain.bypass_token}`,
-        event: EVENT_TASK_TYPE.UPDATED
-      };
+
       ReS(res, SUCCESS_CODE, "Payment status updated successfully", updated);
 
-      await notificationController.createNotification({
-        userId: req.user.id,
-        message: `Invoice payment status updated to ${pay_status}`,
-        route:`${process.env.FRONT_URL}/#/invoice/customer-view/${plain.id}/${plain.bypass_token}`,
-        meta:{
-          type: USER_NOTIFICATION_EVENT_TYPE.INVOICE,
-          customerId: customerData.id,
-          customerName: customerData.name,
-          senderName: req.user.name,
-          role: req.user.role
+      void (async () => {
+        try {
+          if (!customerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+            console.warn("Skipping invoice status email — invalid or missing customer email");
+            return;
+          }
+          const emailPayload = {
+            email: customerEmail,
+            subject: "📄 Your Invoice Has Been Updated",
+            client_name: customerName,
+            id: plain.id,
+            type: "INVOICE",
+            title: `Invoice #${plain.id}`,
+            status: pay_status,
+            due_date: dateOfDue,
+            link: `${process.env.FRONT_URL}/#/invoice/customer-view/${plain.id}/${plain.bypass_token}`,
+            event: EVENT_TASK_TYPE.UPDATED,
+          };
+          await notificationController.createNotification({
+            userId: req.user.id,
+            message: `Invoice payment status updated to ${pay_status}`,
+            route: `${process.env.FRONT_URL}/#/invoice/customer-view/${plain.id}/${plain.bypass_token}`,
+            meta: {
+              type: USER_NOTIFICATION_EVENT_TYPE.INVOICE,
+              customerId,
+              customerName,
+              senderName: req.user.name,
+              role: req.user.role,
+            },
+          });
+          SocketService.emit(SOCKET_EVENTS.USER_NOTIFICATION + `${plain.sender_id}`, {
+            type: USER_NOTIFICATION_EVENT_TYPE.INVOICE,
+            name: req.user.name,
+            profile_image: req.user.profile_image,
+            task_type: EVENT_TASK_TYPE.CREATED,
+            message: `new Invoice created`,
+          });
+          if (customerId) {
+            SocketService.emit(SOCKET_EVENTS.USER_NOTIFICATION + `${customerId}`, {
+              type: USER_NOTIFICATION_EVENT_TYPE.INVOICE,
+              name: req.user.name,
+              profile_image: req.user.profile_image,
+              task_type: EVENT_TASK_TYPE.CREATED,
+              message: `new Invoice created`,
+            });
+          }
+          await sendEventEmail(emailPayload);
+        } catch (emailErr: any) {
+          console.error("Invoice status email failed:", emailErr?.message || emailErr);
         }
-      });
-      SocketService.emit(SOCKET_EVENTS.USER_NOTIFICATION + `${plain.sender_id}`, {
-        type: USER_NOTIFICATION_EVENT_TYPE.INVOICE,
-        name: req.user.name,
-        profile_image: req.user.profile_image,
-        task_type: EVENT_TASK_TYPE.CREATED,
-        message: `new Invoice created`,
-      })
-      SocketService.emit(SOCKET_EVENTS.USER_NOTIFICATION + `${customerData.id}`, {
-        type: USER_NOTIFICATION_EVENT_TYPE.INVOICE,
-        name: req.user.name,
-        profile_image: req.user.profile_image,
-        task_type: EVENT_TASK_TYPE.CREATED,
-        message: `new Invoice created`,
-      })
-      return await sendEventEmail(emailPayload);
+      })();
+      return;
     } catch (error: any) {
       console.error("updateInvoicePaymentStatus Error:", error);
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);

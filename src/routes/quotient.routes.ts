@@ -8,6 +8,7 @@ router.post("/v1/add-attachments", quotesController.addAttachments.bind(quotesCo
 router.put("/v1/:quoteId/manual-attachments", quotesController.updateManualAttachments.bind(quotesController));
 router.put("/v1/:quoteId/green-sketch", quotesController.updateGreenSketch.bind(quotesController));
 router.post("/v1/solar-quote", quotesController.createSolarQuote.bind(quotesController));
+router.post("/v1/solar-quote/send-email", quotesController.sendSolarQuoteEmail.bind(quotesController));
 router.post("/v1/solar-quotes", quotesController.getSolarQuotes.bind(quotesController));
 /** Public Share Proposal — no JWT; requires Mongo _id + numeric id to both match. */
 router.get("/solar-proposal/:objectId/:quoteId", quotesController.getSolarProposal.bind(quotesController));
@@ -17,12 +18,12 @@ router.get("/quote/:id",bypassValidation, quotesController.getQuoteById.bind(quo
 router.delete("/v1/quote/:id", quotesController.deleteQuote.bind(quotesController));
 router.get("/v1/analysis", quotesController.getQuotesAnalysis.bind(quotesController));
 router.get("/v1/analysis-graph", quotesController.getQuoteStatusGraphData.bind(quotesController));
-router.put("/update-cust-quote-status-data",quotesController.updateCustomerQuoteStatus.bind(quotesController));
+router.put("/update-cust-quote-status-data", bypassValidation, quotesController.updateCustomerQuoteStatus.bind(quotesController));
 router.get("/v1/quote-analysis",quotesController.getQuoteAnalysisQuoteId.bind(quotesController));
 router.post("/v1/follow-up",quotesController.sendQuoteFollowUp.bind(quotesController));
 router.post("/v1/close-quote-alert",quotesController.sendCloseAlert.bind(quotesController));
 router.post("/v1/review-feedback",quotesController.sendReviewAndFeedback.bind(quotesController));
-router.get("/signed-url", quotesController.getSignedUrl.bind(quotesController));
+router.get("/v1/signed-url", quotesController.getSignedUrl.bind(quotesController));
 router.post("/v1/get-unique_customers-quote-history", quotesController.getUniqueCustomersQuoteHistory.bind(quotesController));
 router.post("/v1/get-kanban-quotes",quotesController.getKanbanQuotes.bind(quotesController));
 router.post("/v1/move-kanban",quotesController.updateKanbanMovement.bind(quotesController));

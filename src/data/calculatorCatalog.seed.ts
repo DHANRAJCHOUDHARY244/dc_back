@@ -1,4 +1,5 @@
 import slugify from "slugify";
+import { statePriceAll } from "@constants/auStatePrice.constants";
 import {
   calculatorBrandRepository,
   calculatorCategoryRepository,
@@ -116,7 +117,7 @@ export async function ensureCalculatorCatalogSeeded() {
       label,
       sort_order: extraSort++,
       active: true,
-      prices: { vic: 0, nsw: 0, act: 0 },
+      prices: statePriceAll(0),
     });
   }
 

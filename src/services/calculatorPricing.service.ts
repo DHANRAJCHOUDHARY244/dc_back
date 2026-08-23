@@ -4,20 +4,30 @@ import {
   DEFAULT_BSTC_FORMULA,
   DEFAULT_DISTANCE_TIERS,
   DEFAULT_INSTALLATION_OPTION_PRICES,
+  DEFAULT_PROFIT_MARGINS,
   DEFAULT_SOLAR_INSTALL_FORMULA,
   DEFAULT_STC_FORMULA,
   SOLAR_INSTALL_RATE_CENTS_PER_WATT,
   calculateSolarInstallationDollars,
   evalCalcFormula,
+  expandLegacyStatePrice,
   getDistanceDeliveryCost,
   pickStatePrice,
   resolveBatteryInstallDollars,
   resolveOptionFeeCategoryKeys,
+  resolveProfitMargin,
+  statePriceAll,
   sumOptionFeeForSelection,
   type BatteryInstallTier,
   type InstallationOptionPrices,
   type OptionFeeCategoryKey,
+  type StatePriceMap,
 } from "@constants/calculator.constants";
+import {
+  DEFAULT_BATTERY_STC_BANDS,
+  DEFAULT_BATTERY_STC_WINDOWS,
+  computeBatteryStcWithBands,
+} from "@constants/batteryStc.constants";
 import { ensureCalculatorCatalogSeeded } from "../data/calculatorCatalog.seed";
 import {
   calculatorBrandRepository,
@@ -26,6 +36,7 @@ import {
   calculatorProductRepository,
   calculatorSettingsRepository,
 } from "@repositories";
+import { DEFAULT_AU_CALCULATOR_STATES } from "@models/calculatorSettings.model";
 
 const DEFAULT_CALCULATOR_GUIDELINES = [
   "Set the customer's location first — prices and rebates vary by state.",
@@ -33,6 +44,90 @@ const DEFAULT_CALCULATOR_GUIDELINES = [
   "GST is calculated on the full price first, then rebates are deducted from the GST-inclusive amount.",
   "Manage products, brands, prices and fees from the Catalog admin tab.",
 ];
+
+function resolvePanelRemovalRatePerPanel(
+  settings: { panel_removal_cost_per_panel?: number | Partial<StatePriceMap> | null },
+  state: string,
+  override?: number,
+): number {
+  if (override != null) return Number(override);
+  const raw = settings.panel_removal_cost_per_panel;
+  if (typeof raw === "number") return raw;
+  const fromState = pickStatePrice(expandLegacyStatePrice(raw), state);
+  return fromState || CALCULATOR_DEFAULTS.panel_removal_cost_per_panel;
+}
+
+function expandStatePriceFields(doc: Record<string, unknown>): Record<string, unknown> {
+  const $set: Record<string, unknown> = {};
+  const spFields = [
+    "delivery_base",
+    "delivery_per_km",
+    "installation_single_phase",
+    "installation_three_phase",
+    "pre_approval",
+    "grid_connection",
+    "sub_board_upgrade",
+    "critical_installation",
+    "garage_installation",
+    "solar_install_cents_per_watt",
+    "panel_removal_cost_per_panel",
+  ] as const;
+
+  for (const field of spFields) {
+    const raw = doc[field];
+    if (raw == null) continue;
+    if (typeof raw === "number") {
+      $set[field] = statePriceAll(raw);
+      continue;
+    }
+    const expanded = expandLegacyStatePrice(raw as Partial<StatePriceMap>);
+    const missingExtra = ["qld", "sa", "wa", "tas", "nt"].some(
+      (k) => (raw as Partial<StatePriceMap>)[k as keyof StatePriceMap] == null,
+    );
+    if (missingExtra) $set[field] = expanded;
+  }
+
+  const tiers = doc.distance_tiers as Array<{ prices?: Partial<StatePriceMap> }> | undefined;
+  if (tiers?.length) {
+    const next = tiers.map((t) => ({
+      ...t,
+      prices: expandLegacyStatePrice(t.prices),
+    }));
+    if (JSON.stringify(next) !== JSON.stringify(tiers)) $set.distance_tiers = next;
+  }
+
+  const batteryTiers = doc.battery_install_tiers as Array<{ prices?: Partial<StatePriceMap> }> | undefined;
+  if (batteryTiers?.length) {
+    const next = batteryTiers.map((t) => ({
+      ...t,
+      prices: expandLegacyStatePrice(t.prices),
+    }));
+    if (JSON.stringify(next) !== JSON.stringify(batteryTiers)) $set.battery_install_tiers = next;
+  }
+
+  const optionPrices = doc.installation_option_prices as InstallationOptionPrices | undefined;
+  if (optionPrices) {
+    let changed = false;
+    const next = JSON.parse(JSON.stringify(optionPrices)) as InstallationOptionPrices;
+    for (const cat of ["solar", "battery", "inverter"] as const) {
+      const block = next[cat];
+      if (!block) continue;
+      for (const groupKey of ["phase", "story", "coupling"] as const) {
+        const group = block[groupKey] as Record<string, Partial<StatePriceMap>>;
+        for (const choice of Object.keys(group || {})) {
+          const expanded = expandLegacyStatePrice(group[choice]);
+          if (JSON.stringify(expanded) !== JSON.stringify(group[choice])) {
+            group[choice] = expanded;
+            changed = true;
+          }
+        }
+      }
+    }
+    if (changed) $set.installation_option_prices = next;
+  }
+
+  return $set;
+}
 
 export async function getOrCreateCalculatorSettings() {
   let settings = await calculatorSettingsRepository.findOne({ id: 1 });
@@ -49,11 +144,26 @@ export async function getOrCreateCalculatorSettings() {
       $set: { guidelines: DEFAULT_CALCULATOR_GUIDELINES },
     });
   }
+  // Expand to all AU states when only VIC/NSW/ACT (or fewer) are configured.
+  const stateCodes = new Set((settings.states || []).map((s: any) => String(s.code || "").toUpperCase()));
+  if (stateCodes.size < DEFAULT_AU_CALCULATOR_STATES.length) {
+    settings = await calculatorSettingsRepository.updateById(1, {
+      $set: { states: DEFAULT_AU_CALCULATOR_STATES },
+    });
+  }
   // Seed STC/BSTC rebate defaults for existing settings that predate these fields.
-  const rebateDefaults: Record<string, number | string | object> = {};
+  const rebateDefaults: Record<string, number | string | object | boolean> = {};
   if (settings.stc_price == null) rebateDefaults.stc_price = 39;
   if (!settings.stc_formula) rebateDefaults.stc_formula = DEFAULT_STC_FORMULA;
   if (!settings.bstc_formula) rebateDefaults.bstc_formula = DEFAULT_BSTC_FORMULA;
+  if (settings.stc_zone_factor == null) rebateDefaults.stc_zone_factor = 1.185;
+  if (settings.bstc_use_bands == null) rebateDefaults.bstc_use_bands = true;
+  if (!settings.bstc_capacity_bands?.length) {
+    rebateDefaults.bstc_capacity_bands = DEFAULT_BATTERY_STC_BANDS;
+  }
+  if (!settings.bstc_factor_windows?.length) {
+    rebateDefaults.bstc_factor_windows = DEFAULT_BATTERY_STC_WINDOWS;
+  }
   if (!settings.solar_install_formula) rebateDefaults.solar_install_formula = DEFAULT_SOLAR_INSTALL_FORMULA;
   if (!settings.battery_install_tiers?.length) {
     rebateDefaults.battery_install_tiers = DEFAULT_BATTERY_INSTALL_TIERS;
@@ -62,25 +172,54 @@ export async function getOrCreateCalculatorSettings() {
     rebateDefaults.installation_option_prices = DEFAULT_INSTALLATION_OPTION_PRICES;
   }
   if (settings.panel_removal_cost_per_panel == null) {
-    rebateDefaults.panel_removal_cost_per_panel = CALCULATOR_DEFAULTS.panel_removal_cost_per_panel;
+    rebateDefaults.panel_removal_cost_per_panel = statePriceAll(CALCULATOR_DEFAULTS.panel_removal_cost_per_panel);
+  } else if (typeof settings.panel_removal_cost_per_panel === "number") {
+    rebateDefaults.panel_removal_cost_per_panel = statePriceAll(
+      Number(settings.panel_removal_cost_per_panel) || CALCULATOR_DEFAULTS.panel_removal_cost_per_panel,
+    );
   }
-  const installRates = settings.solar_install_cents_per_watt as
-    | { vic?: number; nsw?: number; act?: number }
-    | undefined;
+  const existingMargins = settings.profit_margins as Record<string, number> | undefined;
+  const marginKeys = ["vic", "nsw", "act", "qld", "sa", "wa", "tas", "nt"];
+  const missingMargins =
+    !existingMargins || marginKeys.some((k) => existingMargins[k] == null);
+  if (missingMargins) {
+    rebateDefaults.profit_margins = {
+      ...DEFAULT_PROFIT_MARGINS,
+      vic: Number(settings.profit_margin_vic) || DEFAULT_PROFIT_MARGINS.vic,
+      nsw: Number(settings.profit_margin_nsw_act) || DEFAULT_PROFIT_MARGINS.nsw,
+      act: Number(settings.profit_margin_nsw_act) || DEFAULT_PROFIT_MARGINS.act,
+      ...(existingMargins || {}),
+    };
+  }
+  const installRates = settings.solar_install_cents_per_watt as Partial<StatePriceMap> | undefined;
   if (
     !installRates ||
-    (Number(installRates.vic) || 0) + (Number(installRates.nsw) || 0) + (Number(installRates.act) || 0) <= 0
+    AU_STATE_SUM(installRates) <= 0
   ) {
-    rebateDefaults.solar_install_cents_per_watt = {
-      vic: SOLAR_INSTALL_RATE_CENTS_PER_WATT,
-      nsw: SOLAR_INSTALL_RATE_CENTS_PER_WATT,
-      act: SOLAR_INSTALL_RATE_CENTS_PER_WATT,
-    };
+    rebateDefaults.solar_install_cents_per_watt = statePriceAll(SOLAR_INSTALL_RATE_CENTS_PER_WATT);
   }
   if (Object.keys(rebateDefaults).length) {
     settings = await calculatorSettingsRepository.updateById(1, { $set: rebateDefaults });
   }
+  const statePriceMigration = expandStatePriceFields(settings as unknown as Record<string, unknown>);
+  if (Object.keys(statePriceMigration).length) {
+    settings = await calculatorSettingsRepository.updateById(1, { $set: statePriceMigration });
+  }
   return settings;
+}
+
+function AU_STATE_SUM(sp?: Partial<StatePriceMap>): number {
+  if (!sp) return 0;
+  return (
+    (Number(sp.vic) || 0) +
+    (Number(sp.nsw) || 0) +
+    (Number(sp.act) || 0) +
+    (Number(sp.qld) || 0) +
+    (Number(sp.sa) || 0) +
+    (Number(sp.wa) || 0) +
+    (Number(sp.tas) || 0) +
+    (Number(sp.nt) || 0)
+  );
 }
 
 export async function getCalculatorCatalog() {
@@ -181,7 +320,15 @@ function round(n: number) {
   return Math.round(n * 100) / 100;
 }
 
-type RebateConfig = { price: number; stcFormula: string; bstcFormula: string };
+type RebateConfig = {
+  price: number;
+  stcFormula: string;
+  bstcFormula: string;
+  bstcUseBands?: boolean;
+  bstcBands?: typeof DEFAULT_BATTERY_STC_BANDS;
+  bstcWindows?: typeof DEFAULT_BATTERY_STC_WINDOWS;
+  installDate?: string | Date | null;
+};
 
 /** STC quantity/value from the editable formula (variable `kw` = total solar size). */
 export function computeStc(systemKw: number, cfg: RebateConfig): { qty: number; value: number } {
@@ -191,10 +338,20 @@ export function computeStc(systemKw: number, cfg: RebateConfig): { qty: number; 
   return { qty, value: round(qty * cfg.price) };
 }
 
-/** BSTC quantity/value from the editable formula (variable `kwh` = total battery size). */
+/** BSTC — prefers capacity bands + date factor when enabled; else flat formula. */
 export function computeBstc(batteryKwh: number, cfg: RebateConfig): { qty: number; value: number } {
   const kwh = Number(batteryKwh) || 0;
   if (kwh <= 0) return { qty: 0, value: 0 };
+  if (cfg.bstcUseBands !== false) {
+    const result = computeBatteryStcWithBands({
+      usableKwh: kwh,
+      installDate: cfg.installDate,
+      stcPrice: cfg.price,
+      bands: cfg.bstcBands,
+      windows: cfg.bstcWindows,
+    });
+    return { qty: result.certificates, value: result.value };
+  }
   const qty = Math.max(0, Math.floor(evalCalcFormula(cfg.bstcFormula, { kwh })));
   return { qty, value: round(qty * cfg.price) };
 }
@@ -537,6 +694,14 @@ export async function estimateCalculatorPrice(input: EstimateInput) {
     price: Number(settings.stc_price ?? 39),
     stcFormula: settings.stc_formula || DEFAULT_STC_FORMULA,
     bstcFormula: settings.bstc_formula || DEFAULT_BSTC_FORMULA,
+    bstcUseBands: settings.bstc_use_bands !== false,
+    bstcBands: settings.bstc_capacity_bands?.length
+      ? settings.bstc_capacity_bands
+      : DEFAULT_BATTERY_STC_BANDS,
+    bstcWindows: settings.bstc_factor_windows?.length
+      ? settings.bstc_factor_windows
+      : DEFAULT_BATTERY_STC_WINDOWS,
+    installDate: (input as any).installation_date || null,
   };
 
   const catalogCosts = await resolveLineItemCosts(lineItems, state, rebateConfig);
@@ -719,10 +884,11 @@ export async function estimateCalculatorPrice(input: EstimateInput) {
     ? pickStatePrice(settings.garage_installation, state)
     : 0;
 
-  const panelRemovalRate =
-    input.panel_removal_cost_per_panel != null
-      ? Number(input.panel_removal_cost_per_panel)
-      : Number(settings.panel_removal_cost_per_panel ?? CALCULATOR_DEFAULTS.panel_removal_cost_per_panel);
+  const panelRemovalRate = resolvePanelRemovalRatePerPanel(
+    settings,
+    state,
+    input.panel_removal_cost_per_panel,
+  );
   const panelRemovalCount =
     input.panel_removal && Number(input.panel_removal_count) > 0 ? Math.floor(Number(input.panel_removal_count)) : 0;
   const panelRemovalCost =
@@ -738,10 +904,10 @@ export async function estimateCalculatorPrice(input: EstimateInput) {
   const wiringCost = wiringM > freeM ? round((wiringM - freeM) * rate) : 0;
 
   let stateFees = 0;
-  if ((state === "NSW" || state === "ACT") && input.pre_approval) {
+  if (input.pre_approval) {
     stateFees += pickStatePrice(settings.pre_approval, state);
   }
-  if ((state === "NSW" || state === "ACT") && input.grid_connection) {
+  if (input.grid_connection) {
     stateFees += pickStatePrice(settings.grid_connection, state);
   }
 
@@ -750,8 +916,7 @@ export async function estimateCalculatorPrice(input: EstimateInput) {
       ? input.sales_commission ?? settings.default_sales_commission ?? 250
       : 0;
 
-  const profitMargin =
-    state === "VIC" ? settings.profit_margin_vic ?? 2000 : settings.profit_margin_nsw_act ?? 2300;
+  const profitMargin = resolveProfitMargin(settings, state);
 
   const rebates: Record<string, number> = { ...(input.rebates || {}) };
 
@@ -760,7 +925,7 @@ export async function estimateCalculatorPrice(input: EstimateInput) {
   if (variantStcRebate > 0) rebates.stc = variantStcRebate;
   if (variantBstcRebate > 0) rebates.bstc = variantBstcRebate;
 
-  const solarVicBlocked = state === "NSW" || state === "ACT";
+  const solarVicBlocked = state !== "VIC";
 
   // Solar VIC toggles apply admin-configured default amounts (VIC only).
   if (!solarVicBlocked) {
@@ -894,10 +1059,9 @@ export async function estimateCalculatorPrice(input: EstimateInput) {
       emiMonthly,
       emiMonths: input.emi_months ?? null,
     },
-    formula:
-      state === "VIC"
-        ? "(Products + Installation + Delivery + Commission + $2000 margin + Extras) + GST − Rebates"
-        : "(Products + Installation + Delivery + Commission + $2300 margin + Extras + NSW/ACT fees) + GST − Rebates",
+    formula: `(Products + Installation + Delivery + Commission + $${profitMargin} margin + Extras${
+      state === "VIC" ? "" : " + state fees"
+    }) + GST − Rebates`,
   };
 }
 

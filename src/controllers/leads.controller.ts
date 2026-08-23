@@ -34,6 +34,7 @@ import {
   getLeadManagementDashboard,
   getSourceAnalytics,
   logLeadCall,
+  presentLead,
   qualifyLead,
   resolveDuplicate,
   runLeadCommand,
@@ -43,6 +44,9 @@ import {
   updateLeadStatus,
 } from "@services/leadWorkflow.service";
 import { applyLeadScope, getLeadAccess } from "@services/leadAccess.service";
+import { listAssignableSalesTeam } from "@services/leadAssignment.service";
+import { getMemberLeadDashboard, getSalesTeamRoster } from "@services/leadTeam.service";
+import { describeAuditChanges, diffLeadChanges, pushAudit } from "@services/leadAudit.service";
 import {
   autoAssignLead,
   getDistributionSettings,
@@ -318,6 +322,11 @@ class LeadsController {
         team_leader_id,
         q,
         scope,
+        date_from,
+        date_to,
+        product,
+        transferred,
+        assignment,
       } = req.query as any;
 
       const filter: Record<string, unknown> = { merged_into_id: null };
@@ -328,10 +337,22 @@ class LeadsController {
       } else {
         applyLeadScope(filter, access);
       }
-      if (access.scope === "admin" && owner_id) filter.owner_id = Number(owner_id);
-      if (String(unassigned) === "true") {
+
+      const requestedOwner = owner_id ? Number(owner_id) : null;
+      if (requestedOwner) {
+        if (access.is_admin || access.owner_ids?.includes(requestedOwner)) {
+          filter.owner_id = requestedOwner;
+        }
+      }
+      if (String(unassigned) === "true" || String(assignment) === "unassigned") {
         filter.$or = [{ owner_id: null }, { owner_id: { $exists: false } }];
         delete filter.owner_id;
+      }
+      if (String(assignment) === "assigned" && !requestedOwner) {
+        filter.owner_id = { $nin: [null] };
+        if (access.scope !== "admin" && access.owner_ids) {
+          filter.owner_id = { $in: access.owner_ids };
+        }
       }
 
       const text = q || search;
@@ -357,6 +378,17 @@ class LeadsController {
       if (suburb) filter.suburb = { $regex: suburb, $options: "i" };
       if (postcode) filter.postcode = postcode;
       if (team_leader_id) filter.team_leader_id = Number(team_leader_id);
+      if (product) filter.interested_in = product;
+      if (date_from || date_to) {
+        const created: Record<string, Date> = {};
+        if (date_from) created.$gte = new Date(date_from);
+        if (date_to) {
+          const end = new Date(date_to);
+          end.setHours(23, 59, 59, 999);
+          created.$lte = end;
+        }
+        filter.created_at = created;
+      }
 
       if (bucket === "untouched") {
         filter.last_contacted_at = null;
@@ -371,7 +403,7 @@ class LeadsController {
         const e = new Date();
         e.setHours(23, 59, 59, 999);
         filter.next_follow_up_at = { $gte: s, $lte: e };
-      } else if (bucket === "transferred") {
+      } else if (bucket === "transferred" || String(transferred) === "true") {
         filter["transfers.0"] = { $exists: true };
       }
 
@@ -382,6 +414,7 @@ class LeadsController {
         populate: [
           { path: "owner", select: "id name" },
           { path: "team_leader", select: "id name" },
+          { path: "previous_owner", select: "id name" },
         ],
       });
 
@@ -411,30 +444,48 @@ class LeadsController {
       const body = { ...(req.body || {}) };
       delete body.id;
       delete body._id;
+      delete body.audit_log;
+      delete body.timeline;
+      delete body.transfers;
+      delete body.call_logs;
+
+      let existing: any = await leadRepository.findById(Number(id), { lean: true });
+      if (!existing) return ReE(res, RESOURCE_NOT_FOUND, "Lead not found");
 
       if (body.bill_range || body.interested_in || body.ownership || body.property_type || body.state) {
-        const existing: any = await leadRepository.findById(Number(id), { lean: true });
-        if (existing) {
-          const { score, tier } = computeLeadScore({
-            bill_range: body.bill_range ?? existing.bill_range,
-            interested_in: body.interested_in ?? existing.interested_in,
-            ownership: body.ownership ?? existing.ownership,
-            property_type: body.property_type ?? existing.property_type,
-            state: body.state ?? existing.state,
-          });
-          body.score = score;
-          body.score_tier = tier;
-        }
+        const { score, tier } = computeLeadScore({
+          bill_range: body.bill_range ?? existing.bill_range,
+          interested_in: body.interested_in ?? existing.interested_in,
+          ownership: body.ownership ?? existing.ownership,
+          property_type: body.property_type ?? existing.property_type,
+          state: body.state ?? existing.state,
+        });
+        body.score = score;
+        body.score_tier = tier;
       }
 
       if (body.status) {
         await updateLeadStatus(Number(id), body.status, {
           actorId: req.user?.id,
+          actorName: req.user?.name,
           remark: body.status_remark,
           next_follow_up_at: body.next_follow_up_at,
         });
         delete body.status;
         delete body.status_remark;
+        existing = await leadRepository.findById(Number(id), { lean: true });
+      }
+
+      const changes = diffLeadChanges(existing, body);
+      if (changes.length) {
+        body.audit_log = pushAudit(existing.audit_log, {
+          type: "update",
+          title: "Lead details updated",
+          detail: describeAuditChanges(changes),
+          by: req.user?.id ?? null,
+          by_name: req.user?.name || "",
+          changes,
+        });
       }
 
       if (Object.keys(body).length) {
@@ -480,10 +531,16 @@ class LeadsController {
         populate: [
           { path: "owner", select: "id name email mobile_no" },
           { path: "team_leader", select: "id name" },
+          { path: "previous_owner", select: "id name" },
         ],
       });
       if (!lead) return ReE(res, RESOURCE_NOT_FOUND, "Lead not found");
       const plain = typeof lead.toObject === "function" ? lead.toObject() : lead;
+      const access = await getLeadAccess(req.user || {});
+      const ownerId = Number(plain.owner_id || 0);
+      if (!access.is_admin && ownerId && !(access.owner_ids || []).includes(ownerId)) {
+        return ReE(res, SERVER_ERROR_CODE, "You can only open leads assigned to you or your team");
+      }
       if (!plain.opened_at) {
         await leadRepository.updateMany(
           { id: Number(id) },
@@ -506,7 +563,7 @@ class LeadsController {
         excludeId: plain.id,
       });
       return ReS(res, SUCCESS_CODE, "Lead fetched successfully", {
-        ...enrichLead(plain),
+        ...(await presentLead(plain)),
         duplicates,
       });
     } catch (error: any) {
@@ -529,6 +586,24 @@ class LeadsController {
     }
   }
 
+  async teamRoster(req: AuthenticatedRequest, res: Response) {
+    try {
+      const data = await getSalesTeamRoster(req.user || {});
+      return ReS(res, SUCCESS_CODE, "Sales team roster", data);
+    } catch (error: any) {
+      return ReE(res, SERVER_ERROR_CODE, error.message);
+    }
+  }
+
+  async memberDashboard(req: AuthenticatedRequest, res: Response) {
+    try {
+      const data = await getMemberLeadDashboard(req.user || {}, Number(req.params.userId));
+      return ReS(res, SUCCESS_CODE, "Sales person lead dashboard", data);
+    } catch (error: any) {
+      return ReE(res, SERVER_ERROR_CODE, error.message);
+    }
+  }
+
   async logCall(req: AuthenticatedRequest, res: Response) {
     try {
       const { id }: any = req.params;
@@ -539,6 +614,7 @@ class LeadsController {
         next_follow_up_at: req.body?.next_follow_up_at,
         status: req.body?.status,
         actorId: req.user?.id,
+        actorName: req.user?.name,
       });
       return ReS(res, SUCCESS_CODE, "Call logged", {
         lead,
@@ -550,14 +626,30 @@ class LeadsController {
     }
   }
 
+  async assignees(req: AuthenticatedRequest, res: Response) {
+    try {
+      const result = await listAssignableSalesTeam(req.user || {});
+      return ReS(res, SUCCESS_CODE, "Assignable sales team", result);
+    } catch (error: any) {
+      return ReE(res, SERVER_ERROR_CODE, error.message);
+    }
+  }
+
   async assign(req: AuthenticatedRequest, res: Response) {
     try {
       const access = await getLeadAccess(req.user || {});
-      if (!access.is_admin && !access.is_team_leader) {
-        return ReE(res, SERVER_ERROR_CODE, "Only managers/admins can assign leads");
+      const eligible = await listAssignableSalesTeam(req.user || {});
+      if (!eligible.can_assign && !access.is_admin && !access.is_team_leader) {
+        return ReE(res, SERVER_ERROR_CODE, "You cannot assign leads");
       }
-      const mode = req.body?.mode || "round_robin";
+      const mode = req.body?.mode || "direct";
+      if (eligible.scope === "salesperson" && !req.body?.lead_ids?.length) {
+        return ReE(res, SERVER_ERROR_CODE, "Select the lead(s) you want to assign");
+      }
       if (mode === "ai_smart") {
+        if (!access.is_admin && !access.is_team_leader) {
+          return ReE(res, SERVER_ERROR_CODE, "Only team leaders/admins can run AI assign");
+        }
         let leads: any[] = [];
         if (req.body?.lead_ids?.length) {
           leads = await leadRepository.find({ id: { $in: req.body.lead_ids.map(Number) } }, { lean: true });
@@ -583,6 +675,7 @@ class LeadsController {
         leadIds: req.body?.lead_ids,
         salespersonIds: req.body?.salesperson_ids || [],
         actorId: req.user?.id,
+        actor: req.user,
       });
       return ReS(res, SUCCESS_CODE, "Leads assigned", result);
     } catch (error: any) {
@@ -596,6 +689,7 @@ class LeadsController {
       const { id }: any = req.params;
       const lead = await updateLeadStatus(Number(id), req.body?.status, {
         actorId: req.user?.id,
+        actorName: req.user?.name,
         remark: req.body?.remark,
         next_follow_up_at: req.body?.next_follow_up_at,
       });
@@ -612,7 +706,7 @@ class LeadsController {
   async qualify(req: AuthenticatedRequest, res: Response) {
     try {
       const { id }: any = req.params;
-      const result = await qualifyLead(Number(id), { ...req.body, actorId: req.user?.id });
+      const result = await qualifyLead(Number(id), { ...req.body, actorId: req.user?.id, actorName: req.user?.name });
       return ReS(res, SUCCESS_CODE, "Lead qualified", result);
     } catch (error: any) {
       console.error(error);
@@ -645,7 +739,7 @@ class LeadsController {
         actorId: req.user?.id,
         actorName: req.user?.name,
       });
-      return ReS(res, SUCCESS_CODE, "Note added", enrichLead(lead));
+      return ReS(res, SUCCESS_CODE, "Note added", await presentLead(lead));
     } catch (error: any) {
       return ReE(res, SERVER_ERROR_CODE, error.message);
     }
@@ -659,8 +753,9 @@ class LeadsController {
         note: req.body?.note,
         actorId: req.user?.id,
         actorName: req.user?.name,
+        actorRole: req.user?.role,
       });
-      return ReS(res, SUCCESS_CODE, "Lead transferred", enrichLead(lead));
+      return ReS(res, SUCCESS_CODE, "Lead transferred", await presentLead(lead));
     } catch (error: any) {
       return ReE(res, SERVER_ERROR_CODE, error.message);
     }
@@ -673,7 +768,7 @@ class LeadsController {
         target_id: Number(req.body?.target_id),
         actorId: req.user?.id,
       });
-      return ReS(res, SUCCESS_CODE, "Duplicate resolved", enrichLead(result));
+      return ReS(res, SUCCESS_CODE, "Duplicate resolved", await presentLead(result));
     } catch (error: any) {
       return ReE(res, SERVER_ERROR_CODE, error.message);
     }

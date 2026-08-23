@@ -1,3 +1,23 @@
+import {
+  emptyStatePrice,
+  expandLegacyStatePrice,
+  pickStatePrice,
+  statePriceAll,
+  statePriceKey,
+  type StatePriceMap,
+} from "@constants/auStatePrice.constants";
+
+export {
+  AU_STATE_PRICE_KEYS,
+  emptyStatePrice,
+  expandLegacyStatePrice,
+  pickStatePrice,
+  statePriceAll,
+  statePriceKey,
+  type StatePriceKey,
+  type StatePriceMap,
+} from "@constants/auStatePrice.constants";
+
 /** Numeric fallbacks only — catalog data lives in MongoDB */
 export const CALCULATOR_DEFAULTS = {
   profit_margin_vic: 2000,
@@ -9,20 +29,57 @@ export const CALCULATOR_DEFAULTS = {
   gst_rate: 0.1,
 } as const;
 
+/** Default profit margin $ by AU state (legacy VIC / NSW·ACT values preserved). */
+export const DEFAULT_PROFIT_MARGINS: Record<string, number> = {
+  vic: 2000,
+  nsw: 2300,
+  act: 2300,
+  qld: 2300,
+  sa: 2300,
+  wa: 2300,
+  tas: 2300,
+  nt: 2300,
+};
+
+export function resolveProfitMargin(
+  settings: {
+    profit_margins?: Record<string, number> | null;
+    profit_margin_vic?: number;
+    profit_margin_nsw_act?: number;
+  } | null | undefined,
+  state: string,
+): number {
+  const key = String(state || "VIC").toLowerCase();
+  const map = settings?.profit_margins;
+  if (map && Number(map[key]) > 0) return Number(map[key]);
+  // Legacy fields
+  if (key === "vic") return Number(settings?.profit_margin_vic) || DEFAULT_PROFIT_MARGINS.vic;
+  if (key === "nsw" || key === "act") {
+    return Number(settings?.profit_margin_nsw_act) || DEFAULT_PROFIT_MARGINS.nsw;
+  }
+  // Other states: prefer map, else NSW/ACT bucket, else VIC
+  if (map && Number(map[key]) >= 0) return Number(map[key]) || 0;
+  return (
+    Number(settings?.profit_margin_nsw_act) ||
+    Number(settings?.profit_margin_vic) ||
+    DEFAULT_PROFIT_MARGINS.nsw
+  );
+}
+
 export type DistanceTier = {
   min_km: number;
   max_km: number;
   label: string;
-  prices: { vic: number; nsw: number; act: number };
+  prices: StatePriceMap;
 };
 
 export const DEFAULT_DISTANCE_TIERS: DistanceTier[] = [
-  { min_km: 1, max_km: 50, label: "1–50 km", prices: { vic: 0, nsw: 0, act: 0 } },
-  { min_km: 51, max_km: 100, label: "51–100 km", prices: { vic: 0, nsw: 0, act: 0 } },
-  { min_km: 101, max_km: 150, label: "101–150 km", prices: { vic: 0, nsw: 0, act: 0 } },
-  { min_km: 151, max_km: 200, label: "151–200 km", prices: { vic: 0, nsw: 0, act: 0 } },
-  { min_km: 201, max_km: 250, label: "201–250 km", prices: { vic: 0, nsw: 0, act: 0 } },
-  { min_km: 251, max_km: 300, label: "251–300 km", prices: { vic: 0, nsw: 0, act: 0 } },
+  { min_km: 1, max_km: 50, label: "1–50 km", prices: statePriceAll(0) },
+  { min_km: 51, max_km: 100, label: "51–100 km", prices: statePriceAll(0) },
+  { min_km: 101, max_km: 150, label: "101–150 km", prices: statePriceAll(0) },
+  { min_km: 151, max_km: 200, label: "151–200 km", prices: statePriceAll(0) },
+  { min_km: 201, max_km: 250, label: "201–250 km", prices: statePriceAll(0) },
+  { min_km: 251, max_km: 300, label: "251–300 km", prices: statePriceAll(0) },
 ];
 
 // Editable rebate-quantity formulas. `kw` = total solar system size (kW),
@@ -42,20 +99,20 @@ export const DEFAULT_SOLAR_INSTALL_FORMULA = "kw * 1000 * (cents / 100)";
 export type BatteryInstallTier = {
   max_kwh: number;
   label: string;
-  prices: { vic: number; nsw: number; act: number };
+  prices: StatePriceMap;
 };
 
 /**
  * Battery installation (ex GST) by pack size. Defaults match VIC sheet;
- * NSW/ACT start the same and can be edited per location in Catalog admin.
+ * all states start the same and can be edited per location in Catalog admin.
  * • Up to 23kWh – $1500  • Up to 32kWh – $1700
  * • Up to 42kWh – $2000  • Up to 50kWh – $2300
  */
 export const DEFAULT_BATTERY_INSTALL_TIERS: BatteryInstallTier[] = [
-  { max_kwh: 23, label: "Up to 23kWh", prices: { vic: 1500, nsw: 1500, act: 1500 } },
-  { max_kwh: 32, label: "Up to 32kWh", prices: { vic: 1700, nsw: 1700, act: 1700 } },
-  { max_kwh: 42, label: "Up to 42kWh", prices: { vic: 2000, nsw: 2000, act: 2000 } },
-  { max_kwh: 50, label: "Up to 50kWh", prices: { vic: 2300, nsw: 2300, act: 2300 } },
+  { max_kwh: 23, label: "Up to 23kWh", prices: statePriceAll(1500) },
+  { max_kwh: 32, label: "Up to 32kWh", prices: statePriceAll(1700) },
+  { max_kwh: 42, label: "Up to 42kWh", prices: statePriceAll(2000) },
+  { max_kwh: 50, label: "Up to 50kWh", prices: statePriceAll(2300) },
 ];
 
 /** Resolve battery install $ (ex GST) from total kWh and location. */
@@ -126,22 +183,7 @@ export function calculateSolarInstallationDollars(
   return Math.round(raw * 100) / 100;
 }
 
-export type CalculatorStateCode = "VIC" | "NSW" | "ACT";
-
-export function statePriceKey(code: string): "vic" | "nsw" | "act" {
-  const c = code.toUpperCase();
-  if (c === "NSW") return "nsw";
-  if (c === "ACT") return "act";
-  return "vic";
-}
-
-export function pickStatePrice(
-  prices: { vic?: number; nsw?: number; act?: number } | null | undefined,
-  state: string,
-): number {
-  if (!prices) return 0;
-  return Number(prices[statePriceKey(state)] ?? 0);
-}
+export type CalculatorStateCode = "VIC" | "NSW" | "ACT" | "QLD" | "SA" | "WA" | "TAS" | "NT";
 
 export function resolveDistanceTier(distanceKm: number, tiers: DistanceTier[]): DistanceTier | null {
   if (!tiers?.length) return null;
@@ -174,8 +216,6 @@ export function getDistanceDeliveryCost(
 /** Categories that use Phase / Story / Coupling priced options */
 export type OptionFeeCategoryKey = "solar" | "battery" | "inverter";
 
-export type StatePriceMap = { vic: number; nsw: number; act: number };
-
 export type CategoryOptionFees = {
   phase: { single: StatePriceMap; three: StatePriceMap };
   story: { single: StatePriceMap; double: StatePriceMap; multi: StatePriceMap };
@@ -184,7 +224,7 @@ export type CategoryOptionFees = {
 
 export type InstallationOptionPrices = Record<OptionFeeCategoryKey, CategoryOptionFees>;
 
-const emptyState = (): StatePriceMap => ({ vic: 0, nsw: 0, act: 0 });
+const emptyState = (): StatePriceMap => emptyStatePrice(0);
 
 export function emptyCategoryOptionFees(): CategoryOptionFees {
   return {

@@ -6,6 +6,7 @@ import {
   buyingIntentFromScore,
   computeLeadScore,
   conversionProbabilityFromScore,
+  LEAD_STATUS_LABELS,
   LEAD_STATUSES,
   publicLeadId,
   type LeadStatus,
@@ -16,6 +17,13 @@ import { Roles } from "src/data/dataInserter";
 import notificationController from "@controllers/notification.controller";
 import { applyLeadScope, getLeadAccess, isLeadAdminRole } from "@services/leadAccess.service";
 import { autoAssignLead, getDistributionSettings, pickBestAgent } from "@services/leadDistribution.service";
+import {
+  assertAssigneeAllowed,
+  assertCanAssignLead,
+  resolveAssigneeTeamLeaderId,
+} from "@services/leadAssignment.service";
+import { getUserDisplayMap, hydrateLeadOwnership } from "@services/leadTeam.service";
+import { compileLeadAuditTrail, describeAuditChanges, diffLeadChanges, pushAudit, snapshotLeadFields } from "@services/leadAudit.service";
 
 export { isLeadAdminRole } from "@services/leadAccess.service";
 
@@ -73,6 +81,14 @@ export function enrichLead(lead: any) {
       first_contact_at: first || null,
       response_seconds,
     },
+  };
+}
+
+export async function presentLead(lead: any) {
+  const hydrated = await hydrateLeadOwnership(lead);
+  return {
+    ...enrichLead(hydrated),
+    audit_trail: compileLeadAuditTrail(hydrated),
   };
 }
 
@@ -175,7 +191,7 @@ export async function createEnquiryLead(input: {
   const timeline = [
     {
       type: "enquiry",
-      title: "Lead Enquiry",
+      title: "Lead Created",
       detail: `Source: ${input.source || "Website"}`,
       at: now,
     },
@@ -257,9 +273,26 @@ export async function createEnquiryLead(input: {
     audit_log: [
       {
         type: "created",
+        title: "Lead created",
         detail: `Lead created from ${input.source || "Website"}`,
         at: now,
         by: input.created_by || null,
+        by_name: "",
+        changes: snapshotLeadFields({
+          name: input.name,
+          phone: input.phone,
+          email: input.email,
+          address: input.address,
+          suburb: input.suburb,
+          postcode: input.postcode,
+          state: input.state,
+          source: input.source || "Website",
+          status,
+          interested_in: input.interested_in,
+          property_type: input.property_type,
+          bill_range: input.bill_range,
+          note: input.note,
+        }),
       },
     ],
     cf_id: input.cf_id || null,
@@ -313,7 +346,7 @@ export async function createEnquiryLead(input: {
 export async function updateLeadStatus(
   leadId: number,
   status: string,
-  opts: { actorId?: number | null; remark?: string; next_follow_up_at?: string | Date | null } = {},
+  opts: { actorId?: number | null; actorName?: string; remark?: string; next_follow_up_at?: string | Date | null } = {},
 ) {
   if (!LEAD_STATUSES.includes(status as LeadStatus)) {
     throw new Error("Invalid lead status");
@@ -321,16 +354,26 @@ export async function updateLeadStatus(
   const lead: any = await leadRepository.findOne({ id: leadId }, { lean: true });
   if (!lead) throw new Error("Lead not found");
 
+  const patch: Record<string, unknown> = { status };
+  if (opts.next_follow_up_at) patch.next_follow_up_at = new Date(opts.next_follow_up_at);
+  const changes = diffLeadChanges(lead, patch);
   const $set: Record<string, unknown> = {
-    status,
+    ...patch,
     timeline: pushTimeline(lead.timeline, {
       type: "status",
-      title: "Status Updated",
-      detail: opts.remark || `${lead.status} → ${status}`,
+      title: LEAD_STATUS_LABELS[status] || status,
+      detail: opts.remark || `${LEAD_STATUS_LABELS[lead.status] || lead.status} → ${LEAD_STATUS_LABELS[status] || status}`,
       by: opts.actorId ?? null,
     }),
+    audit_log: pushAudit(lead.audit_log, {
+      type: "status",
+      title: "Status updated",
+      detail: opts.remark || describeAuditChanges(changes) || `${lead.status} → ${status}`,
+      by: opts.actorId ?? null,
+      by_name: opts.actorName || "",
+      changes,
+    }),
   };
-  if (opts.next_follow_up_at) $set.next_follow_up_at = new Date(opts.next_follow_up_at);
 
   await leadRepository.updateMany({ id: leadId }, { $set });
   return leadRepository.findOne({ id: leadId }, { lean: true });
@@ -351,6 +394,7 @@ export async function qualifyLead(
     state?: string;
     address?: string;
     actorId?: number | null;
+    actorName?: string;
   },
 ) {
   const lead: any = await leadRepository.findOne({ id: leadId }, { lean: true });
@@ -368,10 +412,7 @@ export async function qualifyLead(
     response_speed_seconds: 5,
   });
 
-  await leadRepository.updateMany(
-    { id: leadId },
-    {
-      $set: {
+  const patch = {
         property_type: data.property_type ?? lead.property_type,
         ownership: data.ownership ?? lead.ownership,
         bill_range: data.bill_range ?? lead.bill_range,
@@ -387,6 +428,14 @@ export async function qualifyLead(
         ai_qualified_at: now,
         score,
         score_tier: tier,
+  };
+  const changes = diffLeadChanges(lead, patch);
+
+  await leadRepository.updateMany(
+    { id: leadId },
+    {
+      $set: {
+        ...patch,
         ai_messages: [
           ...(Array.isArray(lead.ai_messages) ? lead.ai_messages : []),
           { direction: "out", channel: "WhatsApp", body: thanks, at: now, kind: "qualification_thanks" },
@@ -396,6 +445,14 @@ export async function qualifyLead(
           title: "AI Qualification Complete",
           detail: thanks.slice(0, 120),
           by: data.actorId ?? null,
+        }),
+        audit_log: pushAudit(lead.audit_log, {
+          type: "qualify",
+          title: "Lead qualified",
+          detail: describeAuditChanges(changes) || "Qualification details saved",
+          by: data.actorId ?? null,
+          by_name: data.actorName || "",
+          changes,
         }),
       },
     },
@@ -414,6 +471,7 @@ export async function logLeadCall(
     next_follow_up_at?: string | Date | null;
     status?: string;
     actorId?: number | null;
+    actorName?: string;
   },
 ) {
   const lead: any = await leadRepository.findOne({ id: leadId }, { lean: true });
@@ -426,6 +484,7 @@ export async function logLeadCall(
     remark: String(data.remark || "").trim(),
     at: now,
     by: data.actorId ?? null,
+    by_name: data.actorName || "",
     next_follow_up_at: data.next_follow_up_at ? new Date(data.next_follow_up_at) : null,
     status: data.status || null,
   };
@@ -448,18 +507,36 @@ export async function logLeadCall(
     response_speed_seconds: data.connected ? 30 : null,
   });
 
-  const $set: Record<string, unknown> = {
+  const patch: Record<string, unknown> = {
     status: nextStatus,
     last_contacted_at: now,
+    score,
+    score_tier: tier,
+  };
+  if (data.next_follow_up_at) patch.next_follow_up_at = new Date(data.next_follow_up_at);
+  const changes = [
+    ...diffLeadChanges(lead, patch),
+    { field: "connected", label: "Call connected", from: null, to: !!data.connected },
+    { field: "duration_seconds", label: "Call duration (sec)", from: null, to: callEntry.duration_seconds },
+  ];
+
+  const $set: Record<string, unknown> = {
+    ...patch,
     call_logs: [...(Array.isArray(lead.call_logs) ? lead.call_logs : []), callEntry],
     timeline: pushTimeline(lead.timeline, {
       type: "call",
-      title: data.connected ? "Call Connected" : "Call Attempt",
+      title: data.connected ? "Follow-up" : "Call Attempt",
       detail: callEntry.remark || (data.connected ? "Connected" : "Not connected"),
       by: data.actorId ?? null,
     }),
-    score,
-    score_tier: tier,
+    audit_log: pushAudit(lead.audit_log, {
+      type: "call",
+      title: data.connected ? "Call logged" : "Call attempt logged",
+      detail: callEntry.remark || describeAuditChanges(changes),
+      by: data.actorId ?? null,
+      by_name: data.actorName || "",
+      changes,
+    }),
   };
 
   if (data.connected && !lead.first_contacted_at) {
@@ -484,9 +561,16 @@ export async function assignLeadsRoundRobin(opts: {
   leadIds?: number[];
   salespersonIds: number[];
   actorId?: number | null;
+  actor?: { id?: number; role?: string; role_id?: number };
 }) {
-  const salespersonIds = (opts.salespersonIds || []).map(Number).filter(Boolean);
-  if (!salespersonIds.length) throw new Error("At least one salesperson is required");
+  const salespersonIds = [...new Set((opts.salespersonIds || []).map(Number).filter(Boolean))];
+  if (!salespersonIds.length) throw new Error("Select at least one sales team member");
+
+  if (opts.actor) {
+    for (const sid of salespersonIds) {
+      await assertAssigneeAllowed(opts.actor, sid);
+    }
+  }
 
   let leads: any[] = [];
   if (opts.leadIds?.length) {
@@ -506,30 +590,82 @@ export async function assignLeadsRoundRobin(opts: {
     );
   }
 
+  if (opts.actor) {
+    for (const lead of leads) {
+      await assertCanAssignLead(opts.actor, lead);
+    }
+  }
+
   const assignments: Record<number, number[]> = {};
   for (const sid of salespersonIds) assignments[sid] = [];
+
+  const teamLeaderByUser: Record<number, number | null> = {};
+  for (const sid of salespersonIds) {
+    teamLeaderByUser[sid] = await resolveAssigneeTeamLeaderId(sid);
+  }
+  const nameMap = await getUserDisplayMap([
+    ...salespersonIds,
+    ...leads.map((l) => Number(l.owner_id)).filter(Boolean),
+    Number(opts.actorId) || 0,
+  ]);
 
   let i = 0;
   const now = new Date();
   for (const lead of leads) {
     const sid = salespersonIds[i % salespersonIds.length];
     assignments[sid].push(lead.id);
-    await leadRepository.updateMany(
-      { id: lead.id },
-      {
-        $set: {
-          owner_id: sid,
-          assigned_at: now,
-          status: lead.status === "NEW_LEAD" || lead.status === "AI_QUALIFIED" ? "ASSIGNED" : lead.status,
-          timeline: pushTimeline(lead.timeline, {
-            type: "assign",
-            title: "Lead Assigned",
-            detail: `Assigned to salesperson #${sid}`,
-            by: opts.actorId ?? null,
-          }),
+    const toName = nameMap.get(sid) || `User #${sid}`;
+    const fromName = lead.owner_id ? nameMap.get(Number(lead.owner_id)) || `User #${lead.owner_id}` : "Unassigned";
+    const actorName = opts.actorId ? nameMap.get(Number(opts.actorId)) : "";
+    const $set: Record<string, unknown> = {
+      previous_owner_id: lead.owner_id || null,
+      owner_id: sid,
+      team_leader_id: teamLeaderByUser[sid] ?? lead.team_leader_id ?? null,
+      assigned_at: now,
+      status: lead.status === "NEW_LEAD" || lead.status === "AI_QUALIFIED" ? "ASSIGNED" : lead.status,
+      timeline: pushTimeline(lead.timeline, {
+        type: "assign",
+        title: `Assigned to ${toName}`,
+        detail: lead.owner_id
+          ? `${actorName || "Manager"} moved this lead from ${fromName} to ${toName}`
+          : `${actorName || "Manager"} assigned this lead to ${toName}`,
+        by: opts.actorId ?? null,
+        from_user_id: lead.owner_id || null,
+        to_user_id: sid,
+      }),
+      audit_log: pushAudit(lead.audit_log, {
+        type: "assign",
+        title: "Lead assigned",
+        detail: lead.owner_id
+          ? `${actorName || "Manager"} moved this lead from ${fromName} to ${toName}`
+          : `${actorName || "Manager"} assigned this lead to ${toName}`,
+        by: opts.actorId ?? null,
+        by_name: actorName || "",
+        changes: [
+          { field: "owner_id", label: "Current owner", from: fromName, to: toName },
+          { field: "status", label: "Status", from: lead.status, to: lead.status === "NEW_LEAD" || lead.status === "AI_QUALIFIED" ? "ASSIGNED" : lead.status },
+        ],
+      }),
+    };
+    if (lead.owner_id && Number(lead.owner_id) !== sid) {
+      $set.transfers = [
+        ...(Array.isArray(lead.transfers) ? lead.transfers : []),
+        {
+          from_user_id: Number(lead.owner_id),
+          from_user_name: fromName,
+          to_user_id: sid,
+          to_user_name: toName,
+          reason: "Assigned by manager",
+          note: `Lead assigned to ${toName}`,
+          at: now,
+          by: opts.actorId ?? null,
+          by_name: actorName || "",
+          accepted: true,
+          conversation_status: lead.status,
         },
-      },
-    );
+      ];
+    }
+    await leadRepository.updateMany({ id: lead.id }, { $set });
     i += 1;
   }
 
@@ -797,6 +933,7 @@ export async function getLeadManagementDashboard(user: { id: number; role: strin
   return {
     is_admin: access.is_admin,
     is_team_leader: access.is_team_leader,
+    can_assign: access.is_admin || access.is_team_leader || access.scope === "self",
     scope: access.scope,
     totals: { ...buckets, conversion },
     team_monitoring: team,
@@ -835,6 +972,14 @@ export async function addLeadNote(
           detail: entry.body.slice(0, 180),
           by: entry.by,
         }),
+        audit_log: pushAudit(lead.audit_log, {
+          type: "note",
+          title: entry.type,
+          detail: entry.body,
+          by: entry.by,
+          by_name: entry.by_name,
+          changes: [{ field: "notes", label: "Note", from: null, to: entry.body }],
+        }),
       },
     },
   );
@@ -849,21 +994,40 @@ export async function transferLead(
     note: string;
     actorId?: number | null;
     actorName?: string;
+    actorRole?: string;
   },
 ) {
   const lead: any = await leadRepository.findOne({ id: leadId }, { lean: true });
   if (!lead) throw new Error("Lead not found");
-  if (!data.to_user_id) throw new Error("New salesperson is required");
+  if (!data.to_user_id) throw new Error("New sales team member is required");
   if (!String(data.note || "").trim()) throw new Error("Transfer note is required");
+  if (data.actorId) {
+    await assertCanAssignLead({ id: data.actorId, role: data.actorRole }, lead);
+    await assertAssigneeAllowed({ id: data.actorId, role: data.actorRole }, Number(data.to_user_id));
+  }
+  if (Number(lead.owner_id) === Number(data.to_user_id)) {
+    throw new Error("Lead is already owned by this sales person");
+  }
+  const teamLeaderId = await resolveAssigneeTeamLeaderId(Number(data.to_user_id));
   const now = new Date();
+  const names = await getUserDisplayMap([
+    Number(lead.owner_id) || 0,
+    Number(data.to_user_id),
+    Number(data.actorId) || 0,
+  ]);
+  const fromName = lead.owner_id ? names.get(Number(lead.owner_id)) || `User #${lead.owner_id}` : "Unassigned";
+  const toName = names.get(Number(data.to_user_id)) || `User #${data.to_user_id}`;
+  const byName = data.actorName || names.get(Number(data.actorId)) || "User";
   const transfer = {
     from_user_id: lead.owner_id || null,
+    from_user_name: fromName,
     to_user_id: Number(data.to_user_id),
+    to_user_name: toName,
     reason: data.reason || "Other",
     note: String(data.note).trim(),
     at: now,
     by: data.actorId ?? null,
-    by_name: data.actorName || "",
+    by_name: byName,
     accepted: true,
     conversation_status: lead.status,
   };
@@ -873,25 +1037,35 @@ export async function transferLead(
       $set: {
         previous_owner_id: lead.owner_id || null,
         owner_id: Number(data.to_user_id),
+        team_leader_id: teamLeaderId ?? lead.team_leader_id ?? null,
         assigned_at: now,
         transfers: [...(Array.isArray(lead.transfers) ? lead.transfers : []), transfer],
         timeline: pushTimeline(lead.timeline, {
           type: "transfer",
-          title: "Lead Transferred",
-          detail: `${transfer.reason}: ${transfer.note}`,
+          title: `Transferred to ${toName}`,
+          detail: `${fromName} → ${toName}. ${transfer.reason}${transfer.note ? `: ${transfer.note}` : ""}`,
           by: data.actorId ?? null,
+          from_user_id: lead.owner_id || null,
+          to_user_id: Number(data.to_user_id),
         }),
-        audit_log: [
-          ...(Array.isArray(lead.audit_log) ? lead.audit_log : []),
-          {
-            type: "transfer",
-            detail: `${data.actorName || "User"} transferred lead to #${data.to_user_id}`,
-            previous: lead.owner_id,
-            next: data.to_user_id,
-            at: now,
-            by: data.actorId ?? null,
+        audit_log: pushAudit(lead.audit_log, {
+          type: "transfer",
+          title: "Lead transferred",
+          detail: `${byName} transferred lead from ${fromName} to ${toName}. Reason: ${transfer.reason}. Note: ${transfer.note}`,
+          by: data.actorId ?? null,
+          by_name: byName,
+          changes: [
+            { field: "owner_id", label: "Current owner", from: fromName, to: toName },
+            { field: "previous_owner_id", label: "Previous owner", from: null, to: fromName },
+            { field: "assigned_at", label: "Assigned date", from: lead.assigned_at || null, to: now },
+          ],
+          meta: {
+            reason: transfer.reason,
+            note: transfer.note,
+            from_user_id: lead.owner_id,
+            to_user_id: data.to_user_id,
           },
-        ],
+        }),
       },
     },
   );

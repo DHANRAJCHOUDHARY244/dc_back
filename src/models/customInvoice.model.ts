@@ -10,6 +10,9 @@ const CustomInvoiceSchema = new Schema(
     address: { type: String },
     mobile_no: { type: String },
     name: { type: String, required: true },
+    /** Customer email snapshot (also on linked user when customer_id is set) */
+    custEmail: { type: String },
+    notes: { type: String, default: "" },
     bypass_token: { type: String },
     taxRate: { type: Number, required: true },
     taxAmount: { type: Number, required: true },

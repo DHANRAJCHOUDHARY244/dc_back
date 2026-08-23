@@ -5,12 +5,15 @@ const router = express.Router();
 
 router.get("/pipeline-meta", leadsController.getPipelineMeta.bind(leadsController));
 router.get("/dashboard", leadsController.dashboard.bind(leadsController));
+router.get("/team-roster", leadsController.teamRoster.bind(leadsController));
+router.get("/members/:userId/dashboard", leadsController.memberDashboard.bind(leadsController));
 router.get("/analytics", leadsController.analytics.bind(leadsController));
 router.get("/settings", leadsController.getSettings.bind(leadsController));
 router.post("/settings", leadsController.saveSettings.bind(leadsController));
 router.post("/areas", leadsController.saveArea.bind(leadsController));
 router.post("/agents", leadsController.saveAgent.bind(leadsController));
 router.post("/command", leadsController.command.bind(leadsController));
+router.get("/assignees", leadsController.assignees.bind(leadsController));
 router.post("/assign", leadsController.assign.bind(leadsController));
 router.post("/run-supervisor", leadsController.runSupervisor.bind(leadsController));
 router.post("/sheet-metadata", leadsController.getMetadata.bind(leadsController));

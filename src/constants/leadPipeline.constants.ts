@@ -102,6 +102,35 @@ export const LEAD_SOURCES = [
   "Other",
 ] as const;
 
+export const CONVERTED_LEAD_STATUSES = ["WON", "COMPLETED", "ACCEPTED", "DEPOSIT_PAID"] as const;
+export const DEAD_LEAD_STATUSES = ["LOST", "UNQUALIFIED", "DUPLICATE"] as const;
+export const CANCELLED_LEAD_STATUSES = ["CANCELLED"] as const;
+export const PENDING_LEAD_STATUSES = [
+  "NEW_LEAD",
+  "AI_QUALIFIED",
+  "ASSIGNED",
+  "NEED_FOLLOW_UP",
+  "CALL_ATTEMPT_1",
+  "CALL_ATTEMPT_2",
+  "CALL_ATTEMPT_3",
+  "NOT_REACHABLE",
+  "VOICEMAIL",
+] as const;
+export const TERMINAL_LEAD_STATUSES = [
+  ...CONVERTED_LEAD_STATUSES,
+  ...DEAD_LEAD_STATUSES,
+  ...CANCELLED_LEAD_STATUSES,
+] as const;
+
+export function classifyLeadBucket(status?: string | null) {
+  const s = String(status || "");
+  if ((CONVERTED_LEAD_STATUSES as readonly string[]).includes(s)) return "converted" as const;
+  if ((DEAD_LEAD_STATUSES as readonly string[]).includes(s)) return "dead" as const;
+  if ((CANCELLED_LEAD_STATUSES as readonly string[]).includes(s)) return "cancelled" as const;
+  if ((PENDING_LEAD_STATUSES as readonly string[]).includes(s)) return "pending" as const;
+  return "active" as const;
+}
+
 export const LEAD_SCORE_TIERS = ["VERY_HOT", "HOT", "WARM", "COLD", "LOW"] as const;
 export type LeadScoreTier = (typeof LEAD_SCORE_TIERS)[number];
 

@@ -1,14 +1,6 @@
 import mongoose, { Schema } from "mongoose";
 import { applyBasePlugins, collectionOptions } from "@db/plugins";
-
-const StatePriceSchema = new Schema(
-  {
-    vic: { type: Number, default: 0 },
-    nsw: { type: Number, default: 0 },
-    act: { type: Number, default: 0 },
-  },
-  { _id: false },
-);
+import { StatePriceSchema } from "../schemas/statePrice.schema";
 
 const VariantSchema = new Schema(
   {

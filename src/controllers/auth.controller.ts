@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { roleRepository, userRepository } from "@repositories";
-import { sendEmailRegSignOtp } from "@services/email.service";
+import { sendEmailRegSignOtpAsync } from "@services/email.service";
 import {
   compare_Hash_Password,
   generate_6_Digit_Otp,
@@ -28,11 +28,14 @@ class AuthController {
   private async getUserInfoRoleAndPermission(user_data: any, is_remember = false) {
     if (!user_data?.profile_image) user_data.avatar = faker.image.avatarGitHub();
     else user_data.avatar = user_data?.profile_image;
-    const role_info: any = await roleRepository.findOne(
-      { id: user_data.role_id },
-      { select: "id name", lean: true },
-    );
-    const permissions_info = await permissionController.getPermissionTree(role_info?.id);
+
+    const [role_info, permissions_info] = await Promise.all([
+      roleRepository.findOne(
+        { id: user_data.role_id },
+        { select: "id name", lean: true },
+      ),
+      permissionController.getPermissionTree(user_data.role_id),
+    ]);
 
     const { password: user_pass, otp, ...userInfo } = user_data;
     const token = jwt.sign(
@@ -130,7 +133,7 @@ class AuthController {
           otp: genOtp,
         };
 
-        await sendEmailRegSignOtp(emailPayload);
+        sendEmailRegSignOtpAsync(emailPayload, "Registration OTP email");
       }
 
       return ReS(res, SUCCESS_CODE, "User registered successfully.");
@@ -189,7 +192,7 @@ class AuthController {
 
       if (!old_password) {
         if (!user?.otp_type) return ReE(res, FORBIDDEN_CODE, "Invalid Token");
-        if (!userDetails?.otp_verification_token) ReE(res, RESOURCE_NOT_FOUND, "User not found Or Invalid Token");
+        if (!userDetails?.otp_verification_token) return ReE(res, RESOURCE_NOT_FOUND, "User not found Or Invalid Token");
       }
       if (old_password) {
         const isMatch = await compare_Hash_Password(old_password, userDetails.password);
@@ -243,8 +246,8 @@ class AuthController {
           message: `${userData.name} Please verify your email address by entering the OTP sent to your email.`,
           otp: genOtp
         }
-        ReS(res, SUCCESS_CODE, "Otp sent to your email");
-        return await sendEmailRegSignOtp(emailPayload);
+        sendEmailRegSignOtpAsync(emailPayload, "Email verification OTP");
+        return ReS(res, SUCCESS_CODE, "Otp sent to your email");
       }
 
       if (!otp) return ReE(res, BAD_REQUEST_CODE, "Otp is required");
@@ -294,14 +297,20 @@ class AuthController {
           message: `${userData.name} Please verify your email address by entering the OTP sent to your email.`,
           otp: genOtp
         }
-        ReS(res, SUCCESS_CODE, "Otp sent to your email");
-        return await sendEmailRegSignOtp(emailPayload);
+        sendEmailRegSignOtpAsync(emailPayload, "Forgot password OTP");
+        return ReS(res, SUCCESS_CODE, "Otp sent to your email");
       }
 
       if (!otp) return ReE(res, BAD_REQUEST_CODE, "Otp is required");
 
-      if (otpData && otp === otpData.otp && otpData.expire_at < new Date() && otpData.otp_type !== OtpType.FORGOT_PASSWORD)
+      if (
+        !otpData ||
+        parseInt(String(otp), 10) !== otpData.otp ||
+        new Date(otpData.expired_at) < new Date() ||
+        otpData.otp_type !== OtpType.FORGOT_PASSWORD
+      ) {
         return ReE(res, BAD_REQUEST_CODE, "Invalid or expired otp");
+      }
 
       const otpToken = jwt.sign({ id: user.id, email: user.email, otp_type: OtpType.FORGOT_PASSWORD }, process.env.JWT_SECRET!, { expiresIn: "1m" });
       await userRepository.updateMany(

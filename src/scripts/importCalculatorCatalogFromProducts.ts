@@ -8,6 +8,7 @@ import {
 import fs from "fs";
 import path from "path";
 import slugify from "slugify";
+import { statePriceAll } from "@constants/auStatePrice.constants";
 
 type SourceVariant = {
   id?: string;
@@ -124,8 +125,8 @@ function buildProductVariants(product: SourceProduct) {
       battery_kwh: batteryKwh,
       inverter_kw: inverterKw,
       capacity,
-      prices: { vic: statePrice, nsw: statePrice, act: statePrice },
-      installation_prices: { vic: 0, nsw: 0, act: 0 },
+      prices: statePriceAll(statePrice),
+      installation_prices: statePriceAll(0),
     };
   });
 }

@@ -74,6 +74,7 @@ import {
 } from "./feedback.model";
 import { SlaStageConfig, SlaDelayReason, SlaStageRun } from "./sla.model";
 import { TaskTypeCatalog, EscalationRule, CrmFollowUp } from "./masterTask.model";
+import RebateScheme from "./rebateScheme.model";
 
 /** Alias avoids clash with DOM Document type in some tooling */
 const DocumentModel = Document;
@@ -158,4 +159,5 @@ export {
   TaskTypeCatalog,
   EscalationRule,
   CrmFollowUp,
+  RebateScheme,
 };

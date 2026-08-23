@@ -167,7 +167,34 @@ class QuotesController {
       manual_attachments,
       green_sketch,
       is_draft,
-    } = data as newQuote & { is_draft?: boolean };
+      installationType,
+      property_type,
+      state,
+      panelRemoval,
+      criticalInstallation,
+      garageInstallation,
+      extraWiring,
+      extraWiringMeters,
+      boardUpgrade,
+      miniSubboardRequired,
+      vpp,
+      vppProvider,
+      postcode,
+      customer_type,
+      occupancy,
+      installationDate,
+      waNetwork,
+      solarVicRebate,
+      solarVicLoan,
+      solarVicEligibleConfirmed,
+      vicHotWaterRebate,
+      vicHotWaterLocalManufactured,
+      waBatteryRebateConfirmed,
+      waInterestFreeLoan,
+      existingSolar,
+      batteryInstallType,
+      rebateAmount,
+    } = data;
 
     const payload: any = {
       distance,
@@ -194,6 +221,35 @@ class QuotesController {
     };
     if (manual_attachments !== undefined) payload.manual_attachments = manual_attachments;
     if (green_sketch !== undefined) payload.green_sketch = green_sketch;
+    if (installationType !== undefined) payload.installationType = installationType;
+    if (property_type !== undefined) payload.property_type = property_type;
+    if (state !== undefined) payload.state = state;
+    if (panelRemoval !== undefined) payload.panelRemoval = !!panelRemoval;
+    if (criticalInstallation !== undefined) payload.criticalInstallation = !!criticalInstallation;
+    if (garageInstallation !== undefined) payload.garageInstallation = !!garageInstallation;
+    if (extraWiring !== undefined) payload.extraWiring = !!extraWiring;
+    if (extraWiringMeters !== undefined) payload.extraWiringMeters = extraWiringMeters;
+    if (boardUpgrade !== undefined) payload.boardUpgrade = !!boardUpgrade;
+    if (miniSubboardRequired !== undefined) payload.miniSubboardRequired = !!miniSubboardRequired;
+    if (vpp !== undefined) payload.vpp = !!vpp;
+    if (vppProvider !== undefined) payload.vppProvider = vppProvider;
+    if (postcode !== undefined) payload.postcode = postcode;
+    if (customer_type !== undefined) payload.customer_type = customer_type;
+    if (occupancy !== undefined) payload.occupancy = occupancy;
+    if (installationDate !== undefined) payload.installationDate = installationDate;
+    if (waNetwork !== undefined) payload.waNetwork = waNetwork;
+    if (solarVicRebate !== undefined) payload.solarVicRebate = !!solarVicRebate;
+    if (solarVicLoan !== undefined) payload.solarVicLoan = !!solarVicLoan;
+    if (solarVicEligibleConfirmed !== undefined) payload.solarVicEligibleConfirmed = !!solarVicEligibleConfirmed;
+    if (vicHotWaterRebate !== undefined) payload.vicHotWaterRebate = !!vicHotWaterRebate;
+    if (vicHotWaterLocalManufactured !== undefined) {
+      payload.vicHotWaterLocalManufactured = !!vicHotWaterLocalManufactured;
+    }
+    if (waBatteryRebateConfirmed !== undefined) payload.waBatteryRebateConfirmed = !!waBatteryRebateConfirmed;
+    if (waInterestFreeLoan !== undefined) payload.waInterestFreeLoan = !!waInterestFreeLoan;
+    if (existingSolar !== undefined) payload.existingSolar = !!existingSolar;
+    if (batteryInstallType !== undefined) payload.batteryInstallType = batteryInstallType;
+    if (rebateAmount !== undefined) payload.rebateAmount = Number(rebateAmount) || 0;
     if (!invoiceNumber) {
       payload.kanban_status = is_draft
         ? QuotePipelineStatus.DRAFT
@@ -362,7 +418,8 @@ class QuotesController {
         order_direction = 'DESC',
         kanban_status =null,
         pipeline_status = null,
-        year= null
+        year= null,
+        quote_type = 'all',
       } = req.body;
       const parsedLimit = parseInt(limit as string, 10);
       const parsedPage = parseInt(page as string, 10);
@@ -398,7 +455,13 @@ class QuotesController {
         senderIds = senders.map((s) => s.id);
       }
 
-      const filter: Record<string, unknown> = { is_solar_sketch: { $ne: true } };
+      const filter: Record<string, unknown> = {};
+      const normalizedQuoteType = String(quote_type || 'all').toLowerCase();
+      if (normalizedQuoteType === 'solar_sketch' || normalizedQuoteType === 'solar') {
+        filter.is_solar_sketch = true;
+      } else if (normalizedQuoteType === 'normal') {
+        filter.is_solar_sketch = { $ne: true };
+      }
       if (!(await isQuoteAdmin(user))) {
         
         filter.$or = [{ sender_id: user.id }, { customer_id: user.id }]
@@ -937,6 +1000,15 @@ class QuotesController {
         },
       );
       if (!existing) return ReE(res, FORBIDDEN_CODE, "Quote not found.");
+
+      if (req.bypass_token) {
+        if (req.bypass_token !== existing.bypass_token) {
+          return ReE(res, FORBIDDEN_CODE, "Invalid access token.");
+        }
+      } else if (req.user?.id !== existing.customer_id && req.user?.role !== Roles.SUPER_ADMIN) {
+        return ReE(res, FORBIDDEN_CODE, "Unauthorized.");
+      }
+
       const now = new Date();
       const updateData: any = { customer_accepted: status, status_updated_date: now };
 
@@ -955,16 +1027,16 @@ class QuotesController {
         const file = files?.signature as fileUpload.UploadedFile;
 
         const fileName = `quote-sign-${id}-${generateUUID()}`;
-         file.mv(path.join(this.baseUploadDir, fileName), (err: any) => {
-          if (err) {
-            console.error("File move error:", err);
-            return ReE(res, SERVER_ERROR_CODE, "File upload failed.")
-          }});
-        const fileUrl = `${process.env.BASE_URL}${this.prefixUploadUrl}/${fileName}`;
-
-        if (!fileUrl) {
+        const destPath = path.join(this.baseUploadDir, fileName);
+        try {
+          await new Promise<void>((resolve, reject) => {
+            file.mv(destPath, (err: Error | null) => (err ? reject(err) : resolve()));
+          });
+        } catch (err) {
+          console.error("File move error:", err);
           return ReE(res, SERVER_ERROR_CODE, "File upload failed.");
         }
+        const fileUrl = `${process.env.BASE_URL}${this.prefixUploadUrl}/${fileName}`;
 
         updateData.customerSignatureUrl = fileUrl;
         updateData.accepted_date = now;
@@ -996,19 +1068,23 @@ class QuotesController {
         });
       }
 
-      const emailData = {
-        email: existing.customer.email,
-        subject: `📄 Your Quote Status Has Been Updated to ${status}`,
-        client_name: existing.customer.name,
-        id: existing.id,
-        type: "QUOTE",
-        title: `Quotation #${existing.id}`,
-        status: status,
-        due_date: existing.dateOfDue,
-        link: `${process.env.FRONT_URL}/#/quote/customer-view/${existing.id}/${existing.bypass_token}`,
-        event: EVENT_TASK_TYPE.UPDATED,
-      };
-      const invoiceEmailData = { ...emailData };
+      const customer = existing.customer ?? null;
+      const sender = existing.sender ?? null;
+      const emailData = customer?.email
+        ? {
+            email: customer.email,
+            subject: `📄 Your Quote Status Has Been Updated to ${status}`,
+            client_name: customer.name ?? "Customer",
+            id: existing.id,
+            type: "QUOTE",
+            title: `Quotation #${existing.id}`,
+            status: status,
+            due_date: existing.dateOfDue,
+            link: `${process.env.FRONT_URL}/#/quote/customer-view/${existing.id}/${existing.bypass_token}`,
+            event: EVENT_TASK_TYPE.UPDATED,
+          }
+        : null;
+      const invoiceEmailData = emailData ? { ...emailData } : null;
       let created_invoice;
       if (status === QuoteCustomerStatus.ACCEPTED) {
         const existingInvoice = await invoiceRepository.findOne({ quote_id: id });
@@ -1020,32 +1096,34 @@ class QuotesController {
         }
       }
       ReS(res, SUCCESS_CODE, "Quote status updated successfully.");
-      await notificationController.createNotification({
-        userId: existing.customer.id,
-        message: `Quotation #${existing.id} status has been updated to ${status}.`,
-        route: `${process.env.FRONT_URL}/#/quote/customer-view/${existing.id}/${existing.bypass_token}`,
-        meta: {
-          type: "QUOTE",
-          senderName: existing.sender.name,
-          customerNamwe: existing.customer.name,
-          role: existing.sender.role
-        }
-      })
+      if (customer?.id) {
+        await notificationController.createNotification({
+          userId: customer.id,
+          message: `Quotation #${existing.id} status has been updated to ${status}.`,
+          route: `${process.env.FRONT_URL}/#/quote/customer-view/${existing.id}/${existing.bypass_token}`,
+          meta: {
+            type: "QUOTE",
+            senderName: sender?.name ?? "Team",
+            customerNamwe: customer.name,
+            role: sender?.role,
+          },
+        });
+      }
       await sendMasterQuoteEmail({
         quote_id: existing.id,
-        type: QuoteEmailType.STATUS_UPDATED
-      })
-      if (created_invoice) {
+        type: QuoteEmailType.STATUS_UPDATED,
+      });
+      if (created_invoice && customer?.id && invoiceEmailData) {
         await notificationController.createNotification({
-          userId: existing.customer.id,
+          userId: customer.id,
           message: `Invoice #${created_invoice.id} has been created for Quotation #${existing.id}.`,
           route: `${process.env.FRONT_URL}/#/invoice/customer-view/${created_invoice.id}/${created_invoice.bypass_token}`,
           meta: {
             type: "INVOICE",
-            senderName: existing.sender.name,
-            customerName: existing.customer.name,
-            role: existing.sender.role
-          }
+            senderName: sender?.name ?? "Team",
+            customerName: customer.name,
+            role: sender?.role,
+          },
         });
         invoiceEmailData.subject = `🧾 Your Invoice #${created_invoice.id} Has Been Created for Accepted Quote #${existing.id}`;
         invoiceEmailData.id = created_invoice.id;
@@ -1244,7 +1322,24 @@ class QuotesController {
         extraWiringMeters,
         boardUpgrade,
         miniSubboardRequired,
+        vpp,
+        vppProvider,
+        postcode,
+        customer_type,
+        occupancy,
+        installationDate,
+        waNetwork,
+        solarVicRebate,
+        solarVicLoan,
+        solarVicEligibleConfirmed,
+        vicHotWaterRebate,
+        vicHotWaterLocalManufactured,
+        waBatteryRebateConfirmed,
+        waInterestFreeLoan,
+        existingSolar,
+        batteryInstallType,
         property_type,
+        send_email,
       } = body;
       let customerId = body?.customerId;
 
@@ -1272,6 +1367,28 @@ class QuotesController {
       if (extraWiringMeters !== undefined) pricingPatch.extraWiringMeters = extraWiringMeters;
       if (boardUpgrade !== undefined) pricingPatch.boardUpgrade = !!boardUpgrade;
       if (miniSubboardRequired !== undefined) pricingPatch.miniSubboardRequired = !!miniSubboardRequired;
+      if (vpp !== undefined) pricingPatch.vpp = !!vpp;
+      if (vppProvider !== undefined) pricingPatch.vppProvider = vppProvider;
+      if (postcode !== undefined) pricingPatch.postcode = postcode;
+      if (customer_type !== undefined) pricingPatch.customer_type = customer_type;
+      if (occupancy !== undefined) pricingPatch.occupancy = occupancy;
+      if (installationDate !== undefined) pricingPatch.installationDate = installationDate;
+      if (waNetwork !== undefined) pricingPatch.waNetwork = waNetwork;
+      if (solarVicRebate !== undefined) pricingPatch.solarVicRebate = !!solarVicRebate;
+      if (solarVicLoan !== undefined) pricingPatch.solarVicLoan = !!solarVicLoan;
+      if (solarVicEligibleConfirmed !== undefined) {
+        pricingPatch.solarVicEligibleConfirmed = !!solarVicEligibleConfirmed;
+      }
+      if (vicHotWaterRebate !== undefined) pricingPatch.vicHotWaterRebate = !!vicHotWaterRebate;
+      if (vicHotWaterLocalManufactured !== undefined) {
+        pricingPatch.vicHotWaterLocalManufactured = !!vicHotWaterLocalManufactured;
+      }
+      if (waBatteryRebateConfirmed !== undefined) {
+        pricingPatch.waBatteryRebateConfirmed = !!waBatteryRebateConfirmed;
+      }
+      if (waInterestFreeLoan !== undefined) pricingPatch.waInterestFreeLoan = !!waInterestFreeLoan;
+      if (existingSolar !== undefined) pricingPatch.existingSolar = !!existingSolar;
+      if (batteryInstallType !== undefined) pricingPatch.batteryInstallType = batteryInstallType;
       if (property_type !== undefined) pricingPatch.property_type = property_type;
 
       // ── Update path ──
@@ -1294,6 +1411,18 @@ class QuotesController {
           { id: Number(solarQuoteId) },
           { populate: quoteListPopulate, lean: true },
         );
+        if (send_email === true || send_email === "true") {
+          (async () => {
+            try {
+              await sendMasterQuoteEmail({
+                quote_id: String(solarQuoteId),
+                type: QuoteEmailType.UPDATED,
+              });
+            } catch (err: any) {
+              console.error("Solar quote email failed:", err?.message);
+            }
+          })();
+        }
         return ReS(res, SUCCESS_CODE, "Solar quote saved", quote);
       }
 
@@ -1366,6 +1495,18 @@ class QuotesController {
         { id: quote.id },
         { populate: quoteListPopulate, lean: true },
       );
+      if (send_email === true || send_email === "true") {
+        (async () => {
+          try {
+            await sendMasterQuoteEmail({
+              quote_id: String(quote.id),
+              type: QuoteEmailType.CREATED,
+            });
+          } catch (err: any) {
+            console.error("Solar quote email failed:", err?.message);
+          }
+        })();
+      }
       return ReS(res, SUCCESS_CODE, "Solar quote created", populated);
     } catch (error: any) {
       console.error("Error in createSolarQuote:", error);
@@ -1445,6 +1586,31 @@ class QuotesController {
       });
     } catch (error: any) {
       console.error("Error in getSolarProposal:", error);
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
+    }
+  }
+
+  /** Send quotation email for an existing Solar Sketch quote. */
+  async sendSolarQuoteEmail(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { quoteId, cc = [], bcc = [], type = QuoteEmailType.CREATED } = req.body;
+      if (!quoteId) return ReE(res, BAD_REQUEST_CODE, "quoteId is required");
+
+      const existing: any = await quoteRepository.findOne(
+        { id: Number(quoteId), is_solar_sketch: true },
+        { populate: { path: "customer", select: "id name email" }, lean: true },
+      );
+      if (!existing) return ReE(res, RESOURCE_NOT_FOUND, "Solar quote not found");
+
+      await sendMasterQuoteEmail({
+        quote_id: String(existing.id),
+        type: type === QuoteEmailType.UPDATED ? QuoteEmailType.UPDATED : QuoteEmailType.CREATED,
+        cc,
+        bcc,
+      });
+      return ReS(res, SUCCESS_CODE, `Quotation email sent to ${existing?.customer?.email || "customer"}.`);
+    } catch (error: any) {
+      console.error("Error in sendSolarQuoteEmail:", error);
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
     }
   }
@@ -2484,9 +2650,16 @@ class QuotesController {
         start_date,
         end_date,
         year = null,
+        quote_type = "all",
       } = req.body || {};
 
-      const filter: Record<string, unknown> = { is_solar_sketch: { $ne: true } };
+      const filter: Record<string, unknown> = {};
+      const normalizedQuoteType = String(quote_type || "all").toLowerCase();
+      if (normalizedQuoteType === "solar_sketch" || normalizedQuoteType === "solar") {
+        filter.is_solar_sketch = true;
+      } else if (normalizedQuoteType === "normal") {
+        filter.is_solar_sketch = { $ne: true };
+      }
       if (!(await isQuoteAdmin(user))) {
         if (user.id !== 299) filter.$or = [{ sender_id: user.id }, { customer_id: user.id }];
       }

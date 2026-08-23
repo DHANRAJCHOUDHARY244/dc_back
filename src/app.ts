@@ -22,7 +22,7 @@ import path from "path";
 import { loadCrons } from "@services/cronJobs.service";
 import { setDbReady } from "@utils/logSaver";
 import { reqResLogger } from "./middleware/reqResLogger.middleware";
-import { seedRoles } from "./data/dataInserter";
+// import { seedRoles } from "./data/dataInserter";
 import "@models/index";
 
 const app = express();
@@ -52,20 +52,20 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 (async () => {
   try {
     await connectDatabase();
-    await seedRoles();
-    try {
-      const { ensureSlaSeeds, backfillActiveQuotes } = await import("@services/sla.service");
-      await ensureSlaSeeds();
-      await backfillActiveQuotes();
-    } catch (e) {
-      console.error("SLA seed/backfill:", e);
-    }
-    try {
-      const { ensureMasterTaskSeeds } = await import("@services/masterTask.service");
-      await ensureMasterTaskSeeds();
-    } catch (e) {
-      console.error("Master task seed:", e);
-    }
+    // await seedRoles();
+    // try {
+    //   const { ensureSlaSeeds, backfillActiveQuotes } = await import("@services/sla.service");
+    //   await ensureSlaSeeds();
+    //   await backfillActiveQuotes();
+    // } catch (e) {
+    //   console.error("SLA seed/backfill:", e);
+    // }
+    // try {
+    //   const { ensureMasterTaskSeeds } = await import("@services/masterTask.service");
+    //   await ensureMasterTaskSeeds();
+    // } catch (e) {
+    //   console.error("Master task seed:", e);
+    // }
     setDbReady(true);
     overrideLoggerMethods();
     dbRelation();

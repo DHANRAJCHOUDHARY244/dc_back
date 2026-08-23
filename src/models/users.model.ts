@@ -15,7 +15,7 @@ const defaultBankDetails = {
 const UserSchema = new Schema(
   {
     id: { type: Number, unique: true, index: true },
-    username: { type: String, required: true },
+    username: { type: String, required: true, index: true },
     name: { type: String, required: true },
     address: { type: String },
     email: { type: String, required: true, index: true },

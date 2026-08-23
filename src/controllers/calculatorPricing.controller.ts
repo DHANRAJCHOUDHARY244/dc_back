@@ -1,5 +1,6 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "@constants/common.interface";
+import { emptyStatePrice } from "@constants/auStatePrice.constants";
 import { BAD_REQUEST_CODE, SERVER_ERROR_CODE, SUCCESS_CODE } from "@constants/serverCode";
 import { ReE, ReS } from "@services/generalHelper.service";
 import {
@@ -232,7 +233,7 @@ class CalculatorPricingController {
       const row = await calculatorExtraRepository.create({
         key,
         label,
-        prices: prices || { vic: 0, nsw: 0, act: 0 },
+        prices: prices || emptyStatePrice(0),
         active: active !== false,
         sort_order: sort_order ?? 0,
       });

@@ -78,6 +78,7 @@ export { NotificationRepository, notificationRepository } from "./notification.r
 export { CalculatorProductRepository, calculatorProductRepository } from "./calculatorProduct.repository";
 export { CalculatorExtraRepository, calculatorExtraRepository } from "./calculatorExtra.repository";
 export { CalculatorSettingsRepository, calculatorSettingsRepository } from "./calculatorSettings.repository";
+export { RebateSchemeRepository, rebateSchemeRepository } from "./rebateScheme.repository";
 export { CalculatorCategoryRepository, calculatorCategoryRepository } from "./calculatorCategory.repository";
 export { CalculatorBrandRepository, calculatorBrandRepository } from "./calculatorBrand.repository";
 export { ProductCategoryConfigRepository, productCategoryConfigRepository } from "./productCategoryConfig.repository";

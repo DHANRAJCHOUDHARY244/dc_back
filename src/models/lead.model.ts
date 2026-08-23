@@ -140,6 +140,13 @@ LeadSchema.virtual("creator", {
   justOne: true,
 });
 
+LeadSchema.virtual("previous_owner", {
+  ref: "User",
+  localField: "previous_owner_id",
+  foreignField: "id",
+  justOne: true,
+});
+
 applyBasePlugins(LeadSchema, { collection: "leads", paranoid: true });
 
 const Lead = mongoose.models.Lead ?? mongoose.model("Lead", LeadSchema);

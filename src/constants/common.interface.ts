@@ -96,6 +96,35 @@ export interface newQuote {
     } | null;
     manual_attachments?: unknown[];
     green_sketch?: unknown | null;
+    is_draft?: boolean;
+    installationType?: string;
+    property_type?: string;
+    state?: string;
+    panelRemoval?: boolean;
+    criticalInstallation?: boolean;
+    garageInstallation?: boolean;
+    extraWiring?: boolean;
+    extraWiringMeters?: number;
+    boardUpgrade?: boolean;
+    miniSubboardRequired?: boolean;
+    /** Virtual Power Plant */
+    vpp?: boolean;
+    vppProvider?: string;
+    postcode?: string;
+    customer_type?: string;
+    occupancy?: string;
+    installationDate?: string;
+    waNetwork?: string;
+    solarVicRebate?: boolean;
+    solarVicLoan?: boolean;
+    solarVicEligibleConfirmed?: boolean;
+    vicHotWaterRebate?: boolean;
+    vicHotWaterLocalManufactured?: boolean;
+    waBatteryRebateConfirmed?: boolean;
+    waInterestFreeLoan?: boolean;
+    existingSolar?: boolean;
+    batteryInstallType?: string;
+    rebateAmount?: number;
 }
 
 export interface AutocompleteCustomerByNameEmailInterface{

@@ -441,6 +441,16 @@ export default[
         "component": "/green-sketch/index.tsx",
     },
     {
+        "id": 121,
+        "name": "Solar Battery CRM",
+        "label": "sys.menu.solarBatteryCrm",
+        "icon": "solar:bolt-bold-duotone",
+        "type": 1,
+        "route": "solar-battery-crm",
+        "order": 5,
+        "component": "/solar-battery-crm/index.tsx",
+    },
+    {
         "id": 67,
         "name": "Asessment",
         "label": "sys.menu.assessment.index",

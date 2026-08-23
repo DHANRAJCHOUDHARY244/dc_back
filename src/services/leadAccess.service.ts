@@ -9,7 +9,7 @@ const ADMIN_ROLES = new Set([
 	Roles.CUSTOMER_SUPPORT_EXECUTIVE,
 ]);
 
-const TEAM_LEADER_ROLES = new Set([Roles.MANAGER, Roles.OPERATIONS_MANAGER]);
+const TEAM_LEADER_ROLES = new Set([Roles.MANAGER, Roles.OPERATIONS_MANAGER, Roles.SALES_LEADER]);
 
 export type LeadAccess = {
 	scope: "admin" | "team" | "self";

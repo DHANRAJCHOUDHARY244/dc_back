@@ -30,6 +30,7 @@ export const Roles = {
 
   // ===== SALES =====
   SALES_PERSON: "SALES_PERSON",
+  SALES_LEADER: "SALES_LEADER",
   SENIOR_SALES_EXECUTIVE: "SENIOR_SALES_EXECUTIVE",
   SALES_EXECUTIVE: "SALES_EXECUTIVE",
   BUSINESS_DEVELOPMENT_EXECUTIVE: "BUSINESS_DEVELOPMENT_EXECUTIVE",
@@ -149,6 +150,12 @@ export const rolesData = [
 
   // ===== SALES =====
   {
+    name: Roles.SALES_LEADER,
+    label: "Sales Leader / Team Leader",
+    desc: "Leads a sales team, assigns leads to salespeople, and can reassign to other team leaders.",
+    order: 16.5,
+  },
+  {
     name: Roles.SENIOR_SALES_EXECUTIVE,
     label: "Senior Sales Executive",
     desc: "Leads sales initiatives and handles key clients.",
@@ -222,6 +229,8 @@ export const seedRoles = async () => {
   console.log("Inserted:", newRoles.map(r => r.name));
   console.log("Already exists:", [...existingNames]);
 
+  await seedSalesLeaderPermissions();
+
   // await seedFinanceAccountsPermission();
   // await seedAllInOnePermission();
   // await seedHrAttendancePermissions();
@@ -229,6 +238,44 @@ export const seedRoles = async () => {
 
   // await importAdvertisingData();
   // await sendMarketingEmails()
+};
+
+/** Copy SALES_PERSON menu grants onto SALES_LEADER so they can use Leads from day one. */
+export const seedSalesLeaderPermissions = async () => {
+  try {
+    const leader: any = await roleRepository.findOne({ name: Roles.SALES_LEADER }, { lean: true });
+    const source: any = await roleRepository.findOne({ name: Roles.SALES_PERSON }, { lean: true });
+    if (!leader || !source) return;
+
+    const sourcePerms: any[] = await userPermissionRepository.find(
+      { role_id: source.id },
+      { lean: true },
+    );
+    if (!sourcePerms.length) return;
+
+    let created = 0;
+    for (const row of sourcePerms) {
+      const exists = await userPermissionRepository.findOne({
+        role_id: leader.id,
+        permission_id: row.permission_id,
+      });
+      if (exists) continue;
+      await userPermissionRepository.create({
+        role_id: leader.id,
+        permission_id: row.permission_id,
+        enable: row.enable !== false,
+        create: !!row.create,
+        can_update: !!row.can_update,
+        delete: !!row.delete,
+        is_user_specific: false,
+        is_admin: false,
+      });
+      created += 1;
+    }
+    if (created) console.log(`Seeded ${created} SALES_LEADER permission(s) from SALES_PERSON`);
+  } catch (err) {
+    console.error("seedSalesLeaderPermissions failed", err);
+  }
 };
 
 /** Idempotent: adds the Finance > Accounts menu permission for existing databases. */
@@ -337,6 +384,7 @@ export const seedAllInOnePermission = async () => {
       Roles.MANAGER,
       Roles.OPERATIONS_MANAGER,
       Roles.SALES_PERSON,
+      Roles.SALES_LEADER,
       Roles.SENIOR_SALES_EXECUTIVE,
       Roles.SALES_EXECUTIVE,
       Roles.INSTALLER,
@@ -438,6 +486,7 @@ export const seedHrAttendancePermissions = async () => {
     const selfAccess = new Set([
       ...fullAccess,
       Roles.SALES_PERSON,
+      Roles.SALES_LEADER,
       Roles.SENIOR_SALES_EXECUTIVE,
       Roles.SALES_EXECUTIVE,
       Roles.INSTALLER,
@@ -499,6 +548,45 @@ const EXTRA_LETTER_MENUS = [
   },
 ];
 
+export const seedSolarBatteryCrmPermission = async () => {
+  try {
+    const existing = await permissionRepository.findOne({ route: "solar-battery-crm" });
+    if (existing) return;
+
+    const permission = await permissionRepository.create({
+      name: "Solar Battery CRM",
+      label: "sys.menu.solarBatteryCrm",
+      type: 1,
+      route: "solar-battery-crm",
+      order: 5,
+      component: "/solar-battery-crm/index.tsx",
+      icon: "solar:bolt-bold-duotone",
+    });
+
+    const roles = await roleRepository.find();
+    for (const role of roles as any[]) {
+      const isSuper = role.name === Roles.SUPER_ADMIN;
+      const isSales =
+        isSuper ||
+        ["CEO", "ADMIN", "MANAGER", "SALES_PERSON", "SALES_LEADER", "SENIOR_SALES_EXECUTIVE", "SALES_EXECUTIVE"].includes(role.name);
+      await userPermissionRepository.create({
+        role_id: role.id,
+        permission_id: (permission as any).id,
+        enable: isSales,
+        read: isSales,
+        create: isSales,
+        can_update: isSales,
+        delete: isSuper,
+        is_user_specific: false,
+        is_admin: isSuper,
+      });
+    }
+    console.log("Seeded Solar Battery CRM permission");
+  } catch (err) {
+    console.error("seedSolarBatteryCrmPermission failed", err);
+  }
+};
+
 export const seedDocumentLetterPermissions = async () => {
   try {
     const parent = await permissionRepository.findOne({ route: "document-center", parentId: null });
@@ -539,6 +627,53 @@ export const seedDocumentLetterPermissions = async () => {
     console.log("Seeded extra Document Center letter permissions");
   } catch (err) {
     console.error("seedDocumentLetterPermissions failed", err);
+  }
+};
+
+/** Idempotent: Admin → Rebates & Incentives menu + seed default schemes. */
+export const seedRebateSchemesPermission = async () => {
+  try {
+    const { seedDefaultRebateSchemes } = await import("@services/rebateEngine.service");
+    await seedDefaultRebateSchemes();
+
+    const existing = await permissionRepository.findOne({ route: "rebates" });
+    if (existing) {
+      console.log("Rebates permission already exists");
+      return;
+    }
+
+    const permission = await permissionRepository.create({
+      name: "Rebates & Incentives",
+      label: "sys.menu.rebates",
+      type: 1,
+      route: "rebates",
+      order: 6,
+      component: "/rebates/index.tsx",
+      icon: "solar:hand-money-bold-duotone",
+    });
+
+    const roles = await roleRepository.find();
+    for (const role of roles as any[]) {
+      const isAdmin =
+        role.name === Roles.SUPER_ADMIN ||
+        role.name === Roles.CEO ||
+        role.name === Roles.ADMIN ||
+        role.name === Roles.MANAGER;
+      await userPermissionRepository.create({
+        role_id: role.id,
+        permission_id: (permission as any).id,
+        enable: isAdmin,
+        read: isAdmin,
+        create: isAdmin,
+        can_update: isAdmin,
+        delete: role.name === Roles.SUPER_ADMIN,
+        is_user_specific: false,
+        is_admin: role.name === Roles.SUPER_ADMIN,
+      });
+    }
+    console.log("Seeded Rebates & Incentives permission");
+  } catch (err) {
+    console.error("seedRebateSchemesPermission failed", err);
   }
 };
 

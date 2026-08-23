@@ -1,4 +1,4 @@
-import { AuthenticatedRequest } from "./../constants/common.interface";
+import { AuthenticatedRequest, MenuItem } from "./../constants/common.interface";
 import { ReE, ReS } from "@services/generalHelper.service";
 import { BAD_REQUEST_CODE, RESOURCE_NOT_FOUND, SERVER_ERROR_CODE, SUCCESS_CODE,} from "@constants/serverCode";
 import {
@@ -9,6 +9,11 @@ import {
 import { Response } from "express";
 import { buildMenuTree } from "@services/permissionArrange.service";
 import { notifyRolePermissionChange } from "@services/permissionNotify.service";
+import {
+  getCachedPermissionTree,
+  invalidatePermissionCache,
+  setCachedPermissionTree,
+} from "@services/permissionCache.service";
 
 class PermissionController {
     async addPermission(req: AuthenticatedRequest, res: Response) {
@@ -34,9 +39,11 @@ class PermissionController {
                 )
             );
 
-            // Menu tree changed — refresh connected users for every role
             for (const role of roles as any[]) {
-              if (role?.id != null) notifyRolePermissionChange(role.id);
+              if (role?.id != null) {
+                invalidatePermissionCache(role.id);
+                notifyRolePermissionChange(role.id);
+              }
             }
 
             return ReS(res, SUCCESS_CODE, "Permission added successfully!", permission);
@@ -85,7 +92,10 @@ class PermissionController {
 
             const roles = await roleRepository.find({}, { select: "id", lean: true });
             for (const role of roles as any[]) {
-              if (role?.id != null) notifyRolePermissionChange(role.id);
+              if (role?.id != null) {
+                invalidatePermissionCache(role.id);
+                notifyRolePermissionChange(role.id);
+              }
             }
 
             return ReS(res, SUCCESS_CODE, "Permission updated successfully", updated);
@@ -110,7 +120,10 @@ class PermissionController {
 
             const roles = await roleRepository.find({}, { select: "id", lean: true });
             for (const role of roles as any[]) {
-              if (role?.id != null) notifyRolePermissionChange(role.id);
+              if (role?.id != null) {
+                invalidatePermissionCache(role.id);
+                notifyRolePermissionChange(role.id);
+              }
             }
 
             return ReS(res, SUCCESS_CODE, "Permission deleted successfully");
@@ -120,26 +133,54 @@ class PermissionController {
     }
     async getPermissionTree(role_id: number) {
         try {
-               const rolePermissions = await userPermissionRepository.find(
-                  { role_id, enable: true },
-                  { populate: { path: "permission" } },
-                );
-                const permissionList = rolePermissions.map((entry: any) => {
-                  const {create,can_update,enable,delete:is_deleted,is_user_specific,is_admin} = entry.toJSON();
-                  const permission = entry.permission?.toJSON?.() || {};
-            
-                  return {
-                    ...permission,
-                    create,
-                    delete: is_deleted,
-                    can_update,
-                    is_user_specific,
-                    is_admin,
-                    enable
-                  };
-                });
-            const per = buildMenuTree(permissionList);
-            return per
+            if (!role_id) return [];
+
+            const cached = getCachedPermissionTree(role_id);
+            if (cached) return cached;
+
+            const rows: any[] = await userPermissionRepository.aggregateRaw([
+              { $match: { role_id, enable: true, deleted_at: null } },
+              {
+                $lookup: {
+                  from: "permissions",
+                  localField: "permission_id",
+                  foreignField: "id",
+                  as: "permission",
+                },
+              },
+              { $unwind: "$permission" },
+              { $match: { "permission.deleted_at": null } },
+            ]);
+
+            const permissionList = rows.map((entry) => {
+              const perm = entry.permission ?? {};
+              return {
+                id: perm.id,
+                name: perm.name,
+                parentId: perm.parentId,
+                label: perm.label,
+                icon: perm.icon,
+                type: perm.type,
+                route: perm.route,
+                order: perm.order,
+                component: perm.component,
+                newFeature: perm.newFeature,
+                hide: perm.hide,
+                status: perm.status,
+                created_at: perm.created_at,
+                updated_at: perm.updated_at,
+                create: entry.create,
+                delete: entry.delete,
+                can_update: entry.can_update,
+                is_user_specific: entry.is_user_specific,
+                is_admin: entry.is_admin,
+                enable: entry.enable,
+              };
+            });
+
+            const tree = buildMenuTree(permissionList as MenuItem[]);
+            setCachedPermissionTree(role_id, tree);
+            return tree;
         } catch (error) {
             throw error
         }

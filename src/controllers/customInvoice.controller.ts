@@ -44,6 +44,7 @@ class CustomInvoiceController {
             partialAmount,
             loan_enabled = false,
             loan_meta = null,
+            notes = "",
         } = data;
         const now = new Date();
         const payload: any = {
@@ -67,10 +68,10 @@ class CustomInvoiceController {
             loan_enabled,
             loan_meta,
             name: custName,
-            email: custEmail,
             address: custAddress,
+            notes: String(notes || "").trim(),
             status_updated_date: now,
-        }
+        };
         if (pay_status === "PAID") payload.paid_date = now;
         let customInvoice;
         let isUpdate = false;
@@ -423,9 +424,14 @@ class CustomInvoiceController {
                 return ReE(res, BAD_REQUEST_CODE, "Invalid status date");
             }
 
-            const invoice: any = await customInvoiceRepository.findOne({ id: Number(id) });
+            const invoiceFilter: Record<string, unknown> = { id: Number(id) };
+            if (req.user.role !== Roles.SUPER_ADMIN) {
+                invoiceFilter.sender_id = req.user.id;
+            }
+
+            const invoice: any = await customInvoiceRepository.findOne(invoiceFilter);
             if (!invoice) {
-                return ReE(res, SERVER_ERROR_CODE, "CustomInvoice not found");
+                return ReE(res, SERVER_ERROR_CODE, "CustomInvoice not found or access denied");
             }
 
             const now = new Date();

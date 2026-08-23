@@ -8,6 +8,8 @@ import {
 } from "@repositories";
 import { Roles } from "src/data/dataInserter";
 import notificationController from "@controllers/notification.controller";
+import { resolveAssigneeTeamLeaderId } from "@services/leadAssignment.service";
+import { pushAudit } from "@services/leadAudit.service";
 
 const DEFAULT_SETTINGS = {
 	enabled: true,
@@ -37,6 +39,7 @@ export async function saveDistributionSettings(patch: Record<string, unknown>) {
 
 const SALES_ROLES = [
 	Roles.SALES_PERSON,
+	Roles.SALES_LEADER,
 	Roles.SALES_EXECUTIVE,
 	Roles.SENIOR_SALES_EXECUTIVE,
 	Roles.BUSINESS_DEVELOPMENT_EXECUTIVE,
@@ -163,9 +166,11 @@ export async function pickBestAgent(lead: any) {
 
 	scored.sort((a, b) => b.rank - a.rank || a.stats.active - b.stats.active || a.stats.today - b.stats.today);
 	const winner = scored[0];
+	const teamLeaderId =
+		(await resolveAssigneeTeamLeaderId(winner.user.id)) || area?.team_leader_id || null;
 	return {
 		user_id: winner.user.id,
-		team_leader_id: area?.team_leader_id || null,
+		team_leader_id: teamLeaderId,
 		area_name: area?.name || null,
 		reason: `Lowest workload among ${eligible.length} eligible agents (${winner.stats.active} active, ${winner.stats.today} today)`,
 	};
@@ -175,10 +180,13 @@ export async function autoAssignLead(lead: any, actorId?: number | null) {
 	const pick = await pickBestAgent(lead);
 	if (!pick) return { assigned: false, lead };
 	const now = new Date();
+	const assignee: any = await userRepository.findOne({ id: pick.user_id }, { select: "id name", lean: true });
+	const toName = assignee?.name || `User #${pick.user_id}`;
 	await leadRepository.updateMany(
 		{ id: lead.id },
 		{
 			$set: {
+				previous_owner_id: lead.owner_id || null,
 				owner_id: pick.user_id,
 				team_leader_id: pick.team_leader_id || lead.team_leader_id || null,
 				assigned_at: now,
@@ -187,12 +195,28 @@ export async function autoAssignLead(lead: any, actorId?: number | null) {
 					...(Array.isArray(lead.timeline) ? lead.timeline : []),
 					{
 						type: "assign",
-						title: "AI Distribution",
-						detail: `Assigned to #${pick.user_id}. ${pick.reason}${pick.area_name ? ` · ${pick.area_name}` : ""}`,
+						title: `Assigned to ${toName}`,
+						detail: `AI distribution assigned this lead to ${toName}. ${pick.reason}${pick.area_name ? ` · ${pick.area_name}` : ""}`,
 						at: now,
 						by: actorId ?? null,
+						to_user_id: pick.user_id,
 					},
 				],
+				audit_log: pushAudit(lead.audit_log, {
+					type: "assign",
+					title: "Lead assigned",
+					detail: `AI distribution assigned this lead to ${toName}. ${pick.reason}${pick.area_name ? ` · ${pick.area_name}` : ""}`,
+					by: actorId ?? null,
+					changes: [
+						{ field: "owner_id", label: "Current owner", from: lead.owner_id || "Unassigned", to: toName },
+						{
+							field: "status",
+							label: "Status",
+							from: lead.status,
+							to: ["NEW_LEAD", "AI_QUALIFIED"].includes(lead.status) ? "ASSIGNED" : lead.status,
+						},
+					],
+				}),
 			},
 		},
 	);
