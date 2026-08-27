@@ -26,6 +26,8 @@ const UserSchema = new Schema(
     },
     password: { type: String, required: true },
     is_verified: { type: Boolean, default: false },
+    /** When true, user must set a new password before using the app. */
+    must_change_password: { type: Boolean, default: false },
     mobile_no: { type: String },
     mobile_country_code: { type: String },
     otp_verification_token: { type: String },

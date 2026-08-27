@@ -269,9 +269,11 @@ class QuotesController {
         { $set: payload },
       );
 
-      if (updateResult.modifiedCount > 0) {
+      if (updateResult.matchedCount > 0) {
         isUpdate = true;
         quote = await quoteRepository.findOne({ id: invoiceNumber, customer_id });
+      } else {
+        throw new Error(`Quote #${invoiceNumber} not found for this customer`);
       }
     }
 
@@ -295,7 +297,7 @@ class QuotesController {
         emailData.email = body.custEmail;
         emailData.client_name = body.custName + `(${body.custEmail})`;
         const existingUser: any = await userRepository.findOne(
-          { $or: [{ email: body.custEmail }, { username: body.custName }] },
+          { email: body.custEmail },
           { select: "id", lean: true },
         );
 
@@ -308,7 +310,7 @@ class QuotesController {
           );
 
           const newUser: any = await userRepository.create({
-            username: body.custName.toLowerCase(),
+            username: body.custEmail.toLowerCase(),
             email: body.custEmail.toLowerCase(),
             name: body.custName,
             address: body.custAddress,
@@ -1429,7 +1431,7 @@ class QuotesController {
       // ── Create path — resolve or create the customer ──
       if (!customerId && custEmail) {
         const existingUser: any = await userRepository.findOne(
-          { $or: [{ email: custEmail }, { username: custName }] },
+          { email: custEmail },
           { select: "id", lean: true },
         );
         if (existingUser) {
@@ -1440,7 +1442,7 @@ class QuotesController {
             { select: "id", lean: true },
           );
           const newUser: any = await userRepository.create({
-            username: (custName || custEmail).toLowerCase(),
+            username: custEmail.toLowerCase(),
             email: custEmail.toLowerCase(),
             name: custName || custEmail,
             address: custAddress,
@@ -1682,13 +1684,11 @@ class QuotesController {
       if (!existing) {
         return ReE(res, FORBIDDEN_CODE, "Quote not found.");
       }
-      ReS(res, SUCCESS_CODE, "Follow-up email sent successfully.");
-      // Prepare follow-up email payload
       await sendMasterQuoteEmail({
         quote_id: existing.id,
         type: QuoteEmailType.FOLLOW_UP,
         cc, bcc
-      })
+      });
       const followUp = {
         last_follow_up_date_time: new Date(),
         follow_up_count: (existing.follow_up_count || 0) + 1,
@@ -1702,6 +1702,7 @@ class QuotesController {
         ]
       };
       await quoteRepository.updateMany({ id: quoteId }, { $set: { ...followUp } });
+      return ReS(res, SUCCESS_CODE, "Follow-up email sent successfully.");
     } catch (error: any) {
       console.error("sendQuoteFollowUp Error:", error);
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
@@ -1725,13 +1726,12 @@ class QuotesController {
       if (!existing) {
         return ReE(res, FORBIDDEN_CODE, "Quote not found.");
       }
-      ReS(res, SUCCESS_CODE, `Review and Feedback email to ${existing?.customer?.email} sent successfully.`);
-      // Prepare follow-up email payload
-      return await sendMasterQuoteEmail({
+      await sendMasterQuoteEmail({
         quote_id: existing.id,
         type: QuoteEmailType.FEEDBACK,
         cc, bcc
-      })
+      });
+      return ReS(res, SUCCESS_CODE, `Review and Feedback email to ${existing?.customer?.email} sent successfully.`);
     } catch (error: any) {
       console.error("sendQuoteFollowUp Error:", error);
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
@@ -1754,16 +1754,15 @@ class QuotesController {
       if (!existing) {
         return ReE(res, FORBIDDEN_CODE, "Quote not found.");
       }
-      ReS(res, SUCCESS_CODE, `Close quote email to ${existing?.customer?.email} sent successfully.`);
-      // Prepare follow-up email payload
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 7);
       await quoteRepository.updateMany({ id: quoteId }, { $set: { quote_close_date: dueDate } });
-      return await sendMasterQuoteEmail({
+      await sendMasterQuoteEmail({
         quote_id: existing.id,
         type: QuoteEmailType.CLOSED,
         cc, bcc
-      })
+      });
+      return ReS(res, SUCCESS_CODE, `Close quote email to ${existing?.customer?.email} sent successfully.`);
     } catch (error: any) {
       console.error("sendCloseAlert Error:", error);
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);

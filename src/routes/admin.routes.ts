@@ -7,6 +7,7 @@ router.post("/users", adminController.createUser.bind(adminController));
 router.post("/users/list", adminController.listUsers);
 // Update user details
 router.put("/users/:userId",adminController.updateUser);
+router.post("/users/:userId/temp-password", adminController.generateTempPassword.bind(adminController));
 router.post("/user/profile-img/:userId",adminController.updateCustomerProfileImage.bind(adminController))
 // Update user password
 router.post("/users/password",adminController.updateUserPassword);

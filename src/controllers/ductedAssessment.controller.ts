@@ -23,7 +23,7 @@ class DuctedAssessmentController {
       if (!cust_id) {
         const existingUser: any = await userRepository.findOne(
           {
-            $or: [{ email }, { username: customer }],
+            email,
           },
           { select: "id", lean: true },
         );
@@ -35,7 +35,7 @@ class DuctedAssessmentController {
             { select: "id", lean: true },
           );
           const newUser: any = await userRepository.create({
-            username: customer,
+            username: (email || customer).toLowerCase(),
             name: customer,
             email,
             address,

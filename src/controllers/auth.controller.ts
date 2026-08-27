@@ -54,8 +54,9 @@ class AuthController {
     );
     return {
       user: {
-        username: userInfo.name,
         ...userInfo,
+        username: userInfo.username,
+        name: userInfo.name,
         role: role_info?.name,
         permissions: permissions_info,
       },
@@ -106,7 +107,7 @@ class AuthController {
         otp: {
           otp: genOtp,
           otp_type: OtpType.VERIFY_EMAIL,
-          expired_at: new Date(Date.now() + 60 * 1000),
+          expired_at: new Date(Date.now() + 10 * 60 * 1000),
         },
         role_id: roleId,
       });
@@ -171,6 +172,10 @@ class AuthController {
         return ReE(res, BAD_REQUEST_CODE, "Email not verified");
       }
 
+      if (user.is_active === false) {
+        return ReE(res, BAD_REQUEST_CODE, "Account is deactivated");
+      }
+
       const resData = await this.getUserInfoRoleAndPermission(
         user,
         is_remember
@@ -203,9 +208,10 @@ class AuthController {
       const hashedPassword = await generate_Hash_Password(new_password);
       await userRepository.updateMany(
         { id: user.id },
-        { $set: { password: hashedPassword, otp_verification_token: null } },
+        { $set: { password: hashedPassword, otp_verification_token: null, must_change_password: false } },
       );
-      const resData = await this.getUserInfoRoleAndPermission(userDetails);
+      const refreshed: any = await userRepository.findOne({ id: user.id }, { lean: true, select: { otp: 0 } });
+      const resData = await this.getUserInfoRoleAndPermission(refreshed || userDetails);
 
       return ReS(res, SUCCESS_CODE, "Reset successfully.", resData);
     } catch (error) {
@@ -231,7 +237,7 @@ class AuthController {
               otp: {
                 otp: genOtp,
                 otp_type: OtpType.VERIFY_EMAIL,
-                expired_at: new Date(Date.now() + 60 * 1000),
+                expired_at: new Date(Date.now() + 10 * 60 * 1000),
                 is_active: true,
               },
             },
@@ -239,11 +245,11 @@ class AuthController {
         );
         const emailPayload = {
           email,
-          subject: `User ${userData.name} Registration successful and  Email Verification`,
+          subject: `Verify your email - ${userData.name}`,
           client_name: userData.name,
           id: user.id,
           type: "Email Verification",
-          message: `${userData.name} Please verify your email address by entering the OTP sent to your email.`,
+          message: `${userData.name}, please verify your email address by entering the OTP below. It expires in 10 minutes.`,
           otp: genOtp
         }
         sendEmailRegSignOtpAsync(emailPayload, "Email verification OTP");
@@ -257,12 +263,13 @@ class AuthController {
 
       await userRepository.updateMany(
         { id: user.id },
-        { $set: { is_verified: true, otp: null } },
+        { $set: { is_verified: true, otp: null, must_change_password: true } },
       );
 
-      const resData = await this.getUserInfoRoleAndPermission(user);
+      const refreshed: any = await userRepository.findOne({ id: user.id }, { lean: true, select: { otp: 0 } });
+      const resData = await this.getUserInfoRoleAndPermission(refreshed || { ...user, is_verified: true, must_change_password: true });
 
-      return ReS(res, SUCCESS_CODE, "Email verified successfully.", resData);
+      return ReS(res, SUCCESS_CODE, "Email verified successfully. Please set a new password.", resData);
     } catch (error: any) {
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
     }
@@ -283,18 +290,18 @@ class AuthController {
               otp: {
                 otp: genOtp,
                 otp_type: OtpType.FORGOT_PASSWORD,
-                expired_at: new Date(Date.now() + 60 * 1000),
+                expired_at: new Date(Date.now() + 10 * 60 * 1000),
               },
             },
           },
         );
         const emailPayload = {
           email,
-          subject: `User ${userData.name} Registration successful and  Email Verification`,
+          subject: `Password reset OTP - ${userData.name}`,
           client_name: userData.name,
           id: user.id,
-          type: "Email Verification",
-          message: `${userData.name} Please verify your email address by entering the OTP sent to your email.`,
+          type: "Password Reset",
+          message: `${userData.name}, use the OTP below to reset your password. It expires in 10 minutes.`,
           otp: genOtp
         }
         sendEmailRegSignOtpAsync(emailPayload, "Forgot password OTP");
@@ -312,7 +319,7 @@ class AuthController {
         return ReE(res, BAD_REQUEST_CODE, "Invalid or expired otp");
       }
 
-      const otpToken = jwt.sign({ id: user.id, email: user.email, otp_type: OtpType.FORGOT_PASSWORD }, process.env.JWT_SECRET!, { expiresIn: "1m" });
+      const otpToken = jwt.sign({ id: user.id, email: user.email, otp_type: OtpType.FORGOT_PASSWORD }, process.env.JWT_SECRET!, { expiresIn: "15m" });
       await userRepository.updateMany(
         { id: user.id },
         { $set: { otp_verification_token: otpToken, otp: null } },

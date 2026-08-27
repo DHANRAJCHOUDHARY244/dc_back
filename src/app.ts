@@ -71,6 +71,14 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     dbRelation();
     loadCrons();
 
+    // Warm branding cache so first /public/branding is instant.
+    try {
+      const { getOrCreateSettings } = await import("@services/crmSettings.service");
+      await getOrCreateSettings();
+    } catch (e) {
+      console.warn("Branding cache warm skipped:", (e as Error)?.message || e);
+    }
+
     httpServer.listen(Number(process.env.PORT) || 3000, "0.0.0.0", () => {
       logger.warn(`Server is running on port ${process.env.PORT || 3000}`);
     });
