@@ -10,7 +10,7 @@ import {
 } from "@constants/serverCode";
 
 import { Request, Response } from "express";
-import { ReE, ReS, generate_Hash_Password } from "@services/generalHelper.service";
+import { ReE, ReS, generate_Hash_Password, generateRandomString } from "@services/generalHelper.service";
 import { AuthenticatedRequest } from "@constants/common.interface";
 import { Roles } from "src/data/dataInserter";
 import {
@@ -28,6 +28,9 @@ import {
 
 import authController from "./auth.controller";
 import userController from "./user.controller";
+import { sendEmail } from "@utils/email";
+import { getCompanyConfig } from "@services/crmSettings.service";
+import { runEmailInBackground } from "@services/email.service";
 
 const parsePagination = (body: any) => {
   const limit = Math.max(Number(body.limit) || 10, 1);
@@ -173,6 +176,9 @@ class AdminPanelController {
       const userId = Number(req.params.userId);
       const payload = { ...req.body };
       delete payload.password;
+      delete payload.id;
+      delete payload._id;
+      delete payload.email;
 
       if (payload.role) {
         payload.role_id = await resolveRoleId(payload.role);
@@ -180,7 +186,23 @@ class AdminPanelController {
       }
 
       await userRepository.updateById(userId, { $set: payload });
-      return ReS(res, SUCCESS_CODE, "User updated successfully");
+      const updated: any = await userRepository.findOne(
+        { id: userId },
+        {
+          populate: { path: "role", select: "id name" },
+          select: "-password -otp -otp_verification_token -bank_details -deleted_at",
+          lean: true,
+        },
+      );
+      if (!updated) return ReE(res, BAD_REQUEST_CODE, "User not found");
+
+      const { role, ...rest } = updated;
+      return ReS(res, SUCCESS_CODE, "User updated successfully", {
+        ...rest,
+        role_id: role?.id ?? rest.role_id ?? null,
+        role: role?.name ?? null,
+        avatar: rest.profile_image || null,
+      });
     } catch (err: any) {
       return ReE(res, BAD_REQUEST_CODE, err.message);
     }
@@ -188,15 +210,84 @@ class AdminPanelController {
 
   async updateUserPassword(req: Request, res: Response) {
     try {
-      const { id, new_password } = req.body;
+      const { id, new_password, must_change_password = false } = req.body;
       if (!new_password) return ReE(res, BAD_REQUEST_CODE, "Password required");
+      if (String(new_password).length < 8)
+        return ReE(res, BAD_REQUEST_CODE, "Password must be at least 8 characters");
 
       const password = await generate_Hash_Password(new_password);
-      await userRepository.updateById(Number(id), { $set: { password } });
+      await userRepository.updateById(Number(id), {
+        $set: {
+          password,
+          must_change_password: !!must_change_password,
+        },
+      });
 
       return ReS(res, SUCCESS_CODE, "Password updated");
     } catch {
       return ReE(res, SERVER_ERROR_CODE, "Password update failed");
+    }
+  }
+
+  /**
+   * Generate a temporary password, force reset on next login,
+   * and email username + temporary password to the user.
+   */
+  async generateTempPassword(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = Number(req.params.userId);
+      const user: any = await userRepository.findOne(
+        { id: userId },
+        { select: "id name email username is_active", lean: true },
+      );
+      if (!user) return ReE(res, BAD_REQUEST_CODE, "User not found");
+      if (!user.email) return ReE(res, BAD_REQUEST_CODE, "User has no email");
+
+      const tempPassword = `${generateRandomString(6).slice(0, 6)}A1!${userId}`;
+      const hashed = await generate_Hash_Password(tempPassword);
+      await userRepository.updateById(userId, {
+        $set: {
+          password: hashed,
+          must_change_password: true,
+          is_verified: true,
+        },
+      });
+
+      const cfg = await getCompanyConfig();
+      const front = process.env.FRONT_URL || process.env.FRONTEND_URL || cfg.website || "";
+      const loginUrl = `${String(front).replace(/\/$/, "")}/#/login`;
+      const html = `
+        <div style="font-family:Segoe UI,sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#f8fafc;border-radius:16px;">
+          <h2 style="margin:0 0 12px;color:#0f172a;">Temporary login credentials</h2>
+          <p style="color:#334155;">Hello <strong>${user.name || user.username}</strong>,</p>
+          <p style="color:#334155;">An administrator generated a temporary password for your ${cfg.nameShort || "CRM"} account. Please sign in and set a new password immediately.</p>
+          <table style="width:100%;border-collapse:collapse;margin:16px 0;background:#fff;border-radius:12px;overflow:hidden;">
+            <tr><td style="padding:10px 14px;color:#64748b;">Username</td><td style="padding:10px 14px;font-weight:700;color:#0f172a;">${user.username || user.email}</td></tr>
+            <tr style="background:#f1f5f9;"><td style="padding:10px 14px;color:#64748b;">Email</td><td style="padding:10px 14px;font-weight:700;color:#0f172a;">${user.email}</td></tr>
+            <tr><td style="padding:10px 14px;color:#64748b;">Temporary password</td><td style="padding:10px 14px;font-weight:700;color:#b45309;">${tempPassword}</td></tr>
+          </table>
+          <p style="color:#334155;">After login you will be required to create a new password before continuing.</p>
+          <p style="text-align:center;margin:24px 0;">
+            <a href="${loginUrl}" style="display:inline-block;background:linear-gradient(90deg,#22c55e,#84cc16);color:#052e16;font-weight:700;padding:12px 22px;border-radius:999px;text-decoration:none;">Open login</a>
+          </p>
+          <p style="font-size:12px;color:#94a3b8;">If you did not expect this email, contact support at ${cfg.email || "support"}.</p>
+        </div>
+      `;
+
+      runEmailInBackground(
+        () => sendEmail(user.email, `Temporary password — ${cfg.nameShort || "Account"}`, html),
+        "Temp password email",
+      );
+
+      return ReS(res, SUCCESS_CODE, `Temporary password emailed to ${user.email}`, {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        must_change_password: true,
+      });
+    } catch (err: any) {
+      console.error("generateTempPassword error:", err);
+      return ReE(res, SERVER_ERROR_CODE, err?.message || "Failed to generate temporary password");
     }
   }
 

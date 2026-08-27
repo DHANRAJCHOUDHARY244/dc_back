@@ -105,7 +105,7 @@ class CustomInvoiceController {
                 emailData.client_name = body.custName + `(${body.custEmail})`;
                 const existingUser: any = await userRepository.findOne(
                     {
-                        $or: [{ email: body.custEmail }, { username: body.custName }],
+                        email: body.custEmail,
                     },
                     { select: "id", lean: true },
                 );
@@ -119,7 +119,7 @@ class CustomInvoiceController {
                     );
 
                     const newUser: any = await userRepository.create({
-                        username: body.custName.toLowerCase(),
+                        username: body.custEmail.toLowerCase(),
                         email: body.custEmail.toLowerCase(),
                         name: body.custName,
                         address: body.custAddress,

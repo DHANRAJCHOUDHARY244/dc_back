@@ -154,7 +154,7 @@ class CustomerController {
       const hashedPassword = await generate_Hash_Password(new_password);
       await userRepository.updateMany(
         { id: userId },
-        { $set: { password: hashedPassword } },
+        { $set: { password: hashedPassword, must_change_password: false } },
       );
       return ReS(res, SUCCESS_CODE, "Reset successfully.",);
     } catch (error) {
@@ -170,23 +170,38 @@ class CustomerController {
         { id: userId },
         { lean: true },
       );
-      if(updatedData?.role){
-        const role_name = Roles[updatedData.role];
-        if(!role_name) return ReE(res, BAD_REQUEST_CODE, "Invalid role");
+      if (!userData) return ReE(res, BAD_REQUEST_CODE, "User Not Found");
+      const payload: any = { ...updatedData };
+      delete payload.password;
+      delete payload.id;
+      delete payload._id;
+      if (payload.role) {
+        const role_name = Roles[payload.role as keyof typeof Roles];
+        if (!role_name) return ReE(res, BAD_REQUEST_CODE, "Invalid role");
         const role: any = await roleRepository.findOne(
           { name: role_name },
           { select: "id", lean: true },
         );
-        if(!role) return ReE(res, BAD_REQUEST_CODE, "Role not found");
-        updatedData.role_id = role.id;
+        if (!role) return ReE(res, BAD_REQUEST_CODE, "Role not found");
+        payload.role_id = role.id;
+        delete payload.role;
       }
-      if (!userData) return ReE(res, BAD_REQUEST_CODE, "User Not Found");
-      const { password, ...safeUserData } = userData;
-      await userRepository.updateMany(
+      await userRepository.updateMany({ id: userId }, { $set: payload });
+      const updated: any = await userRepository.findOne(
         { id: userId },
-        { $set: { ...updatedData } },
+        {
+          populate: { path: "role", select: "id name" },
+          select: "-password -otp -otp_verification_token -bank_details -deleted_at",
+          lean: true,
+        },
       );
-      return ReS(res, SUCCESS_CODE, "User Updated Successfully", { ...safeUserData, ...updatedData });
+      const { role, ...rest } = updated || {};
+      return ReS(res, SUCCESS_CODE, "User Updated Successfully", {
+        ...rest,
+        role_id: role?.id ?? rest.role_id ?? null,
+        role: role?.name ?? null,
+        avatar: rest.profile_image || null,
+      });
     } catch (error) {
       console.error("Error in updateCustomerDetails:", error);
       return ReE(res, SERVER_ERROR_CODE, "Something went wrong");
@@ -194,12 +209,14 @@ class CustomerController {
   }
   async autocompleteCustomerByNameEmail(req: AuthenticatedRequest, res: Response) {
     try {
-      const { billTo, billToEmail } = req.body;
+      const billTo = (req.body?.billTo ?? req.query?.billTo) as string | undefined;
+      const billToEmail = (req.body?.billToEmail ?? req.query?.billToEmail) as string | undefined;
       if (!billTo && !billToEmail) return ReS(res, SUCCESS_CODE, "Customers fetched successfully", []);
       const role: any = await roleRepository.findOne(
         { name: Roles.CUSTOMER },
         { select: "id", lean: true },
       );
+      if (!role) return ReE(res, BAD_REQUEST_CODE, "Customer role not found");
       const orConditions: Record<string, unknown>[] = [];
       if (billToEmail?.trim()) {
         orConditions.push({ email: { $regex: billToEmail.trim(), $options: "i" } });
@@ -424,7 +441,9 @@ class CustomerController {
   async getCustomerByCfId(req: AuthenticatedRequest, res: Response){
     try {
       const cf_id = Number(req.query.cf_id);
+      if (!cf_id) return ReE(res, BAD_REQUEST_CODE, "cf_id is required");
       const cfData:any = await contactFormRepository.findById(cf_id, { lean: true });
+      if (!cfData) return ReE(res, NO_CONTENT, "Contact form not found");
       const custData = await userRepository.findOne(
         { email: cfData.email },
         { select: "id email name", lean: true },

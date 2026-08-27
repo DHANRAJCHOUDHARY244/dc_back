@@ -40,8 +40,11 @@ export const sendMasterQuoteEmail = async (
 
     const { sender, customer, bypass_token, name, dateOfDue, customer_accepted } = quote;
 
-    const customerName = name || sender?.name;
-    const customerEmail = customer?.email;
+    const customerName = customer?.name || name || quote.cf?.name;
+    const customerEmail = customer?.email || quote.cf?.email;
+    if (!customerEmail) {
+      throw new Error("Customer email is missing for this quote");
+    }
 
     const objectId = quote._id ? String(quote._id) : "";
     const link = quote.is_solar_sketch && objectId
