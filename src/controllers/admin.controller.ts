@@ -208,6 +208,34 @@ class AdminPanelController {
     }
   }
 
+  async getUserById(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = Number(req.params.userId);
+      if (!userId) return ReE(res, BAD_REQUEST_CODE, "userId is required");
+
+      const user: any = await userRepository.findOne(
+        { id: userId },
+        {
+          populate: { path: "role", select: "id name" },
+          select: "-password -otp -otp_verification_token -bank_details -deleted_at",
+          lean: true,
+        },
+      );
+      if (!user) return ReE(res, BAD_REQUEST_CODE, "User not found");
+
+      const { role, ...rest } = user;
+      return ReS(res, SUCCESS_CODE, "User fetched successfully", {
+        ...rest,
+        role_id: role?.id ?? rest.role_id ?? null,
+        role: role?.name ?? null,
+        avatar: rest.profile_image || null,
+        profile_image: rest.profile_image || null,
+      });
+    } catch (err: any) {
+      return ReE(res, SERVER_ERROR_CODE, err?.message || "Failed to fetch user");
+    }
+  }
+
   async updateUserPassword(req: Request, res: Response) {
     try {
       const { id, new_password, must_change_password = false } = req.body;

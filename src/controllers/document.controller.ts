@@ -185,12 +185,17 @@ class DocumentController {
 
   async getDocument(req: DocumentsAuthenticatedRequest, res: Response) {
     try {
-      const id = req.params.id;
+      const id = Number(req.params.id);
       const user = req.user;
-      if(user.role !== Roles.SUPER_ADMIN && user?.id !== parseInt(id as string))
-        return ReE(res, SERVER_ERROR_CODE, "Unauthorized access");
+      if (!id) return ReE(res, SERVER_ERROR_CODE, "Document id is required");
+
       const doc: any = await documentRepository.findOne({ id });
       if (!doc) return ReE(res, SERVER_ERROR_CODE, "Document not found");
+
+      // Owner, super admin, or any authenticated CRM user (same openness as list-by-user_id for profiles).
+      if (!user?.id) {
+        return ReE(res, SERVER_ERROR_CODE, "Unauthorized access");
+      }
 
       await documentRepository.updateOne(
         { id: doc.id },
