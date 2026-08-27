@@ -93,8 +93,10 @@ class CustomerController {
       const userData: any = await userRepository.findOne(
         { id: userId },
         {
-          select: "username email city mobile_no mobile_country_code name is_active profile_image address id",
-          populate: { path: "role", select: "name" },
+          // role_id must be selected or virtual populate("role") returns empty
+          select:
+            "username email city mobile_no mobile_country_code name is_active is_verified profile_image address id role_id must_change_password",
+          populate: { path: "role", select: "id name" },
           lean: true,
         },
       );
@@ -104,7 +106,17 @@ class CustomerController {
       if (!userData?.profile_image) userData.profile_image = faker.image.avatarGitHub();
       else userData.avatar = userData?.profile_image;
 
-      return ReS(res, SUCCESS_CODE, "customers fetched successfully", { ...userData,role:userData?.role?.name});
+      const roleName =
+        typeof userData.role === "string"
+          ? userData.role
+          : userData?.role?.name ?? null;
+
+      return ReS(res, SUCCESS_CODE, "customers fetched successfully", {
+        ...userData,
+        role_id: userData?.role?.id ?? userData.role_id ?? null,
+        role: roleName,
+        avatar: userData.avatar || userData.profile_image || null,
+      });
     } catch (error) {
       console.error("Error fetching customers:", error);
       return ReE(res, SERVER_ERROR_CODE, "Something went wrong");

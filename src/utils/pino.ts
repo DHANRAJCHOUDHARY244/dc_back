@@ -1,5 +1,5 @@
 import pino from "pino";
-import { saveLog, setDbReady } from "./logSaver";
+import { setDbReady } from "./logSaver";
 
 const p = pino({
   base: {
@@ -29,7 +29,7 @@ const safePinoCall = (level: LogLevel, msg: any, meta: any = {}) => {
   try {
     const safeMsg = typeof msg === "string" ? msg : JSON.stringify(msg);
     const safeMeta = typeof meta === "object" ? meta : { meta };
-    p[level](safeMeta, safeMsg); // Pass meta as first argument for pino
+    p[level](safeMeta, safeMsg);
     return safeMsg;
   } catch (err) {
     console.error("PinoLoggingError:", err, "Original msg:", msg);
@@ -37,41 +37,26 @@ const safePinoCall = (level: LogLevel, msg: any, meta: any = {}) => {
   }
 };
 
-// Logger wrapper
+// Console / pino only — nothing is written to MongoDB.
 let logger: any = {
   info: (msg: any, meta: any = {}) => safePinoCall("info", msg, meta),
-  error: (msg: any, meta: any = {}) => saveLog("error", safePinoCall("error", msg, meta), meta),
-  warn: (msg: any, meta: any = {}) => saveLog("warn", safePinoCall("warn", msg, meta), meta),
-  debug: (msg: any, meta: any = {}) => saveLog("debug", safePinoCall("debug", msg, meta), meta),
+  error: (msg: any, meta: any = {}) => safePinoCall("error", msg, meta),
+  warn: (msg: any, meta: any = {}) => safePinoCall("warn", msg, meta),
+  debug: (msg: any, meta: any = {}) => safePinoCall("debug", msg, meta),
   raw: p,
   setDbReady,
 };
 
 /**
- * Override console methods and capture meta
+ * Keep process crash hooks; do not persist logs to MongoDB.
  */
 export const overrideLoggerMethods = () => {
-  ["error", "warn", "debug"].forEach((method) => {
-    const orig = (console as any)[method].bind(console);
-    (console as any)[method] = (...args: any[]) => {
-      const msg = args.map(a => (typeof a === "object" ? JSON.stringify(a) : a)).join(" ");
-      const meta = { args, source: "console" };
-      saveLog(`console_${method}`, msg, meta);
-      orig(...args);
-    };
-  });
-
-  // Capture uncaught exceptions
   process.on("uncaughtException", (err: Error) => {
-    saveLog("uncaughtException", err.message, { stack: err.stack, source: "process" });
     console.error(err);
-    process.exit(1); // Optional: exit the process
+    process.exit(1);
   });
 
-  // Capture unhandled promise rejections
   process.on("unhandledRejection", (reason: any) => {
-    const msg = typeof reason === "string" ? reason : JSON.stringify(reason);
-    saveLog("unhandledRejection", msg, { reason, source: "process" });
     console.error(reason);
     process.exit(1);
   });

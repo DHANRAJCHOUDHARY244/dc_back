@@ -2,7 +2,6 @@ import logger from "@utils/pino";
 import { CronEngine } from "./cron-engine.service";
 import { DAILY, HOURLY, MINUTE, MORNING, NIGHT } from "@constants/cron.constants";
 import quotesController from "@controllers/quotes.controller";
-import { deleteOldLogsCron } from "@utils/logSaver";
 import { runLeadSupervisor } from "@services/leadWorkflow.service";
 import { finalizeMissingAbsents } from "@services/hrAttendance.service";
 import { evaluateOpenRuns, ensureSlaSeeds, backfillActiveQuotes } from "@services/sla.service";
@@ -18,7 +17,6 @@ export const loadCrons = () => {
 		schedule: DAILY.MIDNIGHT,
 		functions: [
 			quotesController.markDeadQuotesCron,
-			deleteOldLogsCron,
 			() => {
 				void finalizeMissingAbsents(new Date(Date.now() - 86400000));
 			},
@@ -43,7 +41,7 @@ export const loadCrons = () => {
 	CronEngine.register({
 		name: "hourly-every-hour",
 		schedule: HOURLY.EVERY_HOUR,
-		functions: [deleteOldLogsCron],
+		functions: [],
 		enabled: false,
 	});
 
