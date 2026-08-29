@@ -74,6 +74,8 @@ class AuthController {
         password,
         mobile_no,
         mobile_country_code,
+        city,
+        address,
         is_signup = true,
         role,
       } = req.body;
@@ -81,6 +83,8 @@ class AuthController {
       name = name?.trim();
       username = username?.trim().toLowerCase();
       email = email?.trim().toLowerCase();
+      city = city?.trim() || undefined;
+      address = address?.trim() || undefined;
 
       const existingUser = await userRepository.findOne(
         { $or: [{ email }, { username }] },
@@ -93,8 +97,12 @@ class AuthController {
       const hashedPassword = await generate_Hash_Password(password);
       const genOtp = generate_6_Digit_Otp();
 
+      const roleName = role
+        ? (Roles[role as keyof typeof Roles] ?? String(role).trim())
+        : Roles.CUSTOMER;
+
       const roleDoc: any = await roleRepository.findOne(
-        { name: role ? Roles[role] : Roles.CUSTOMER },
+        { name: roleName },
         { select: "id", lean: true },
       );
       const roleId = roleDoc?.id ?? null;
@@ -106,6 +114,8 @@ class AuthController {
         password: hashedPassword,
         mobile_no,
         mobile_country_code,
+        city,
+        address,
         otp: {
           otp: genOtp,
           otp_type: OtpType.VERIFY_EMAIL,
@@ -115,8 +125,8 @@ class AuthController {
       });
 
       try {
-        const roleName = role ? Roles[role] : Roles.CUSTOMER;
-        if (roleName !== Roles.CUSTOMER && user?.id) {
+        const roleNameForHr = roleName;
+        if (roleNameForHr !== Roles.CUSTOMER && user?.id) {
           const { ensureEmployeeProfile } = await import("@services/hrAttendance.service");
           await ensureEmployeeProfile(user.id);
         }
