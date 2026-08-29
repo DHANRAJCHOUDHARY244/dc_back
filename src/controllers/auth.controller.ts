@@ -23,6 +23,7 @@ import { faker } from "@faker-js/faker";
 import permissionController from "./permission.controller";
 import { Roles } from "src/data/dataInserter";
 import { getCompanyConfig } from "@services/crmSettings.service";
+import { resolveRoleHomePath } from "@services/roleHomePath.service";
 class AuthController {
 
   private async getUserInfoRoleAndPermission(user_data: any, is_remember = false) {
@@ -60,7 +61,8 @@ class AuthController {
         role: role_info?.name,
         permissions: permissions_info,
       },
-      token
+      token,
+      home_path: resolveRoleHomePath(role_info?.name, permissions_info as any[]),
     }
   }
   async register(req: Request, res: Response) {
@@ -368,6 +370,11 @@ class AuthController {
       console.error("Error searching users:", error);
       return ReE(res, SERVER_ERROR_CODE, "Internal server error");
     }
+  }
+
+  /** Stateless JWT logout — client clears token; endpoint avoids 404 on sign-out. */
+  async logout(_req: Request, res: Response) {
+    return ReS(res, SUCCESS_CODE, "Logged out successfully", {});
   }
 }
 

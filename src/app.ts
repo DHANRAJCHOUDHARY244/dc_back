@@ -17,13 +17,14 @@ import routes from "./routes";
 import morgan from "morgan";
 import { dbRelation } from "./sync";
 import { setupSocket } from "./socket/socket";
-import { registerChatSocket } from "./socket/chat.socket";
 import path from "path";
 import { loadCrons } from "@services/cronJobs.service";
 import { setDbReady } from "@utils/logSaver";
 import { reqResLogger } from "./middleware/reqResLogger.middleware";
 // import { seedRoles } from "./data/dataInserter";
+import { bootstrapOnStartup } from "./data/dataInserter";
 import "@models/index";
+import "./assistant/models/index";
 
 const app = express();
 const httpServer = createServer(app);
@@ -52,7 +53,11 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 (async () => {
   try {
     await connectDatabase();
-    // await seedRoles();
+    try {
+      await bootstrapOnStartup();
+    } catch (e) {
+      console.error("CRM bootstrap failed:", e);
+    }
     // try {
     //   const { ensureSlaSeeds, backfillActiveQuotes } = await import("@services/sla.service");
     //   await ensureSlaSeeds();
@@ -89,6 +94,5 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 })();
 
 setupSocket(httpServer);
-registerChatSocket();
 
 export default app;

@@ -4,3 +4,6 @@ logs
 dist
 .vercel
 /uploads
+.env
+.env.local
+.env.*.local

@@ -60,11 +60,11 @@ export class BaseRepository {
   }
 
   async updateById(id: number, data: UpdateQuery<Record<string, unknown>>) {
-    return this.model.findOneAndUpdate(this.filter({ id }), data, { new: true });
+    return this.model.findOneAndUpdate(this.filter({ id }), data, { returnDocument: "after" });
   }
 
   async updateOne(filter: QueryFilter<Record<string, unknown>>, data: UpdateQuery<Record<string, unknown>>) {
-    return this.model.findOneAndUpdate(this.filter(filter), data, { new: true });
+    return this.model.findOneAndUpdate(this.filter(filter), data, { returnDocument: "after" });
   }
 
   async updateMany(filter: QueryFilter<Record<string, unknown>>, data: UpdateQuery<Record<string, unknown>>) {
@@ -76,7 +76,7 @@ export class BaseRepository {
     return this.model.findOneAndUpdate(
       this.filter({ id }),
       { $set: { deleted_at: new Date() } },
-      { new: true },
+      { returnDocument: "after" },
     );
   }
 
@@ -89,7 +89,7 @@ export class BaseRepository {
     return this.model.findOneAndUpdate(
       this.filter(filter),
       { $set: { deleted_at: new Date() } },
-      { new: true },
+      { returnDocument: "after" },
     );
   }
 

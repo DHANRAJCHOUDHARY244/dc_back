@@ -78,6 +78,10 @@ const resolveUploadPath = (
       subPath = `feedback/${entityId}`;
       break;
 
+    case UploadCategory.INSTALLER_JOB:
+      subPath = `installer-jobs/${entityId}`;
+      break;
+
     default:
       subPath = `misc`;
   }

@@ -75,11 +75,15 @@ class QuoteChatController {
             });
             const payload = { message: updated };
 
-
-            SocketService.emit(`chat_${message.id}`, {
-                event: "updated_message",
-                data: payload
-            });
+            SocketService.emitToRoom(
+                `quote-chat-${message.quote_id}`,
+                SOCKET_EVENTS.QUOTE_CHAT_MESSAGE,
+                {
+                    event: "updated_message",
+                    data: payload,
+                    quote_id: message.quote_id,
+                },
+            );
 
             return ReS(res, SUCCESS_CODE, "Message updated successfully", payload);
         } catch (error) {
@@ -127,12 +131,15 @@ class QuoteChatController {
 
             await quoteChatRepository.deleteById(Number(messageId));
 
-            SocketService.emit(`chat_`, {
-                event: "deleted_message",
-                data: {
-                    messageId,
+            SocketService.emitToRoom(
+                `quote-chat-${message.quote_id}`,
+                SOCKET_EVENTS.QUOTE_CHAT_MESSAGE,
+                {
+                    event: "deleted_message",
+                    messageId: Number(messageId),
+                    quote_id: message.quote_id,
                 },
-            });
+            );
 
             return ReS(res, SUCCESS_CODE, "Message deleted successfully", { messageId });
         } catch (error) {

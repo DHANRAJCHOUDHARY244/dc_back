@@ -530,34 +530,40 @@ class HrController {
 			const leave: any = await leaveRequestRepository.findOne({ id }, { lean: true });
 			if (!leave) return ReE(res, BAD_REQUEST_CODE, "Leave not found");
 
-			const isAdmin = hr.isHrAdmin(req.user.role);
-			const isManager = hr.isHrManager(req.user.role);
+			const isHrApprover = hr.isHrLeaveApprover(req.user.role);
+			const isTeamLead = hr.isHrTeamLead(req.user.role);
 			let nextStatus = leave.status;
 			const patch: any = {};
 
 			if (action === "reject") {
-				nextStatus = "REJECTED";
 				if (leave.status === "PENDING_TL") {
+					if (!isTeamLead) return ReE(res, FORBIDDEN_CODE, "Only team lead can reject at this stage");
+					nextStatus = "REJECTED";
 					patch.tl_approver_id = req.user.id;
 					patch.tl_action_at = new Date();
 					patch.tl_note = note || "";
-				} else {
+				} else if (leave.status === "PENDING_HR") {
+					if (!isHrApprover) return ReE(res, FORBIDDEN_CODE, "Only HR can reject at this stage");
+					nextStatus = "REJECTED";
 					patch.hr_approver_id = req.user.id;
 					patch.hr_action_at = new Date();
 					patch.hr_note = note || "";
+				} else {
+					return ReE(res, FORBIDDEN_CODE, "Leave is not pending approval");
 				}
 			} else if (action === "approve") {
-				if (leave.status === "PENDING_TL" && (isManager || isAdmin)) {
-					nextStatus = isAdmin ? "APPROVED" : "PENDING_HR";
+				if (leave.status === "PENDING_TL") {
+					if (!isTeamLead) {
+						return ReE(res, FORBIDDEN_CODE, "Only team lead can approve at this stage");
+					}
+					nextStatus = "PENDING_HR";
 					patch.tl_approver_id = req.user.id;
 					patch.tl_action_at = new Date();
 					patch.tl_note = note || "";
-					if (isAdmin) {
-						patch.hr_approver_id = req.user.id;
-						patch.hr_action_at = new Date();
-						patch.hr_note = note || "Approved by HR/Admin";
+				} else if (leave.status === "PENDING_HR") {
+					if (!isHrApprover) {
+						return ReE(res, FORBIDDEN_CODE, "Only HR can give final approval");
 					}
-				} else if (leave.status === "PENDING_HR" && isAdmin) {
 					nextStatus = "APPROVED";
 					patch.hr_approver_id = req.user.id;
 					patch.hr_action_at = new Date();
@@ -671,33 +677,36 @@ class HrController {
 			const { action, note } = req.body;
 			const corr: any = await attendanceCorrectionRepository.findOne({ id }, { lean: true });
 			if (!corr) return ReE(res, BAD_REQUEST_CODE, "Correction not found");
-			const isAdmin = hr.isHrAdmin(req.user.role);
-			const isManager = hr.isHrManager(req.user.role);
+			const isHrApprover = hr.isHrLeaveApprover(req.user.role);
+			const isTeamLead = hr.isHrTeamLead(req.user.role);
 			let nextStatus = corr.status;
 			const patch: any = {};
 
 			if (action === "reject") {
-				nextStatus = "REJECTED";
 				if (corr.status === "PENDING_TL") {
+					if (!isTeamLead) return ReE(res, FORBIDDEN_CODE, "Only team lead can reject at this stage");
+					nextStatus = "REJECTED";
 					patch.tl_approver_id = req.user.id;
 					patch.tl_action_at = new Date();
 					patch.tl_note = note || "";
-				} else {
+				} else if (corr.status === "PENDING_HR") {
+					if (!isHrApprover) return ReE(res, FORBIDDEN_CODE, "Only HR can reject at this stage");
+					nextStatus = "REJECTED";
 					patch.hr_approver_id = req.user.id;
 					patch.hr_action_at = new Date();
 					patch.hr_note = note || "";
+				} else {
+					return ReE(res, FORBIDDEN_CODE, "Correction is not pending approval");
 				}
 			} else if (action === "approve") {
-				if (corr.status === "PENDING_TL" && (isManager || isAdmin)) {
-					nextStatus = isAdmin ? "APPROVED" : "PENDING_HR";
+				if (corr.status === "PENDING_TL") {
+					if (!isTeamLead) return ReE(res, FORBIDDEN_CODE, "Only team lead can approve at this stage");
+					nextStatus = "PENDING_HR";
 					patch.tl_approver_id = req.user.id;
 					patch.tl_action_at = new Date();
 					patch.tl_note = note || "";
-					if (isAdmin) {
-						patch.hr_approver_id = req.user.id;
-						patch.hr_action_at = new Date();
-					}
-				} else if (corr.status === "PENDING_HR" && isAdmin) {
+				} else if (corr.status === "PENDING_HR") {
+					if (!isHrApprover) return ReE(res, FORBIDDEN_CODE, "Only HR can give final approval");
 					nextStatus = "APPROVED";
 					patch.hr_approver_id = req.user.id;
 					patch.hr_action_at = new Date();
@@ -709,7 +718,7 @@ class HrController {
 			const updated = await attendanceCorrectionRepository.updateById(id, { $set: patch });
 
 			if (nextStatus === "APPROVED") {
-				if (!isAdmin) return ReE(res, FORBIDDEN_CODE, "Only HR/Admin can finalize correction");
+				if (!isHrApprover) return ReE(res, FORBIDDEN_CODE, "Only HR can finalize correction");
 				await hr.hrMarkAttendance(actor(req), {
 					user_id: corr.user_id,
 					date: corr.date,
@@ -896,6 +905,64 @@ class HrController {
 				by_department: byDept,
 				by_team: byTeam,
 			});
+		} catch (e: any) {
+			return ReE(res, SERVER_ERROR_CODE, e.message);
+		}
+	}
+
+	/* ---------- onboarding ---------- */
+	async listOnboarding(req: AuthenticatedRequest, res: Response) {
+		try {
+			if (!hr.isHrOnboardingAdmin(req.user.role)) return ReE(res, FORBIDDEN_CODE, "Unauthorized");
+			const { onboarding_status, page = 1, limit = 50, search } = req.body || {};
+			const filter: any = {};
+			if (onboarding_status) filter.onboarding_status = onboarding_status;
+			const rows = await hr.listOnboardingProfiles(filter);
+			let data = rows;
+			if (search) {
+				const q = String(search).toLowerCase();
+				data = rows.filter((r: any) => {
+					const u = r.user || {};
+					return (
+						String(u.name || "").toLowerCase().includes(q) ||
+						String(u.email || "").toLowerCase().includes(q) ||
+						String(r.employee_code || "").toLowerCase().includes(q)
+					);
+				});
+			}
+			const start = (Number(page) - 1) * Number(limit);
+			const slice = data.slice(start, start + Number(limit));
+			return ReS(res, SUCCESS_CODE, "Onboarding list", {
+				data: slice,
+				total: data.length,
+				page: Number(page),
+				limit: Number(limit),
+			});
+		} catch (e: any) {
+			return ReE(res, SERVER_ERROR_CODE, e.message);
+		}
+	}
+
+	async startOnboarding(req: AuthenticatedRequest, res: Response) {
+		try {
+			if (!hr.isHrOnboardingAdmin(req.user.role)) return ReE(res, FORBIDDEN_CODE, "Unauthorized");
+			const userId = Number(req.body.user_id);
+			if (!userId) return ReE(res, BAD_REQUEST_CODE, "user_id required");
+			const updated = await hr.startEmployeeOnboarding(userId, req.user.id);
+			return ReS(res, SUCCESS_CODE, "Onboarding started", updated);
+		} catch (e: any) {
+			return ReE(res, SERVER_ERROR_CODE, e.message);
+		}
+	}
+
+	async updateOnboardingTask(req: AuthenticatedRequest, res: Response) {
+		try {
+			if (!hr.isHrOnboardingAdmin(req.user.role)) return ReE(res, FORBIDDEN_CODE, "Unauthorized");
+			const userId = Number(req.params.userId);
+			const { task_key, done } = req.body;
+			if (!task_key) return ReE(res, BAD_REQUEST_CODE, "task_key required");
+			const updated = await hr.updateOnboardingTask(userId, String(task_key), Boolean(done));
+			return ReS(res, SUCCESS_CODE, "Task updated", updated);
 		} catch (e: any) {
 			return ReE(res, SERVER_ERROR_CODE, e.message);
 		}

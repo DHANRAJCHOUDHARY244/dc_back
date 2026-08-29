@@ -24,6 +24,7 @@ import {
 	markMissedFollowUps,
 	upsertEscalationRules,
 } from "@services/masterTask.service";
+import { notifyMasterTaskBadgeChanged } from "@services/badgeNotify.service";
 import { taskRepository } from "@repositories";
 import { MasterTaskStatus } from "@constants/masterTask.constants";
 
@@ -134,6 +135,7 @@ class MasterTaskController {
 				{ id },
 				{ lean: true, populate: [{ path: "user", select: "id name" }] },
 			);
+			notifyMasterTaskBadgeChanged();
 			return ReS(res, SUCCESS_CODE, "Updated", updated);
 		} catch (e: any) {
 			return ReE(res, SERVER_ERROR_CODE, e.message);

@@ -14,6 +14,7 @@ import {
   invalidatePermissionCache,
   setCachedPermissionTree,
 } from "@services/permissionCache.service";
+import { syncPermissionCatalogFromFile } from "@services/permissionCatalogSync.service";
 
 class PermissionController {
     async addPermission(req: AuthenticatedRequest, res: Response) {
@@ -195,6 +196,16 @@ class PermissionController {
           return ReS(res, SUCCESS_CODE, "Permissions fetched successfully", per);
         } catch (error) {
             return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);
+        }
+    }
+
+    async syncCatalog(req: AuthenticatedRequest, res: Response) {
+        try {
+            const result = await syncPermissionCatalogFromFile();
+            return ReS(res, SUCCESS_CODE, "Permission catalogue synced from definitions", result);
+        } catch (error: any) {
+            console.error("syncCatalog failed:", error);
+            return ReE(res, SERVER_ERROR_CODE, error?.message || "Failed to sync permission catalogue");
         }
     }
 }

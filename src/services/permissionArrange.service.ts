@@ -25,25 +25,24 @@ export function buildMenuTree(items: MenuItem[]): MenuItem[] {
   const map = new Map<string, MenuItem>();
   const tree: MenuItem[] = [];
 
-  // Initialize map and children array
-  items.forEach(item => {
+  items.forEach((item) => {
     item.children = [];
-    map.set(item.id, item);
+    map.set(String(item.id), item);
   });
 
-  // Link children to their parents
-  items.forEach(item => {
-    if (item.parentId) {
-      const parent = map.get(item.parentId);
+  items.forEach((item) => {
+    if (item.parentId != null && item.parentId !== "") {
+      const parent = map.get(String(item.parentId));
       if (parent) {
         parent.children!.push(item);
+      } else {
+        tree.push(item);
       }
     } else {
       tree.push(item);
     }
   });
 
-  // Remove null/undefined fields from every node
   return removeNulls(tree);
 }
 
@@ -51,18 +50,20 @@ export function buildMenuTreePermissionGrp(items: MenuItem[]): MenuItem[] {
   const map = new Map<string, MenuItem>();
   const tree: MenuItem[] = [];
 
-  // Initialize map and children array
-  items.forEach(item => {
+  items.forEach((item) => {
     item.children = [];
-    map.set(item.permission_id, item);
+    const key = String(item.permission_id ?? item.id);
+    map.set(key, item);
   });
 
-  // Link children to their parents
-  items.forEach(item => {
-    if (item.parentId) {
-      const parent = map.get(item.parentId);
+  items.forEach((item) => {
+    const parentKey = item.parentId != null && item.parentId !== "" ? String(item.parentId) : null;
+    if (parentKey) {
+      const parent = map.get(parentKey);
       if (parent) {
         parent.children!.push(item);
+      } else {
+        tree.push(item);
       }
     } else {
       tree.push(item);

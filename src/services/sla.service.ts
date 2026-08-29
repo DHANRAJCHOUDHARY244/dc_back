@@ -16,6 +16,7 @@ import {
 	taskRepository,
 } from "@repositories";
 import notificationController from "@controllers/notification.controller";
+import { notifySlaBadgeChanged } from "@services/badgeNotify.service";
 import logger from "@utils/pino";
 
 let seedPromise: Promise<void> | null = null;
@@ -375,12 +376,15 @@ export async function evaluateOpenRuns() {
 			);
 		}
 	}
-	return { scanned: open.length, updated };
+	const result = { scanned: open.length, updated };
+	if (updated > 0) {
+		notifySlaBadgeChanged(await buildAlertsSummaryOnly());
+	}
+	return result;
 }
 
-export async function getAlertsSummary() {
+export async function buildAlertsSummaryOnly() {
 	await ensureSlaSeeds();
-	await evaluateOpenRuns().catch(() => undefined);
 	const active = (await slaStageRunRepository.find({ active: true }, { lean: true })) as any[];
 	const enriched = active.map((r) => enrichRun(r)!);
 	const delayed = enriched.filter(
@@ -398,6 +402,12 @@ export async function getAlertsSummary() {
 			.length,
 		missing_reason: delayed.filter((r) => !r.delay_reason_code).length,
 	};
+}
+
+export async function getAlertsSummary() {
+	await ensureSlaSeeds();
+	await evaluateOpenRuns().catch(() => undefined);
+	return buildAlertsSummaryOnly();
 }
 
 export async function listDelayedJobs(filters: Record<string, any> = {}) {
@@ -544,9 +554,11 @@ export async function setDelayReason(
 		},
 	);
 
-	return enrichRun(
+	const updated = enrichRun(
 		await slaStageRunRepository.findOne({ id: run.id }, { lean: true }),
 	);
+	notifySlaBadgeChanged(await buildAlertsSummaryOnly());
+	return updated;
 }
 
 export async function resolveDelay(
@@ -584,11 +596,15 @@ export async function resolveDelay(
 				{ $set: { status: "DONE", closing_date: new Date(), closing_message: notes } },
 			)
 			.catch(() => undefined);
+		const { notifyMasterTaskBadgeChanged } = await import("@services/badgeNotify.service");
+		notifyMasterTaskBadgeChanged();
 	}
 
-	return enrichRun(
+	const updated = enrichRun(
 		await slaStageRunRepository.findOne({ id: run.id }, { lean: true }),
 	);
+	notifySlaBadgeChanged(await buildAlertsSummaryOnly());
+	return updated;
 }
 
 /** Counts per pipeline stage for quote filter chips */

@@ -17,6 +17,7 @@ import {
 	userRepository,
 } from "@repositories";
 import notificationController from "@controllers/notification.controller";
+import { notifyMasterTaskBadgeChanged } from "@services/badgeNotify.service";
 import logger from "@utils/pino";
 
 let seedPromise: Promise<void> | null = null;
@@ -141,6 +142,7 @@ export async function createMasterTask(input: Record<string, any>, actorId: numb
 		})
 		.catch(() => undefined);
 
+	notifyMasterTaskBadgeChanged();
 	return task;
 }
 
@@ -439,6 +441,7 @@ export async function evaluateTaskEscalations() {
 		}
 	}
 
+	if (updated > 0) notifyMasterTaskBadgeChanged();
 	return { scanned: open.length, updated };
 }
 

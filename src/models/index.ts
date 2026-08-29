@@ -24,6 +24,8 @@ import Expense from "./expense.model";
 import FinanceSnapshot from "./finance_snapshot.model";
 import InstallerAgreement from "./installerAgreement.model";
 import InstallerDocument from "./installerDocument.model";
+import InstallerJob from "./installerJob.model";
+import InstallerAvailability from "./installerAvailability.model";
 import Invoice from "./invoice.model";
 import Lead from "./lead.model";
 import LeadAgent from "./leadAgent.model";
@@ -106,6 +108,8 @@ export {
   FinanceSnapshot,
   InstallerAgreement,
   InstallerDocument,
+  InstallerJob,
+  InstallerAvailability,
   Invoice,
   Lead,
   LeadAgent,

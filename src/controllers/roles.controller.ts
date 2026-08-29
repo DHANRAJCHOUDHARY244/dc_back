@@ -8,6 +8,7 @@ import {
 import { ReE, ReS } from "@services/generalHelper.service";
 import { buildMenuTreePermissionGrp } from "@services/permissionArrange.service";
 import { notifyRolePermissionChange } from "@services/permissionNotify.service";
+import { invalidatePermissionCache } from "@services/permissionCache.service";
 import { Response } from "express";
 
 class RolesController {
@@ -112,6 +113,7 @@ class RolesController {
       }
 
       // Live CRM: connected users with this role refresh menus without logout
+      invalidatePermissionCache(role_id);
       notifyRolePermissionChange(role_id);
 
       return ReS(res, SUCCESS_CODE, "Permission saved successfully");

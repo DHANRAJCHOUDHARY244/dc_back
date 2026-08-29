@@ -1,8 +1,10 @@
 import { SOCKET_EVENTS } from "@constants/socket.constants";
 import { roleRoom } from "@services/permissionNotify.service";
+import { registerPresence, sendPresenceSync, unregisterPresence } from "@services/presence.service";
 import { SocketService } from "@services/socket.service";
 import { Server, Socket } from "socket.io";
 import { socketAuthenticate } from "src/middleware/socketAuth.middleware";
+import { attachChatSocketHandlers } from "./chat.socket";
 
 export const setupSocket = (httpServer: any) => {
   const io = new Server(httpServer);
@@ -13,6 +15,8 @@ export const setupSocket = (httpServer: any) => {
     const user = (socket as any).user;
     console.log(`✅ Socket connected: ${user?.email || socket.id}`);
 
+    attachChatSocketHandlers(socket);
+
     /* Join personal + role rooms so permission / CRM pushes reach this user live */
     if (user?.id != null) {
       socket.join(`user-${user.id}`);
@@ -20,6 +24,12 @@ export const setupSocket = (httpServer: any) => {
     if (user?.role_id != null) {
       socket.join(roleRoom(user.role_id));
     }
+
+    registerPresence(io, socket);
+
+    socket.on(SOCKET_EVENTS.PRESENCE_REQUEST, () => {
+      sendPresenceSync(socket);
+    });
 
     socket.emit(SOCKET_EVENTS.USER_NOTIFICATION + `${user?.id}`, {
       time: new Date().toISOString(),
@@ -51,6 +61,7 @@ export const setupSocket = (httpServer: any) => {
     });
 
     socket.on(SOCKET_EVENTS.DISCONNECT, () => {
+      unregisterPresence(io, socket);
       console.log(`❌ Disconnected: ${socket.id}`);
     });
   });

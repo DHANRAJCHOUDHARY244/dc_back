@@ -1,6 +1,0 @@
-yesor nor required true
-available ci nreajker need to be upgrade yes or no if no visible  enclosure or other
-zone controller yes no and add commet option
-
-phone no and complete address 
-ssh -i dj.pem ubuntu@ec2-16-171-145-162.eu-north-1.compute.amazonaws.com

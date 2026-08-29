@@ -12,74 +12,80 @@ import { Roles } from "src/data/dataInserter";
 
 const HR_CHILDREN = [
 	{
+		name: "Onboarding",
+		route: "onboarding",
+		label: "sys.menu.hr.onboarding",
+		component: "/hr/onboarding/OnboardingPage.tsx",
+	},
+	{
 		name: "Employees",
-		route: "hr/employees",
+		route: "employees",
 		label: "sys.menu.hr.employees",
 		component: "/hr/employees/EmployeesPage.tsx",
 	},
 	{
 		name: "Attendance",
-		route: "hr/attendance",
+		route: "attendance",
 		label: "sys.menu.hr.attendance",
 		component: "/hr/attendance/AttendancePage.tsx",
 	},
 	{
 		name: "Leave Management",
-		route: "hr/leave",
+		route: "leave",
 		label: "sys.menu.hr.leave",
 		component: "/hr/leave/LeavePage.tsx",
 	},
 	{
 		name: "Attendance Corrections",
-		route: "hr/corrections",
+		route: "corrections",
 		label: "sys.menu.hr.corrections",
 		component: "/hr/corrections/CorrectionsPage.tsx",
 	},
 	{
 		name: "Attendance Reports",
-		route: "hr/reports",
+		route: "reports",
 		label: "sys.menu.hr.reports",
 		component: "/hr/reports/ReportsPage.tsx",
 	},
 	{
 		name: "Attendance Analytics",
-		route: "hr/analytics",
+		route: "analytics",
 		label: "sys.menu.hr.analytics",
 		component: "/hr/analytics/AnalyticsPage.tsx",
 	},
 	{
 		name: "Payroll",
-		route: "hr/payroll",
+		route: "payroll",
 		label: "sys.menu.hr.payroll",
 		component: "/hr/payroll/PayrollPage.tsx",
 	},
 	{
 		name: "Salary Slips",
-		route: "hr/salary-slips",
+		route: "salary-slips",
 		label: "sys.menu.hr.salary_slips",
 		component: "/hr/salary-slips/SalarySlipsPage.tsx",
 	},
 	{
 		name: "Holidays",
-		route: "hr/holidays",
+		route: "holidays",
 		label: "sys.menu.hr.holidays",
 		component: "/hr/holidays/HolidaysPage.tsx",
 	},
 	{
 		name: "Shift Management",
-		route: "hr/shifts",
+		route: "shifts",
 		label: "sys.menu.hr.shifts",
 		component: "/hr/shifts/ShiftsPage.tsx",
 	},
 	{
 		name: "Attendance Settings",
-		route: "hr/settings",
+		route: "settings",
 		label: "sys.menu.hr.settings",
 		component: "/hr/settings/SettingsPage.tsx",
 	},
 	{
 		name: "Audit Logs",
-		route: "hr/audit",
+		route: "audit",
 		label: "sys.menu.hr.audit",
 		component: "/hr/audit/AuditLogsPage.tsx",
 	},
@@ -221,20 +227,23 @@ async function main() {
 	]);
 
 	let upInserted = 0;
+	const hrOnly = new Set([Roles.SUPER_ADMIN, Roles.HR_EXECUTIVE]);
 	for (const role of roles as any[]) {
 		if (role.name === Roles.CUSTOMER) continue;
 		const isFull = fullAccess.has(role.name);
 		const enabled = selfAccess.has(role.name) || isFull;
-		for (const permission_id of permissionIds) {
+		const isHrOnly = hrOnly.has(role.name);
+		for (const perm of created) {
+			const isOnboarding = perm.route === "onboarding";
 			const id = await nextSeq(db, "user_permissions");
 			await db.collection("user_permissions").insertOne({
 				id,
 				role_id: role.id,
 				user_id: null,
-				permission_id,
-				enable: enabled,
-				create: isFull,
-				can_update: isFull,
+				permission_id: perm.id,
+				enable: isOnboarding ? isHrOnly : enabled,
+				create: isOnboarding ? isHrOnly : isFull,
+				can_update: isOnboarding ? isHrOnly : isFull,
 				delete:
 					role.name === Roles.SUPER_ADMIN ||
 					role.name === Roles.ADMIN ||

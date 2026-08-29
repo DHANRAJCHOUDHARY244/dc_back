@@ -1,4 +1,5 @@
 import { permissionRepository, roleRepository, userPermissionRepository } from "@repositories";
+import { syncPermissionCatalogFromFile } from "@services/permissionCatalogSync.service";
 import { importAdvertisingData } from "src/helpers/advertisingDataInserter";
 import { sendMarketingEmails } from "src/helpers/sendMarketingEmail";
 import { seedProducts } from "./productSeeder";
@@ -221,8 +222,26 @@ export const seedRoles = async () => {
   );
 
   if (newRoles.length) {
+    const { syncSequenceFromMax } = await import("@db/counter.model");
+    const maxAgg: any[] = await roleRepository.aggregateRaw([
+      { $group: { _id: null, maxId: { $max: "$id" } } },
+    ]);
+    await syncSequenceFromMax("roles", Number(maxAgg[0]?.maxId || 0));
+
     for (const role of newRoles) {
-      await roleRepository.create(role);
+      try {
+        await roleRepository.create(role);
+      } catch (err: any) {
+        if (err?.code === 11000) {
+          const retryMax: any[] = await roleRepository.aggregateRaw([
+            { $group: { _id: null, maxId: { $max: "$id" } } },
+          ]);
+          await syncSequenceFromMax("roles", Number(retryMax[0]?.maxId || 0));
+          await roleRepository.create(role);
+        } else {
+          throw err;
+        }
+      }
     }
   }
 
@@ -230,14 +249,64 @@ export const seedRoles = async () => {
   console.log("Already exists:", [...existingNames]);
 
   await seedSalesLeaderPermissions();
+  await syncPermissionCatalogFromFile().catch((err) => {
+    console.error("syncPermissionCatalogFromFile failed", err);
+  });
+};
 
-  // await seedFinanceAccountsPermission();
-  // await seedAllInOnePermission();
-  // await seedHrAttendancePermissions();
-  // await seedDocumentLetterPermissions();
-
-  // await importAdvertisingData();
-  // await sendMarketingEmails()
+/** Run on server start: roles, permissions, installer job sync from site info. */
+export const bootstrapOnStartup = async () => {
+  try {
+    // await seedRoles();
+    console.log("seedRoles commmited skipped");
+    
+  } catch (err) {
+    console.error("seedRoles failed:", err);
+  }
+  try {
+    const { seedDefaultSuperAdmin } = await import("@services/defaultSuperAdmin.service");
+    await seedDefaultSuperAdmin();
+  } catch (err) {
+    console.error("seedDefaultSuperAdmin failed:", err);
+  }
+  try {
+    const skipAssistant =
+      process.env.ASSISTANT_BOOTSTRAP_ON_STARTUP === "false" ||
+      process.env.ASSISTANT_BOOTSTRAP_ON_STARTUP === "0";
+    if (skipAssistant) {
+      console.log("Assistant bootstrap skipped (ASSISTANT_BOOTSTRAP_ON_STARTUP=false)");
+    } else {
+      const { bootstrapAssistant } = await import("../assistant/services/assistant.config.service");
+      await bootstrapAssistant();
+      console.log("Assistant RAG bootstrap complete");
+    }
+  } catch (err) {
+    console.error("bootstrapAssistant failed", err);
+  }
+  try {
+    const { syncInstallerJobsFromSiteInfo } = await import("@services/installerJob.service");
+    const synced = await syncInstallerJobsFromSiteInfo();
+    if (synced > 0) console.log(`Installer jobs synced from site info: ${synced}`);
+  } catch (err) {
+    console.error("syncInstallerJobsFromSiteInfo failed", err);
+  }
+  try {
+    const { ensureInstallerRoleRoutes, ensureHrRoleRoutes, ensureCustomerRoleRoutes } = await import("@services/permissionCatalogSync.service");
+    const result = await ensureInstallerRoleRoutes();
+    const hrResult = await ensureHrRoleRoutes();
+    const customerResult = await ensureCustomerRoleRoutes();
+    if (result.updated || result.created) {
+      console.log(`Installer route permissions synced: updated=${result.updated} created=${result.created}`);
+    }
+    if (hrResult.updated || hrResult.created) {
+      console.log(`HR route permissions synced: updated=${hrResult.updated} created=${hrResult.created}`);
+    }
+    if (customerResult.updated || customerResult.created) {
+      console.log(`Customer route permissions synced: updated=${customerResult.updated} created=${customerResult.created}`);
+    }
+  } catch (err) {
+    console.error("ensureInstallerRoleRoutes failed", err);
+  }
 };
 
 /** Copy SALES_PERSON menu grants onto SALES_LEADER so they can use Leads from day one. */
@@ -447,21 +516,23 @@ export const seedHrAttendancePermissions = async () => {
     const catId = (catalogue as any).id;
 
     const children = [
-      { name: "Employees", route: "hr/employees", label: "sys.menu.hr.employees", component: "/hr/employees/EmployeesPage.tsx" },
-      { name: "Attendance", route: "hr/attendance", label: "sys.menu.hr.attendance", component: "/hr/attendance/AttendancePage.tsx" },
-      { name: "Leave Management", route: "hr/leave", label: "sys.menu.hr.leave", component: "/hr/leave/LeavePage.tsx" },
-      { name: "Attendance Corrections", route: "hr/corrections", label: "sys.menu.hr.corrections", component: "/hr/corrections/CorrectionsPage.tsx" },
-      { name: "Attendance Reports", route: "hr/reports", label: "sys.menu.hr.reports", component: "/hr/reports/ReportsPage.tsx" },
-      { name: "Attendance Analytics", route: "hr/analytics", label: "sys.menu.hr.analytics", component: "/hr/analytics/AnalyticsPage.tsx" },
-      { name: "Payroll", route: "hr/payroll", label: "sys.menu.hr.payroll", component: "/hr/payroll/PayrollPage.tsx" },
-      { name: "Salary Slips", route: "hr/salary-slips", label: "sys.menu.hr.salary_slips", component: "/hr/salary-slips/SalarySlipsPage.tsx" },
-      { name: "Holidays", route: "hr/holidays", label: "sys.menu.hr.holidays", component: "/hr/holidays/HolidaysPage.tsx" },
-      { name: "Shift Management", route: "hr/shifts", label: "sys.menu.hr.shifts", component: "/hr/shifts/ShiftsPage.tsx" },
-      { name: "Attendance Settings", route: "hr/settings", label: "sys.menu.hr.settings", component: "/hr/settings/SettingsPage.tsx" },
-      { name: "Audit Logs", route: "hr/audit", label: "sys.menu.hr.audit", component: "/hr/audit/AuditLogsPage.tsx" },
+      { name: "Onboarding", route: "onboarding", label: "sys.menu.hr.onboarding", component: "/hr/onboarding/OnboardingPage.tsx" },
+      { name: "Employees", route: "employees", label: "sys.menu.hr.employees", component: "/hr/employees/EmployeesPage.tsx" },
+      { name: "Attendance", route: "attendance", label: "sys.menu.hr.attendance", component: "/hr/attendance/AttendancePage.tsx" },
+      { name: "Leave Management", route: "leave", label: "sys.menu.hr.leave", component: "/hr/leave/LeavePage.tsx" },
+      { name: "Attendance Corrections", route: "corrections", label: "sys.menu.hr.corrections", component: "/hr/corrections/CorrectionsPage.tsx" },
+      { name: "Attendance Reports", route: "reports", label: "sys.menu.hr.reports", component: "/hr/reports/ReportsPage.tsx" },
+      { name: "Attendance Analytics", route: "analytics", label: "sys.menu.hr.analytics", component: "/hr/analytics/AnalyticsPage.tsx" },
+      { name: "Payroll", route: "payroll", label: "sys.menu.hr.payroll", component: "/hr/payroll/PayrollPage.tsx" },
+      { name: "Salary Slips", route: "salary-slips", label: "sys.menu.hr.salary_slips", component: "/hr/salary-slips/SalarySlipsPage.tsx" },
+      { name: "Holidays", route: "holidays", label: "sys.menu.hr.holidays", component: "/hr/holidays/HolidaysPage.tsx" },
+      { name: "Shift Management", route: "shifts", label: "sys.menu.hr.shifts", component: "/hr/shifts/ShiftsPage.tsx" },
+      { name: "Attendance Settings", route: "settings", label: "sys.menu.hr.settings", component: "/hr/settings/SettingsPage.tsx" },
+      { name: "Audit Logs", route: "audit", label: "sys.menu.hr.audit", component: "/hr/audit/AuditLogsPage.tsx" },
     ];
 
     const permissionIds = [catId];
+    let onboardingPermissionId: number | null = null;
     for (const c of children) {
       const p = await permissionRepository.create({
         name: c.name,
@@ -471,10 +542,13 @@ export const seedHrAttendancePermissions = async () => {
         route: c.route,
         component: c.component,
       });
-      permissionIds.push((p as any).id);
+      const pid = (p as any).id;
+      if (c.route === "onboarding") onboardingPermissionId = pid;
+      permissionIds.push(pid);
     }
 
     const roles = await roleRepository.find();
+    const hrOnly = new Set([Roles.SUPER_ADMIN, Roles.HR_EXECUTIVE]);
     const fullAccess = new Set([
       Roles.SUPER_ADMIN,
       Roles.CEO,
@@ -509,13 +583,15 @@ export const seedHrAttendancePermissions = async () => {
       if (role.name === Roles.CUSTOMER) continue;
       const isFull = fullAccess.has(role.name);
       const enabled = selfAccess.has(role.name) || isFull;
+      const isHrOnly = hrOnly.has(role.name);
       for (const permission_id of permissionIds) {
+        const isOnboarding = onboardingPermissionId != null && permission_id === onboardingPermissionId;
         await userPermissionRepository.create({
           role_id: role.id,
           permission_id,
-          enable: enabled,
-          create: isFull,
-          can_update: isFull,
+          enable: isOnboarding ? isHrOnly : enabled,
+          create: isOnboarding ? isHrOnly : isFull,
+          can_update: isOnboarding ? isHrOnly : isFull,
           delete: role.name === Roles.SUPER_ADMIN || role.name === Roles.ADMIN || role.name === Roles.HR_EXECUTIVE,
           is_user_specific: false,
         });
