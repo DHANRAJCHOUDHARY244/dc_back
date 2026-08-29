@@ -9,6 +9,11 @@ import { AuthenticatedRequest } from "@constants/common.interface";
 import { Response } from "express";
 import { notificationRepository } from "@repositories";
 import { Roles } from "src/data/dataInserter";
+import { notificationCutoffDate } from "@services/notificationLifecycle.service";
+
+function escapeRegex(value: string) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 class NotificationController {
   async  createNotification ({userId,message,route,meta = {},}:
@@ -25,8 +30,9 @@ class NotificationController {
     try {
       const { limit = 10, page = 1, status = null, type = null } = req.body;
       const { id: userId, role } = req.user;
+      const cutoff = notificationCutoffDate();
 
-      const filter: any = {};
+      const filter: any = { created_at: { $gte: cutoff } };
       if (role !== Roles.SUPER_ADMIN) filter.userId = userId;
 
       if (status === "read") filter.isRead = true;
@@ -34,7 +40,7 @@ class NotificationController {
 
       if (type)
         filter["meta_information.type"] = {
-          $regex: type,
+          $regex: `^${escapeRegex(String(type))}$`,
           $options: "i",
         };
 
@@ -48,12 +54,21 @@ class NotificationController {
         return ReE(res, NO_CONTENT, "No notifications found");
       }
 
-      const userFilter = role !== Roles.SUPER_ADMIN ? { userId } : {};
-      const [globalCount, unreadCount, readCount] = await Promise.all([
-        notificationRepository.count(userFilter),
-        notificationRepository.count({ ...userFilter, isRead: false }),
-        notificationRepository.count({ ...userFilter, isRead: true }),
+      const userFilter = role !== Roles.SUPER_ADMIN ? { userId, created_at: { $gte: cutoff } } : { created_at: { $gte: cutoff } };
+      const summaryRows: any[] = await notificationRepository.aggregateRaw([
+        { $match: userFilter },
+        {
+          $facet: {
+            global: [{ $count: "count" }],
+            unread: [{ $match: { isRead: false } }, { $count: "count" }],
+            read: [{ $match: { isRead: true } }, { $count: "count" }],
+          },
+        },
       ]);
+      const facet = summaryRows[0] || {};
+      const globalCount = facet.global?.[0]?.count ?? 0;
+      const unreadCount = facet.unread?.[0]?.count ?? 0;
+      const readCount = facet.read?.[0]?.count ?? 0;
 
       const totalPages = Math.ceil(count / limit);
 
@@ -83,10 +98,10 @@ class NotificationController {
       if (!Array.isArray(ids) || ids.length === 0)
         return ReE(res, BAD_REQUEST_CODE, "ids array is required");
 
-      await notificationRepository.updateMany(
-        { id: { $in: ids } },
-        { $set: { isRead: true } },
-      );
+      const filter: any = { id: { $in: ids } };
+      if (req.user.role !== Roles.SUPER_ADMIN) filter.userId = req.user.id;
+
+      await notificationRepository.updateMany(filter, { $set: { isRead: true } });
 
       return ReS(res, SUCCESS_CODE, "Notifications marked as read", { updatedIds: ids });
     } catch (error) {
@@ -101,7 +116,10 @@ class NotificationController {
       if (!Array.isArray(ids) || ids.length === 0)
         return ReE(res, BAD_REQUEST_CODE, "ids array is required");
 
-      const result: any = await notificationRepository.deleteMany({ id: { $in: ids } });
+      const filter: any = { id: { $in: ids } };
+      if (req.user.role !== Roles.SUPER_ADMIN) filter.userId = req.user.id;
+
+      const result: any = await notificationRepository.deleteMany(filter);
 
       if (!result?.deletedCount && !result?.modifiedCount)
         return ReE(res, NO_CONTENT, "No notifications found to delete");

@@ -2,12 +2,24 @@ import { SOCKET_EVENTS } from "@constants/socket.constants";
 import { roleRoom } from "@services/permissionNotify.service";
 import { registerPresence, sendPresenceSync, unregisterPresence } from "@services/presence.service";
 import { SocketService } from "@services/socket.service";
+import { getRedisPubSubClients } from "@config/redis";
+import { createAdapter } from "@socket.io/redis-adapter";
 import { Server, Socket } from "socket.io";
 import { socketAuthenticate } from "src/middleware/socketAuth.middleware";
 import { attachChatSocketHandlers } from "./chat.socket";
+import logger from "@utils/pino";
 
-export const setupSocket = (httpServer: any) => {
-  const io = new Server(httpServer);
+export async function setupSocket(httpServer: any) {
+  const io = new Server(httpServer, {
+    cors: { origin: true, credentials: true },
+  });
+
+  const pubSub = getRedisPubSubClients();
+  if (pubSub) {
+    io.adapter(createAdapter(pubSub.pubClient, pubSub.subClient));
+    logger.warn("Socket.IO Redis adapter enabled");
+  }
+
   io.use(socketAuthenticate);
   SocketService.init(io);
 
@@ -17,7 +29,6 @@ export const setupSocket = (httpServer: any) => {
 
     attachChatSocketHandlers(socket);
 
-    /* Join personal + role rooms so permission / CRM pushes reach this user live */
     if (user?.id != null) {
       socket.join(`user-${user.id}`);
     }
@@ -25,10 +36,10 @@ export const setupSocket = (httpServer: any) => {
       socket.join(roleRoom(user.role_id));
     }
 
-    registerPresence(io, socket);
+    void registerPresence(io, socket);
 
     socket.on(SOCKET_EVENTS.PRESENCE_REQUEST, () => {
-      sendPresenceSync(socket);
+      void sendPresenceSync(socket);
     });
 
     socket.emit(SOCKET_EVENTS.USER_NOTIFICATION + `${user?.id}`, {
@@ -39,7 +50,6 @@ export const setupSocket = (httpServer: any) => {
       task_type: SOCKET_EVENTS.HANDSHAKE_SUCCESS,
     });
 
-    /* ── Quote Chat Rooms ── */
     socket.on(SOCKET_EVENTS.QUOTE_CHAT_JOIN, (quoteId: number | string) => {
       const room = `quote-chat-${quoteId}`;
       socket.join(room);
@@ -61,9 +71,10 @@ export const setupSocket = (httpServer: any) => {
     });
 
     socket.on(SOCKET_EVENTS.DISCONNECT, () => {
-      unregisterPresence(io, socket);
+      void unregisterPresence(io, socket);
       console.log(`❌ Disconnected: ${socket.id}`);
     });
   });
+
   return io;
-};
+}

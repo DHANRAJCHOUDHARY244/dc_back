@@ -1,29 +1,50 @@
 import type { MenuItem } from "@constants/common.interface";
+import { cacheDel, cacheDelByPattern, cacheGetJson, cacheSetJson } from "@services/redisCache.service";
 
-const TTL_MS = 5 * 60 * 1000;
+const TTL_SECONDS = 5 * 60;
+const REDIS_PREFIX = "permissions:tree:";
 
 type CacheEntry = { tree: MenuItem[]; expiresAt: number };
 
-const cache = new Map<number, CacheEntry>();
+const memoryCache = new Map<number, CacheEntry>();
 
-export function getCachedPermissionTree(roleId: number): MenuItem[] | null {
-  const entry = cache.get(roleId);
+function getMemory(roleId: number): MenuItem[] | null {
+  const entry = memoryCache.get(roleId);
   if (!entry) return null;
   if (Date.now() > entry.expiresAt) {
-    cache.delete(roleId);
+    memoryCache.delete(roleId);
     return null;
   }
   return entry.tree;
 }
 
-export function setCachedPermissionTree(roleId: number, tree: MenuItem[]): void {
-  cache.set(roleId, { tree, expiresAt: Date.now() + TTL_MS });
+function setMemory(roleId: number, tree: MenuItem[]) {
+  memoryCache.set(roleId, { tree, expiresAt: Date.now() + TTL_SECONDS * 1000 });
+}
+
+export async function getCachedPermissionTree(roleId: number): Promise<MenuItem[] | null> {
+  const mem = getMemory(roleId);
+  if (mem) return mem;
+
+  const fromRedis = await cacheGetJson<MenuItem[]>(`${REDIS_PREFIX}${roleId}`);
+  if (fromRedis) {
+    setMemory(roleId, fromRedis);
+    return fromRedis;
+  }
+  return null;
+}
+
+export async function setCachedPermissionTree(roleId: number, tree: MenuItem[]): Promise<void> {
+  setMemory(roleId, tree);
+  await cacheSetJson(`${REDIS_PREFIX}${roleId}`, tree, TTL_SECONDS);
 }
 
 export function invalidatePermissionCache(roleId?: number): void {
   if (roleId != null) {
-    cache.delete(roleId);
+    memoryCache.delete(roleId);
+    void cacheDel(`${REDIS_PREFIX}${roleId}`);
     return;
   }
-  cache.clear();
+  memoryCache.clear();
+  void cacheDelByPattern(`${REDIS_PREFIX}*`);
 }

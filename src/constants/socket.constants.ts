@@ -15,6 +15,11 @@ export const SOCKET_EVENTS = {
   QUOTE_CHAT_LEAVE: 'quote-chat:leave',
   QUOTE_CHAT_MESSAGE: 'quote-chat:message',
   QUOTE_CHAT_TYPING: 'quote-chat:typing',
+  /* CRM Chat */
+  CHAT_JOIN: 'chat:join',
+  CHAT_LEAVE: 'chat:leave',
+  CHAT_TYPING: 'chat:typing',
+  CHAT_READ: 'chat:read',
   /** Live CRM staff presence */
   PRESENCE_SYNC: 'presence:sync',
   PRESENCE_UPDATE: 'presence:update',
@@ -30,11 +35,14 @@ export enum USER_NOTIFICATION_EVENT_TYPE{
   INVOICE='INVOICE',
   CUSTOM_INVOICE='CUSTOM_INVOICE',
   PERMISSION='PERMISSION',
+  CHAT='CHAT',
 }
 export enum EVENT_TASK_TYPE{
   CREATED='CREATED',
   UPDATED='UPDATED',
-  DELETED='DELETED'
+  DELETED='DELETED',
+  MENTION='MENTION',
+  REPLY='REPLY',
 }
 export interface SocketDataInterface{
     type:USER_NOTIFICATION_EVENT_TYPE,

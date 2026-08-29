@@ -117,14 +117,14 @@ class InvoiceController {
           role: req.user.role
         }
       });
-      SocketService.emit(SOCKET_EVENTS.USER_NOTIFICATION + `${sender_id}`, {
+      SocketService.emitToUser(sender_id, SOCKET_EVENTS.USER_NOTIFICATION + `${sender_id}`, {
         type: USER_NOTIFICATION_EVENT_TYPE.INVOICE,
         name: req.user.name,
         profile_image: req.user.profile_image,
         task_type: EVENT_TASK_TYPE.CREATED,
         message: `new Invoice created`,
       })
-      SocketService.emit(SOCKET_EVENTS.USER_NOTIFICATION + `${customerData.id}`, {
+      SocketService.emitToUser(customerData.id, SOCKET_EVENTS.USER_NOTIFICATION + `${customerData.id}`, {
         type: USER_NOTIFICATION_EVENT_TYPE.INVOICE,
         name: req.user.name,
         profile_image: req.user.profile_image,
@@ -413,7 +413,7 @@ class InvoiceController {
               role: req.user.role,
             },
           });
-          SocketService.emit(SOCKET_EVENTS.USER_NOTIFICATION + `${plain.sender_id}`, {
+          SocketService.emitToUser(plain.sender_id, SOCKET_EVENTS.USER_NOTIFICATION + `${plain.sender_id}`, {
             type: USER_NOTIFICATION_EVENT_TYPE.INVOICE,
             name: req.user.name,
             profile_image: req.user.profile_image,
@@ -421,7 +421,7 @@ class InvoiceController {
             message: `new Invoice created`,
           });
           if (customerId) {
-            SocketService.emit(SOCKET_EVENTS.USER_NOTIFICATION + `${customerId}`, {
+            SocketService.emitToUser(customerId, SOCKET_EVENTS.USER_NOTIFICATION + `${customerId}`, {
               type: USER_NOTIFICATION_EVENT_TYPE.INVOICE,
               name: req.user.name,
               profile_image: req.user.profile_image,

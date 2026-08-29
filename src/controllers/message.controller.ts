@@ -8,6 +8,18 @@ import { EVENT_TASK_TYPE, SOCKET_EVENTS } from "@constants/socket.constants";
 import { UploadCategory } from "@constants/common.enum";
 import { uploadFiles } from "@utils/fileUpload.helper";
 import { UploadedFile } from "express-fileupload";
+import {
+  assertChatMember,
+  emitChatEvent,
+  formatMessagePayload,
+  isChatAdmin,
+  isUserMuted,
+  loadReplyPreviews,
+} from "@services/chat.service";
+import notificationController from "@controllers/notification.controller";
+import { USER_NOTIFICATION_EVENT_TYPE } from "@constants/socket.constants";
+import { chatNotificationRoute } from "@services/notificationLifecycle.service";
+import { buildLinkPreviews } from "@services/linkPreview.service";
 
 function detectKind(mime: string): "image" | "video" | "audio" | "document" {
   const m = String(mime || "").toLowerCase();
@@ -26,7 +38,7 @@ function resolveMessageType(attachments: any[], content: string) {
   return content?.trim() ? "mixed" : "document";
 }
 
-function previewText(content: string, attachments: any[] = []) {
+export function previewText(content: string, attachments: any[] = []) {
   const text = String(content || "").trim();
   if (text) return text;
   if (!attachments.length) return "";
@@ -38,20 +50,26 @@ function previewText(content: string, attachments: any[] = []) {
   return `📎 ${attachments.length} files`;
 }
 
-function formatMessage(msg: any, sender?: any) {
-  const raw = msg?.toObject?.() ?? msg;
-  return {
-    id: raw.id,
-    chatId: raw.chatId,
-    senderId: raw.senderId ?? sender?.id,
-    senderName: sender?.name || raw.sender?.name || "Unknown",
-    avatarUrl: sender?.profile_image || raw.sender?.profile_image || "",
-    content: raw.content || "",
-    messageType: raw.messageType || "text",
-    attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
-    timestamp: raw.created_at || raw.createdAt,
-    created_at: raw.created_at || raw.createdAt,
-  };
+function parseMentions(raw: unknown): { userId: number; name: string }[] {
+  if (!raw) return [];
+  if (typeof raw === "string") {
+    try {
+      return parseMentions(JSON.parse(raw));
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((m) => ({
+      userId: Number(m?.userId),
+      name: String(m?.name || "").slice(0, 100),
+    }))
+    .filter((m) => m.userId && m.name);
+}
+
+function stripHtml(text: string) {
+  return String(text || "").replace(/<[^>]*>/g, "");
 }
 
 class MessageController {
@@ -59,19 +77,27 @@ class MessageController {
     try {
       const { id: userId } = req.user;
       const chatId = Number(req.body.chatId);
-      const senderId = Number(req.body.senderId || userId);
-      const content = String(req.body.content || "").trim();
+      const senderId = userId;
+      const content = stripHtml(String(req.body.content || "").trim());
+      const replyToId = req.body.replyToId ? Number(req.body.replyToId) : null;
+      const mentions = parseMentions(req.body.mentions);
 
       if (!chatId || !senderId) {
         return ReE(res, BAD_REQUEST_CODE, "Missing chatId or senderId");
       }
 
-      const chat: any = await chatRepository.findById(chatId);
-      if (!chat) return ReE(res, SERVER_ERROR_CODE, "Chat not found");
-      const members: number[] = chat.members || [];
-      if (!members.includes(userId)) {
-        return ReE(res, SERVER_ERROR_CODE, "You are not a member of this chat");
+      const { error, chat } = await assertChatMember(chatId, userId);
+      if (error) return ReE(res, SERVER_ERROR_CODE, error);
+      const members: number[] = chat!.members || [];
+
+      if (replyToId) {
+        const parent: any = await messageRepository.findById(replyToId, { lean: true });
+        if (!parent || Number(parent.chatId) !== chatId) {
+          return ReE(res, BAD_REQUEST_CODE, "Invalid reply target");
+        }
       }
+
+      const validMentions = mentions.filter((m) => members.includes(m.userId));
 
       let attachments: any[] = [];
       const filesMap = req.files as { [key: string]: UploadedFile | UploadedFile[] } | undefined;
@@ -82,7 +108,7 @@ class MessageController {
           files: filesRaw,
           entityId: chatId,
           multiple: true,
-          maxSizeMB: 50,
+          maxSizeMB: 40,
           allowedTypes: [
             "image/jpeg",
             "image/png",
@@ -127,37 +153,99 @@ class MessageController {
         content,
         messageType,
         attachments,
+        replyToId: replyToId || null,
+        mentions: validMentions,
+        reactions: [],
+        readBy: [userId],
+        linkPreviews: [],
       });
 
       const sender: any = await userRepository.findById(senderId, {
         select: "id name email profile_image",
         lean: true,
       });
-      const payload = formatMessage(message, sender);
+
+      let replyTo: any = null;
+      if (replyToId) {
+        replyTo = await messageRepository.findById(replyToId, {
+          populate: { path: "sender", select: "id name profile_image" },
+          lean: true,
+        });
+      }
+
+      const payload = formatMessagePayload(message, sender, replyTo);
       const notifyText = previewText(content, attachments);
 
       await chatRepository.updateById(chatId, { $set: { updated_at: new Date() } }).catch(() => undefined);
 
       members.forEach((m: number) => {
         if (m === userId) return;
-        SocketService.emit(`message_created_${chatId}_${m}`, {
+        SocketService.emitToUser(m, `message_created_${chatId}_${m}`, {
           event: "created",
           data: payload,
         });
-        SocketService.emit(SOCKET_EVENTS.USER_NOTIFICATION + `${m}`, {
-          type: "Message Received",
+
+        const isMentioned = validMentions.some((mn) => mn.userId === m);
+        const isReplyTarget = replyTo && Number(replyTo.senderId) === m;
+        const muted = isUserMuted(chat, m);
+        if (muted && !isMentioned) return;
+
+        const route = chatNotificationRoute(chatId);
+        const notifyMessage = isMentioned
+          ? `${req.user.name} mentioned you: ${notifyText || "in a message"}`
+          : isReplyTarget
+            ? `${req.user.name} replied to your message`
+            : `${req.user.name}: ${notifyText || "New message"}`;
+
+        void notificationController
+          .createNotification({
+            userId: m,
+            message: notifyMessage,
+            route,
+            meta: {
+              type: USER_NOTIFICATION_EVENT_TYPE.CHAT,
+              senderName: req.user.name,
+              chatId,
+              messageId: payload.id,
+              link: route,
+              mention: isMentioned,
+              reply: !!isReplyTarget,
+            },
+          })
+          .catch(() => undefined);
+
+        SocketService.emitToUser(m, SOCKET_EVENTS.USER_NOTIFICATION + `${m}`, {
+          type: USER_NOTIFICATION_EVENT_TYPE.CHAT,
           name: req.user.name,
           profile_image: req.user.profile_image,
-          task_type: EVENT_TASK_TYPE.CREATED,
-          message: notifyText || "New message",
+          task_type: isMentioned
+            ? EVENT_TASK_TYPE.MENTION
+            : isReplyTarget
+              ? EVENT_TASK_TYPE.REPLY
+              : EVENT_TASK_TYPE.CREATED,
+          message: notifyMessage,
+          chatId,
+          messageId: payload.id,
+          route,
         });
       });
 
-      // Also notify room listeners (for same-user multi-tab)
-      SocketService.emit(`chat_${chatId}`, {
-        event: "created_message",
-        data: { chatId, message: payload },
-      });
+      emitChatEvent(chatId, "created_message", { chatId, message: payload });
+
+      if (content) {
+        void buildLinkPreviews(content)
+          .then(async (linkPreviews) => {
+            if (!linkPreviews.length) return;
+            await messageRepository.updateById(message.id, { $set: { linkPreviews } });
+            const enriched = formatMessagePayload(
+              { ...message.toObject?.() ?? message, linkPreviews },
+              sender,
+              replyTo,
+            );
+            emitChatEvent(chatId, "updated_message", { chatId, message: enriched });
+          })
+          .catch(() => undefined);
+      }
 
       return ReS(res, SUCCESS_CODE, "Message sent successfully", payload);
     } catch (error: any) {
@@ -167,20 +255,99 @@ class MessageController {
 
   async getMessages(req: AuthenticatedRequest, res: Response) {
     try {
-      const { chatId } = req.params;
+      const chatId = Number(req.params.chatId);
+      const beforeId = req.query.beforeId ? Number(req.query.beforeId) : null;
+      const limit = Math.min(Number(req.query.limit) || 50, 100);
+
       if (!chatId) return ReE(res, SERVER_ERROR_CODE, "Chat ID is required");
+      const { error } = await assertChatMember(chatId, req.user.id);
+      if (error) return ReE(res, SERVER_ERROR_CODE, error);
+
+      const filter: any = { chatId };
+      if (beforeId) filter.id = { $lt: beforeId };
+
+      const messages = await messageRepository.find(filter, {
+        populate: { path: "sender", select: "id name email profile_image" },
+        sort: { id: -1 },
+        limit,
+        lean: true,
+      });
+
+      const replyMap = await loadReplyPreviews(messages as any[]);
+      const formattedMessages = (messages as any[])
+        .reverse()
+        .map((msg) => formatMessagePayload(msg, msg.sender, replyMap.get(msg.replyToId)));
+
+      return ReS(res, SUCCESS_CODE, "Messages retrieved successfully", {
+        messages: formattedMessages,
+        hasMore: formattedMessages.length === limit,
+      });
+    } catch (error) {
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);
+    }
+  }
+
+  async searchMessages(req: AuthenticatedRequest, res: Response) {
+    try {
+      const chatId = Number(req.params.chatId);
+      const q = String(req.query.q || "").trim();
+      if (!chatId || !q) return ReE(res, BAD_REQUEST_CODE, "chatId and q required");
+
+      const { error } = await assertChatMember(chatId, req.user.id);
+      if (error) return ReE(res, SERVER_ERROR_CODE, error);
 
       const messages = await messageRepository.find(
-        { chatId: Number(chatId) },
+        { chatId, content: { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } },
         {
-          populate: { path: "sender", select: "id name email profile_image" },
-          sort: { created_at: 1 },
+          populate: { path: "sender", select: "id name profile_image" },
+          sort: { created_at: -1 },
+          limit: 30,
           lean: true,
         },
       );
 
-      const formattedMessages = messages.map((msg: any) => formatMessage(msg, msg.sender));
-      return ReS(res, SUCCESS_CODE, "Messages retrieved successfully", formattedMessages);
+      const results = (messages as any[]).map((msg) => formatMessagePayload(msg, msg.sender));
+      return ReS(res, SUCCESS_CODE, "Search results", results);
+    } catch (error) {
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);
+    }
+  }
+
+  async addReaction(req: AuthenticatedRequest, res: Response) {
+    try {
+      const messageId = Number(req.params.messageId);
+      const emoji = String(req.body.emoji || "").slice(0, 8);
+      const userId = req.user.id;
+      if (!messageId || !emoji) return ReE(res, BAD_REQUEST_CODE, "messageId and emoji required");
+
+      const message: any = await messageRepository.findById(messageId, { lean: true });
+      if (!message) return ReE(res, SERVER_ERROR_CODE, "Message not found");
+
+      const { error } = await assertChatMember(message.chatId, userId);
+      if (error) return ReE(res, SERVER_ERROR_CODE, error);
+
+      const reactions: any[] = message.reactions || [];
+      const existingIdx = reactions.findIndex(
+        (r) => Number(r.userId) === userId && r.emoji === emoji,
+      );
+      let updatedReactions;
+      if (existingIdx >= 0) {
+        updatedReactions = reactions.filter((_, i) => i !== existingIdx);
+      } else {
+        updatedReactions = [...reactions, { emoji, userId }];
+      }
+
+      const updated = await messageRepository.updateById(messageId, {
+        $set: { reactions: updatedReactions },
+      });
+
+      emitChatEvent(message.chatId, "reaction_updated", {
+        messageId,
+        chatId: message.chatId,
+        reactions: updatedReactions,
+      });
+
+      return ReS(res, SUCCESS_CODE, "Reaction updated", { messageId, reactions: updatedReactions });
     } catch (error) {
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);
     }
@@ -189,9 +356,29 @@ class MessageController {
   async getMessageById(req: AuthenticatedRequest, res: Response) {
     try {
       const { messageId }: any = req.params;
-      const message = await messageRepository.findById(Number(messageId));
+      const message: any = await messageRepository.findById(Number(messageId), {
+        populate: { path: "sender", select: "id name email profile_image" },
+        lean: true,
+      });
       if (!message) return ReE(res, SERVER_ERROR_CODE, "Message not found");
-      return ReS(res, SUCCESS_CODE, "Message retrieved successfully", message);
+
+      const { error } = await assertChatMember(message.chatId, req.user.id);
+      if (error) return ReE(res, SERVER_ERROR_CODE, error);
+
+      let replyTo = null;
+      if (message.replyToId) {
+        replyTo = await messageRepository.findById(message.replyToId, {
+          populate: { path: "sender", select: "id name profile_image" },
+          lean: true,
+        });
+      }
+
+      return ReS(
+        res,
+        SUCCESS_CODE,
+        "Message retrieved successfully",
+        formatMessagePayload(message, message.sender, replyTo),
+      );
     } catch (error) {
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);
     }
@@ -203,20 +390,27 @@ class MessageController {
       const { content } = req.body;
       const message: any = await messageRepository.findById(Number(messageId));
       if (!message) return ReE(res, SERVER_ERROR_CODE, "Message not found");
+
+      const { error } = await assertChatMember(message.chatId, req.user.id);
+      if (error) return ReE(res, SERVER_ERROR_CODE, error);
+
       if (Number(message.senderId) !== Number(req.user.id)) {
         return ReE(res, SERVER_ERROR_CODE, "You can only edit your own messages");
       }
 
       const updated = await messageRepository.updateById(Number(messageId), {
-        $set: { content: String(content || "").trim() },
+        $set: { content: stripHtml(String(content || "").trim()), editedAt: new Date() },
       });
 
-      SocketService.emit(`chat_${message.chatId}`, {
-        event: "updated_message",
-        data: { message: updated, chatId: message.chatId },
+      const sender: any = await userRepository.findById(Number(updated?.senderId || req.user.id), {
+        select: "id name profile_image",
+        lean: true,
       });
+      const formatted = formatMessagePayload(updated, sender);
 
-      return ReS(res, SUCCESS_CODE, "Message updated successfully", { message: updated });
+      emitChatEvent(message.chatId, "updated_message", { message: formatted, chatId: message.chatId });
+
+      return ReS(res, SUCCESS_CODE, "Message updated successfully", { message: formatted });
     } catch (error) {
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);
     }
@@ -227,17 +421,216 @@ class MessageController {
       const { messageId }: any = req.params;
       const message: any = await messageRepository.findById(Number(messageId));
       if (!message) return ReE(res, SERVER_ERROR_CODE, "Message not found");
-      if (Number(message.senderId) !== Number(req.user.id) && !["SUPER_ADMIN", "ADMIN"].includes(req.user.role)) {
+
+      const { error } = await assertChatMember(message.chatId, req.user.id);
+      if (error) return ReE(res, SERVER_ERROR_CODE, error);
+
+      if (
+        Number(message.senderId) !== Number(req.user.id) &&
+        !["SUPER_ADMIN", "ADMIN"].includes(req.user.role)
+      ) {
         return ReE(res, SERVER_ERROR_CODE, "You can only delete your own messages");
       }
 
       const chatId = message.chatId;
       await messageRepository.deleteById(Number(messageId));
-      SocketService.emit(`chat_${chatId}`, {
-        event: "deleted_message",
-        data: { messageId: Number(messageId), chatId },
-      });
+      emitChatEvent(chatId, "deleted_message", { messageId: Number(messageId), chatId });
       return ReS(res, SUCCESS_CODE, "Message deleted successfully", { messageId, chatId });
+    } catch (error) {
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);
+    }
+  }
+
+  async pinMessage(req: AuthenticatedRequest, res: Response) {
+    try {
+      const messageId = Number(req.params.messageId);
+      const message: any = await messageRepository.findById(messageId, { lean: true });
+      if (!message) return ReE(res, SERVER_ERROR_CODE, "Message not found");
+
+      const { error, chat } = await assertChatMember(message.chatId, req.user.id);
+      if (error) return ReE(res, SERVER_ERROR_CODE, error);
+      if (chat!.type === "group" && !isChatAdmin(chat, req.user)) {
+        return ReE(res, SERVER_ERROR_CODE, "Admin access required");
+      }
+
+      const isPinned = !message.isPinned;
+      await messageRepository.updateById(messageId, {
+        $set: {
+          isPinned,
+          pinnedAt: isPinned ? new Date() : null,
+          pinnedBy: isPinned ? req.user.id : null,
+        },
+      });
+
+      emitChatEvent(message.chatId, "message_pinned", { chatId: message.chatId, messageId, isPinned });
+      return ReS(res, SUCCESS_CODE, isPinned ? "Message pinned" : "Message unpinned", { messageId, isPinned });
+    } catch (error) {
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);
+    }
+  }
+
+  async toggleStar(req: AuthenticatedRequest, res: Response) {
+    try {
+      const messageId = Number(req.params.messageId);
+      const userId = req.user.id;
+      const message: any = await messageRepository.findById(messageId, { lean: true });
+      if (!message) return ReE(res, SERVER_ERROR_CODE, "Message not found");
+
+      const { error } = await assertChatMember(message.chatId, userId);
+      if (error) return ReE(res, SERVER_ERROR_CODE, error);
+
+      const starredBy: number[] = message.starredBy || [];
+      const isStarred = starredBy.includes(userId);
+      const updated = isStarred
+        ? starredBy.filter((id) => id !== userId)
+        : [...starredBy, userId];
+
+      await messageRepository.updateById(messageId, { $set: { starredBy: updated } });
+      return ReS(res, SUCCESS_CODE, isStarred ? "Unstarred" : "Starred", {
+        messageId,
+        starred: !isStarred,
+        starredBy: updated,
+      });
+    } catch (error) {
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);
+    }
+  }
+
+  async forwardMessage(req: AuthenticatedRequest, res: Response) {
+    try {
+      const messageId = Number(req.params.messageId);
+      const targetChatIds: number[] = (req.body.targetChatIds || []).map(Number).filter(Boolean);
+      if (!targetChatIds.length) return ReE(res, BAD_REQUEST_CODE, "targetChatIds required");
+
+      const source: any = await messageRepository.findById(messageId, {
+        populate: { path: "sender", select: "id name profile_image" },
+        lean: true,
+      });
+      if (!source) return ReE(res, SERVER_ERROR_CODE, "Message not found");
+
+      const { error } = await assertChatMember(source.chatId, req.user.id);
+      if (error) return ReE(res, SERVER_ERROR_CODE, error);
+
+      const sender: any = await userRepository.findById(req.user.id, {
+        select: "id name profile_image",
+        lean: true,
+      });
+
+      const forwarded: any[] = [];
+      for (const targetChatId of targetChatIds) {
+        const memberCheck = await assertChatMember(targetChatId, req.user.id);
+        if (memberCheck.error) continue;
+
+        const created: any = await messageRepository.create({
+          chatId: targetChatId,
+          senderId: req.user.id,
+          content: source.content || "",
+          messageType: source.messageType || "text",
+          attachments: source.attachments || [],
+          forwardedFrom: {
+            chatId: source.chatId,
+            messageId: source.id,
+            senderName: source.sender?.name || "Unknown",
+            content: String(source.content || "").slice(0, 200),
+          },
+          reactions: [],
+          readBy: [req.user.id],
+          linkPreviews: source.linkPreviews || [],
+        });
+
+        const payload = formatMessagePayload(created, sender);
+        emitChatEvent(targetChatId, "created_message", { chatId: targetChatId, message: payload });
+        forwarded.push(payload);
+      }
+
+      return ReS(res, SUCCESS_CODE, "Message forwarded", { forwarded });
+    } catch (error) {
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);
+    }
+  }
+
+  async getPinnedMessages(req: AuthenticatedRequest, res: Response) {
+    try {
+      const chatId = Number(req.params.chatId);
+      const { error } = await assertChatMember(chatId, req.user.id);
+      if (error) return ReE(res, SERVER_ERROR_CODE, error);
+
+      const messages = await messageRepository.find(
+        { chatId, isPinned: true },
+        { populate: { path: "sender", select: "id name profile_image" }, sort: { pinnedAt: -1 }, lean: true },
+      );
+
+      const results = (messages as any[]).map((msg) => formatMessagePayload(msg, msg.sender));
+      return ReS(res, SUCCESS_CODE, "Pinned messages", results);
+    } catch (error) {
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);
+    }
+  }
+
+  async getStarredMessages(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user.id;
+      const chats: any[] = await chatRepository.find({ members: userId }, { select: "id", lean: true });
+      const chatIds = chats.map((c) => c.id);
+
+      const messages = await messageRepository.find(
+        { chatId: { $in: chatIds }, starredBy: userId },
+        { populate: { path: "sender", select: "id name profile_image" }, sort: { created_at: -1 }, limit: 50, lean: true },
+      );
+
+      const results = (messages as any[]).map((msg) => formatMessagePayload(msg, msg.sender));
+      return ReS(res, SUCCESS_CODE, "Starred messages", results);
+    } catch (error) {
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);
+    }
+  }
+
+  async globalSearch(req: AuthenticatedRequest, res: Response) {
+    try {
+      const q = String(req.query.q || "").trim();
+      if (!q || q.length < 2) return ReE(res, BAD_REQUEST_CODE, "Query must be at least 2 characters");
+
+      const userId = req.user.id;
+      const chats: any[] = await chatRepository.find({ members: userId }, { select: "id name type", lean: true });
+      const chatIds = chats.map((c) => c.id);
+      const chatNameById = new Map(chats.map((c) => [c.id, c.name || "Chat"]));
+
+      const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const messages = await messageRepository.find(
+        { chatId: { $in: chatIds }, content: { $regex: escaped, $options: "i" }, systemType: null },
+        { populate: { path: "sender", select: "id name profile_image" }, sort: { created_at: -1 }, limit: 40, lean: true },
+      );
+
+      const results = (messages as any[]).map((msg) => ({
+        ...formatMessagePayload(msg, msg.sender),
+        chatName: chatNameById.get(msg.chatId) || "Chat",
+      }));
+
+      return ReS(res, SUCCESS_CODE, "Global search results", results);
+    } catch (error) {
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);
+    }
+  }
+
+  async getMessageReaders(req: AuthenticatedRequest, res: Response) {
+    try {
+      const messageId = Number(req.params.messageId);
+      const message: any = await messageRepository.findById(messageId, { lean: true });
+      if (!message) return ReE(res, SERVER_ERROR_CODE, "Message not found");
+
+      const { error } = await assertChatMember(message.chatId, req.user.id);
+      if (error) return ReE(res, SERVER_ERROR_CODE, error);
+
+      const readerIds = (message.readBy || []).filter((id: number) => id !== message.senderId);
+      const readers = readerIds.length
+        ? await userRepository.find({ id: { $in: readerIds } }, { select: "id name profile_image", lean: true })
+        : [];
+
+      return ReS(res, SUCCESS_CODE, "Message readers", {
+        messageId,
+        readBy: readers,
+        readCount: readerIds.length,
+      });
     } catch (error) {
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);
     }
@@ -245,4 +638,3 @@ class MessageController {
 }
 
 export default new MessageController();
-export { previewText };
