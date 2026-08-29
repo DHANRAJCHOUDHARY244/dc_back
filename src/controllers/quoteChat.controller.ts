@@ -32,7 +32,6 @@ class QuoteChatController {
                 SOCKET_EVENTS.QUOTE_CHAT_MESSAGE,
                 payload
             );
-            SocketService.emit(`send-quote-chat-message-${quote_id}`, payload);
             return ReS(res, SUCCESS_CODE, "Message sent successfully", payload);
         } catch (error) {
             return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);

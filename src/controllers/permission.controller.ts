@@ -136,7 +136,7 @@ class PermissionController {
         try {
             if (!role_id) return [];
 
-            const cached = getCachedPermissionTree(role_id);
+            const cached = await getCachedPermissionTree(role_id);
             if (cached) return cached;
 
             const rows: any[] = await userPermissionRepository.aggregateRaw([
@@ -180,7 +180,7 @@ class PermissionController {
             });
 
             const tree = buildMenuTree(permissionList as MenuItem[]);
-            setCachedPermissionTree(role_id, tree);
+            await setCachedPermissionTree(role_id, tree);
             return tree;
         } catch (error) {
             throw error

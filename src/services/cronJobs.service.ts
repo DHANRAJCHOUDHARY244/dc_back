@@ -5,11 +5,11 @@ import quotesController from "@controllers/quotes.controller";
 import { runLeadSupervisor } from "@services/leadWorkflow.service";
 import { finalizeMissingAbsents } from "@services/hrAttendance.service";
 import { evaluateOpenRuns, ensureSlaSeeds, backfillActiveQuotes } from "@services/sla.service";
-import {
-	evaluateTaskEscalations,
+import { evaluateTaskEscalations,
 	markMissedFollowUps,
 	ensureMasterTaskSeeds,
 } from "@services/masterTask.service";
+import { purgeExpiredNotifications } from "@services/notificationLifecycle.service";
 
 export const loadCrons = () => {
 	CronEngine.register({
@@ -19,6 +19,11 @@ export const loadCrons = () => {
 			quotesController.markDeadQuotesCron,
 			() => {
 				void finalizeMissingAbsents(new Date(Date.now() - 86400000));
+			},
+			() => {
+				void purgeExpiredNotifications().catch((e) =>
+					logger.error(`Notification purge: ${e?.message || e}`),
+				);
 			},
 		],
 		enabled: true,

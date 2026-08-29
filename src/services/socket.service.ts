@@ -18,4 +18,8 @@ export const SocketService = {
   emitToRoom(room: string, event: string, data: any) {
     io?.to(room).emit(event, { ...data, time: new Date().toISOString() });
   },
+  /** Emit to a single user's private room (user-{id}) */
+  emitToUser(userId: number | string, event: string, data: any) {
+    io?.to(`user-${userId}`).emit(event, { ...data, time: new Date().toISOString() });
+  },
 };

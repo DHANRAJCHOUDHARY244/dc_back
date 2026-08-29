@@ -1,5 +1,6 @@
 import { getDefaultCrmSettings } from "@config/company.config";
 import { crmSettingsRepository } from "@repositories";
+import { cacheDel, cacheGetJson, cacheSetJson } from "@services/redisCache.service";
 
 /** Normalized company config used across backend templates and API responses */
 export type CompanyConfigSnapshot = {
@@ -27,10 +28,14 @@ export type CompanyConfigSnapshot = {
   contactUsPageUrl: string;
 };
 
+const CRM_SETTINGS_KEY = "crm:settings";
+const CRM_SETTINGS_TTL = 10 * 60;
+
 let cachedSettings: any = null;
 
 export function clearCrmSettingsCache() {
   cachedSettings = null;
+  void cacheDel(CRM_SETTINGS_KEY);
 }
 
 export function mapSettingsToCompanyConfig(settings: any): CompanyConfigSnapshot {
@@ -64,11 +69,18 @@ export function mapSettingsToCompanyConfig(settings: any): CompanyConfigSnapshot
 export async function getOrCreateSettings() {
   if (cachedSettings) return cachedSettings;
 
+  const fromRedis = await cacheGetJson<any>(CRM_SETTINGS_KEY);
+  if (fromRedis) {
+    cachedSettings = fromRedis;
+    return fromRedis;
+  }
+
   let settings = await crmSettingsRepository.findOne({}, { sort: { id: 1 } });
   if (!settings) {
     settings = await crmSettingsRepository.create(getDefaultCrmSettings());
   }
   cachedSettings = settings;
+  await cacheSetJson(CRM_SETTINGS_KEY, settings, CRM_SETTINGS_TTL);
   return settings;
 }
 

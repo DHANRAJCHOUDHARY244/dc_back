@@ -70,6 +70,7 @@ export { InstallerDocumentRepository, installerDocumentRepository } from "./inst
 export { CustomContactRepository, customContactRepository } from "./customContact.repository";
 export { CustomContactDocumentRepository, customContactDocumentRepository } from "./customContactDocument.repository";
 export { ChatRepository, chatRepository } from "./chat.repository";
+export { ChatReadStateRepository, chatReadStateRepository } from "./chatReadState.repository";
 export { MessageRepository, messageRepository } from "./message.repository";
 export { ChatPermissionRepository, chatPermissionRepository } from "./chatPermission.repository";
 export { DocumentRepository, documentRepository } from "./document.repository";
