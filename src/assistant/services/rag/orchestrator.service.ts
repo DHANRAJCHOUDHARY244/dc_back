@@ -29,8 +29,8 @@ export async function chatWithAssistant(
   user: any,
   body: AssistantChatRequest,
 ): Promise<AssistantChatResponse> {
-  if (!isGeminiConfigured()) {
-    throw new Error("Gemini API is not configured (GOOGLE_API_KEY missing)");
+  if (!(await isGeminiConfigured())) {
+    throw new Error("Gemini API is not configured — add Google AI API key in CRM Settings");
   }
 
   const config = await getAssistantConfig();
@@ -141,10 +141,10 @@ export async function getConversation(userId: number, conversationId: number) {
   );
 }
 
-export function getAssistantStatusForUser(user: any, config: AssistantConfigDTO) {
+export async function getAssistantStatusForUser(user: any, config: AssistantConfigDTO) {
   const access = resolveUserAssistantAccess(user, config);
   return {
-    configured: isGeminiConfigured(),
+    configured: await isGeminiConfigured(),
     enabled: config.enabled && access.allowed,
     model: config.model,
     rag_enabled: config.rag_enabled,

@@ -24,6 +24,7 @@ import permissionController from "./permission.controller";
 import { Roles } from "src/data/dataInserter";
 import { getCompanyConfig } from "@services/crmSettings.service";
 import { resolveRoleHomePath } from "@services/roleHomePath.service";
+import { resolveRoleDocFromInput, normalizeRoleName } from "@services/roleResolver.service";
 class AuthController {
 
   private async getUserInfoRoleAndPermission(user_data: any, is_remember = false) {
@@ -97,15 +98,14 @@ class AuthController {
       const hashedPassword = await generate_Hash_Password(password);
       const genOtp = generate_6_Digit_Otp();
 
-      const roleName = role
-        ? (Roles[role as keyof typeof Roles] ?? String(role).trim())
-        : Roles.CUSTOMER;
+      const roleName = role ? normalizeRoleName(role) : Roles.CUSTOMER;
 
-      const roleDoc: any = await roleRepository.findOne(
-        { name: roleName },
-        { select: "id", lean: true },
-      );
+      const roleDoc: any = await resolveRoleDocFromInput(roleName);
       const roleId = roleDoc?.id ?? null;
+
+      if (role && !roleId) {
+        return ReE(res, BAD_REQUEST_CODE, "Invalid role — role not found in database");
+      }
 
       const user: any = await userRepository.create({
         name,

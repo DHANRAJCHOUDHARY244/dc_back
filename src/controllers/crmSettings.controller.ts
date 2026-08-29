@@ -147,6 +147,8 @@ class CrmSettingsController {
         "website_display",
         "refer_friend_url",
         "contact_us_url",
+        "google_api_key",
+        "google_maps_api_key",
       ] as const;
 
       const updates: Record<string, unknown> = {};

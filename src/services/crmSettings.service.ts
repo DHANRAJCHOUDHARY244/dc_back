@@ -26,6 +26,7 @@ export type CompanyConfigSnapshot = {
   emailLogoUrl: string;
   referFriendEarnBonusPageUrl: string;
   contactUsPageUrl: string;
+  googleMapsApiKey: string;
 };
 
 const CRM_SETTINGS_KEY = "crm:settings";
@@ -63,6 +64,7 @@ export function mapSettingsToCompanyConfig(settings: any): CompanyConfigSnapshot
     emailLogoUrl: settings?.email_logo_url || "",
     referFriendEarnBonusPageUrl: settings?.refer_friend_url || "",
     contactUsPageUrl: settings?.contact_us_url || "",
+    googleMapsApiKey: settings?.google_maps_api_key || "",
   };
 }
 
@@ -87,6 +89,22 @@ export async function getOrCreateSettings() {
 export async function getCompanyConfig(): Promise<CompanyConfigSnapshot> {
   const settings = await getOrCreateSettings();
   return mapSettingsToCompanyConfig(settings);
+}
+
+/** Google Gemini key — CRM settings first, then legacy env fallback. */
+export async function getGoogleApiKeyFromSettings(): Promise<string> {
+  const settings = await getOrCreateSettings();
+  return String(settings?.google_api_key || "").trim() || process.env.GOOGLE_API_KEY?.trim() || "";
+}
+
+/** Google Maps / Solar key — CRM settings first, then legacy env fallback. */
+export async function getGoogleMapsApiKeyFromSettings(): Promise<string> {
+  const settings = await getOrCreateSettings();
+  return (
+    String(settings?.google_maps_api_key || "").trim() ||
+    process.env.GOOGLE_MAPS_API_KEY?.trim() ||
+    ""
+  );
 }
 
 export function getDefaultCompanyConfig(): CompanyConfigSnapshot {
@@ -118,5 +136,7 @@ export function pickPublicCompanyConfig(settings: any) {
     website_display: cfg.websiteDisplay,
     refer_friend_url: cfg.referFriendEarnBonusPageUrl,
     contact_us_url: cfg.contactUsPageUrl,
+    google_maps_api_key: cfg.googleMapsApiKey,
+    googleMapsApiKey: cfg.googleMapsApiKey,
   };
 }

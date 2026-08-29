@@ -10,7 +10,7 @@ const EMBEDDING_FALLBACKS = [
 let resolvedEmbeddingModel: string | null = null;
 
 async function embedWithModel(text: string, model: string): Promise<number[]> {
-  const genAI = getGeminiClient();
+  const genAI = await getGeminiClient();
   const embeddingModel = genAI.getGenerativeModel({ model });
   const result = await embeddingModel.embedContent(text);
   const values = result.embedding?.values;

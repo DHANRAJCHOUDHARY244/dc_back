@@ -25,6 +25,10 @@ const CrmSettingsSchema = new Schema(
     website_display: { type: String, default: COMPANY_CONFIG.websiteDisplay },
     refer_friend_url: { type: String, default: COMPANY_CONFIG.referFriendEarnBonusPageUrl },
     contact_us_url: { type: String, default: COMPANY_CONFIG.contactUsPageUrl },
+    /** Google Gemini / AI API key (server-side only — not exposed on public branding). */
+    google_api_key: { type: String, default: "" },
+    /** Google Maps / Places / Solar API key (used by maps UI and server solar proxy). */
+    google_maps_api_key: { type: String, default: "" },
     metadata_fields: jsonArray,
   },
   collectionOptions("crm_settings"),

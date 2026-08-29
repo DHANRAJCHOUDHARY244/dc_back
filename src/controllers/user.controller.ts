@@ -15,6 +15,7 @@ import {
 } from "@repositories";
 import { AuthenticatedRequest } from "@constants/common.interface";
 import { fileUpload } from 'express-fileupload';
+import { resolveRoleDocFromInput } from "@services/roleResolver.service";
 import { Roles } from "src/data/dataInserter";
 import { getRelativeFilePath, uploadFiles } from "@utils/fileUpload.helper";
 import { UploadCategory } from "@constants/common.enum";
@@ -41,10 +42,7 @@ class UserController {
             if (user.role_id) {
               roleDoc = await roleRepository.findOne({ id: user.role_id }, { select: "id name", lean: true });
             } else if (user.role) {
-              roleDoc = await roleRepository.findOne(
-                { name: Roles[user.role as string] || user.role },
-                { select: "id name", lean: true },
-              );
+              roleDoc = await resolveRoleDocFromInput(user.role);
             }
             if (!roleDoc) return ReE(res, FORBIDDEN_CODE, "Role is not present");
             if (roleDoc.name === Roles.SUPER_ADMIN) {
