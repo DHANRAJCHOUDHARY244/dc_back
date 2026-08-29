@@ -73,6 +73,8 @@ export function getDefaultCrmSettings() {
 		website_display: COMPANY_CONFIG.websiteDisplay,
 		refer_friend_url: COMPANY_CONFIG.referFriendEarnBonusPageUrl,
 		contact_us_url: COMPANY_CONFIG.contactUsPageUrl,
+		google_api_key: "",
+		google_maps_api_key: "",
 		metadata_fields: DEFAULT_CRM_METADATA,
 	};
 }

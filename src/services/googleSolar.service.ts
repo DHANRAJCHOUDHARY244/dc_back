@@ -1,14 +1,15 @@
 import type { BuildingInsights, GeocodeResult } from "../types/solar.types";
+import { getGoogleMapsApiKeyFromSettings } from "@services/crmSettings.service";
 
 const GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json";
 const BUILDING_INSIGHTS_URL =
   "https://solar.googleapis.com/v1/buildingInsights:findClosest";
 const STATIC_MAP_URL = "https://maps.googleapis.com/maps/api/staticmap";
 
-function getApiKey(): string {
-  const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
+async function getApiKey(): Promise<string> {
+  const key = await getGoogleMapsApiKeyFromSettings();
   if (!key) {
-    throw new Error("GOOGLE_MAPS_API_KEY is not configured");
+    throw new Error("Google Maps API key is not configured in CRM settings");
   }
   return key;
 }
@@ -25,7 +26,7 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
 
 class GoogleSolarService {
   async geocodeAddress(address: string): Promise<GeocodeResult> {
-    const key = getApiKey();
+    const key = await getApiKey();
     const url = new URL(GEOCODE_URL);
     url.searchParams.set("address", address.trim());
     url.searchParams.set("key", key);
@@ -60,7 +61,7 @@ class GoogleSolarService {
     lat: number,
     lng: number,
   ): Promise<BuildingInsights> {
-    const key = getApiKey();
+    const key = await getApiKey();
     const url = new URL(BUILDING_INSIGHTS_URL);
     url.searchParams.set("location.latitude", String(lat));
     url.searchParams.set("location.longitude", String(lng));
@@ -96,7 +97,7 @@ class GoogleSolarService {
     zoom = 20,
     size = 1280,
   ): Promise<Buffer> {
-    const key = getApiKey();
+    const key = await getApiKey();
     const url = new URL(STATIC_MAP_URL);
     url.searchParams.set("center", `${lat},${lng}`);
     url.searchParams.set("zoom", String(zoom));

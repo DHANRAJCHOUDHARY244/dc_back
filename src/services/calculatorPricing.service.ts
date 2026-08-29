@@ -297,6 +297,10 @@ export type EstimateInput = {
   include_sales_commission?: boolean;
   /** When false, skip distance/delivery charges (quotes). Default true. */
   include_delivery?: boolean;
+  /** When false, exclude per-state profit margin (quotes). Default true. */
+  include_profit_margin?: boolean;
+  /** When true, roll phase/storey/coupling fees into install costs (quotes). */
+  rollup_installation_options?: boolean;
   sales_commission?: number;
   emi_months?: number;
   emi_interest_rate?: number;
@@ -817,8 +821,8 @@ export async function estimateCalculatorPrice(input: EstimateInput) {
     couplingChoice,
     state,
   );
-  const installationOptionsCost = round(phaseOptionFee + storyOptionFee + couplingOptionFee);
-  const installationOptionsBreakdown = [
+  let installationOptionsCost = round(phaseOptionFee + storyOptionFee + couplingOptionFee);
+  let installationOptionsBreakdown = [
     phaseOptionFee > 0
       ? {
           key: "phase",
@@ -846,6 +850,23 @@ export async function estimateCalculatorPrice(input: EstimateInput) {
         }
       : null,
   ].filter(Boolean) as { key: string; label: string; amount: number }[];
+
+  if (input.rollup_installation_options && installationOptionsCost > 0) {
+    const installBase = solarInstallCost + batteryInstallCost;
+    if (installBase > 0) {
+      const solarShare = solarInstallCost / installBase;
+      solarInstallCost = round(solarInstallCost + installationOptionsCost * solarShare);
+      batteryInstallCost = round(batteryInstallCost + installationOptionsCost * (1 - solarShare));
+    } else {
+      solarInstallCost = round(solarInstallCost + installationOptionsCost);
+    }
+    installationCost = round(solarInstallCost + batteryInstallCost);
+    if (installationCost <= 0) {
+      installationCost = round(lineInstallationCost + installationOptionsCost);
+    }
+    installationOptionsCost = 0;
+    installationOptionsBreakdown = [];
+  }
 
   const deliveryBase = pickStatePrice(settings.delivery_base, state);
   const distanceDelivery =
@@ -916,7 +937,8 @@ export async function estimateCalculatorPrice(input: EstimateInput) {
       ? input.sales_commission ?? settings.default_sales_commission ?? 250
       : 0;
 
-  const profitMargin = resolveProfitMargin(settings, state);
+  const profitMargin =
+    input.include_profit_margin === false ? 0 : resolveProfitMargin(settings, state);
 
   const rebates: Record<string, number> = { ...(input.rebates || {}) };
 

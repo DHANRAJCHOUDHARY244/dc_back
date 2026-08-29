@@ -39,7 +39,7 @@ class AssistantController {
   async status(req: AuthenticatedRequest, res: Response) {
     try {
       const config = await getAssistantConfig();
-      const status = getAssistantStatusForUser(req.user, config);
+      const status = await getAssistantStatusForUser(req.user, config);
       return ReS(res, SUCCESS_CODE, "Assistant status", status);
     } catch (e: any) {
       return ReE(res, SERVER_ERROR_CODE, e.message || "Failed");

@@ -32,6 +32,7 @@ import { sendEmail } from "@utils/email";
 import { getCompanyConfig } from "@services/crmSettings.service";
 import { runEmailInBackground } from "@services/email.service";
 import { isProtectedSuperAdminEmail } from "@config/protectedUsers.config";
+import { normalizeRoleName, resolveRoleIdFromInput } from "@services/roleResolver.service";
 
 const parsePagination = (body: any) => {
   const limit = Math.max(Number(body.limit) || 10, 1);
@@ -45,12 +46,9 @@ const parseSorting = (body: any) => {
   return { [sort_by]: sort_order as 1 | -1 };
 };
 
-const resolveRoleId = async (role?: keyof typeof Roles) => {
-  if (!role) return null;
-  const roleName = Roles[role];
-  const roleData: any = await roleRepository.findOne({ name: roleName });
-  if (!roleData) throw new Error("INVALID_ROLE");
-  return roleData.id;
+const resolveRoleId = async (role?: string) => {
+	if (!role) return null;
+	return resolveRoleIdFromInput(role);
 };
 
 const ENTITY_REGISTRY: Record<string, { repo: any; userKeys: string[] }> = {
@@ -189,7 +187,7 @@ class AdminPanelController {
           return ReE(res, BAD_REQUEST_CODE, "This system owner account cannot be deactivated");
         }
         if (payload.role) {
-          const roleName = Roles[payload.role as keyof typeof Roles];
+          const roleName = normalizeRoleName(payload.role);
           if (roleName && roleName !== Roles.SUPER_ADMIN) {
             return ReE(res, BAD_REQUEST_CODE, "This system owner account must remain Super Admin");
           }

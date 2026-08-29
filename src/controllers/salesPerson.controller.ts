@@ -13,6 +13,7 @@ import { quoteRepository, roleRepository, userRepository } from "@repositories";
 import { AuthenticatedRequest } from "@constants/common.interface";
 import userController from "./user.controller";
 import { faker } from "@faker-js/faker";
+import { resolveRoleIdFromInput } from "@services/roleResolver.service";
 import { Roles } from "src/data/dataInserter";
 import { UpdatesalesPeron } from "@constants/salesPeron.interface";
 
@@ -199,14 +200,11 @@ class SalesPersonController {
       delete payload.id;
       delete payload._id;
       if (payload.role) {
-        const role_name = Roles[payload.role as keyof typeof Roles];
-        if (!role_name) return ReE(res, BAD_REQUEST_CODE, "Invalid role");
-        const role: any = await roleRepository.findOne(
-          { name: role_name },
-          { select: "id", lean: true },
-        );
-        if (!role) return ReE(res, BAD_REQUEST_CODE, "Role not found");
-        payload.role_id = role.id;
+        try {
+          payload.role_id = await resolveRoleIdFromInput(payload.role);
+        } catch {
+          return ReE(res, BAD_REQUEST_CODE, "Invalid role — role not found in database");
+        }
         delete payload.role;
       }
       await userRepository.updateMany({ id: userId }, { $set: payload });

@@ -13,7 +13,7 @@ export type GeminiChatOptions = {
 };
 
 export async function generateAssistantReply(options: GeminiChatOptions): Promise<string> {
-  const genAI = getGeminiClient();
+  const genAI = await getGeminiClient();
   const model = genAI.getGenerativeModel({
     model: options.model,
     systemInstruction: options.systemPrompt,
