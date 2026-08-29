@@ -188,4 +188,5 @@ export enum UploadCategory {
   CHAT = "CHAT",
   TRAINING = "TRAINING",
   FEEDBACK = "FEEDBACK",
+  INSTALLER_JOB = "INSTALLER_JOB",
 }

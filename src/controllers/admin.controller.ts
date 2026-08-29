@@ -31,6 +31,7 @@ import userController from "./user.controller";
 import { sendEmail } from "@utils/email";
 import { getCompanyConfig } from "@services/crmSettings.service";
 import { runEmailInBackground } from "@services/email.service";
+import { isProtectedSuperAdminEmail } from "@config/protectedUsers.config";
 
 const parsePagination = (body: any) => {
   const limit = Math.max(Number(body.limit) || 10, 1);
@@ -174,11 +175,28 @@ class AdminPanelController {
   async updateUser(req: AuthenticatedRequest, res: Response) {
     try {
       const userId = Number(req.params.userId);
+      const target: any = await userRepository.findById(userId, { lean: true });
+      if (!target) return ReE(res, BAD_REQUEST_CODE, "User not found");
+
       const payload = { ...req.body };
       delete payload.password;
       delete payload.id;
       delete payload._id;
       delete payload.email;
+
+      if (isProtectedSuperAdminEmail(target.email)) {
+        if (payload.is_active === false) {
+          return ReE(res, BAD_REQUEST_CODE, "This system owner account cannot be deactivated");
+        }
+        if (payload.role) {
+          const roleName = Roles[payload.role as keyof typeof Roles];
+          if (roleName && roleName !== Roles.SUPER_ADMIN) {
+            return ReE(res, BAD_REQUEST_CODE, "This system owner account must remain Super Admin");
+          }
+        }
+        payload.is_active = true;
+        payload.is_verified = true;
+      }
 
       if (payload.role) {
         payload.role_id = await resolveRoleId(payload.role);

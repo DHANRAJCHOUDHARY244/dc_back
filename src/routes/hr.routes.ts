@@ -39,6 +39,10 @@ router.post("/corrections", hrController.submitCorrection.bind(hrController));
 router.post("/corrections/list", hrController.listCorrections.bind(hrController));
 router.post("/corrections/:id/action", hrController.actionCorrection.bind(hrController));
 
+router.post("/onboarding/list", hrController.listOnboarding.bind(hrController));
+router.post("/onboarding/start", hrController.startOnboarding.bind(hrController));
+router.put("/onboarding/:userId/task", hrController.updateOnboardingTask.bind(hrController));
+
 router.post("/month-lock", hrController.lockMonth.bind(hrController));
 router.post("/month-unlock", hrController.unlockMonth.bind(hrController));
 router.get("/month-locks", hrController.listLocks.bind(hrController));

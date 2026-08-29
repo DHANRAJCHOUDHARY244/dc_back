@@ -31,6 +31,24 @@ const EmployeeProfileSchema = new Schema(
 		weekly_off_days: { type: [Number], default: () => [0] },
 		attendance_enabled: { type: Boolean, default: true },
 		notes: { type: String, default: "" },
+		onboarding_status: {
+			type: String,
+			enum: ["NOT_STARTED", "IN_PROGRESS", "COMPLETED"],
+			default: "NOT_STARTED",
+			index: true,
+		},
+		onboarding_tasks: {
+			type: [
+				{
+					key: String,
+					label: String,
+					done: { type: Boolean, default: false },
+					done_at: { type: Date, default: null },
+				},
+			],
+			default: [],
+		},
+		onboarding_completed_at: { type: Date, default: null },
 	},
 	collectionOptions("employee_profiles"),
 );

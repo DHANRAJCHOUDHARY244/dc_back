@@ -3,8 +3,12 @@ import {
 	AttendanceStatus,
 	DEFAULT_LEAVE_TYPES,
 	EmploymentStatus,
+	DEFAULT_ONBOARDING_TASKS,
 	HR_ADMIN_ROLES,
+	HR_LEAVE_APPROVER_ROLES,
 	HR_MANAGER_ROLES,
+	HR_ONBOARDING_ROLES,
+	HR_TEAM_LEAD_ROLES,
 	dayKey,
 	endOfDay,
 	formatHoursMinutes,
@@ -38,6 +42,18 @@ export function isHrAdmin(role?: string) {
 
 export function isHrManager(role?: string) {
 	return HR_MANAGER_ROLES.includes(String(role || ""));
+}
+
+export function isHrLeaveApprover(role?: string) {
+	return HR_LEAVE_APPROVER_ROLES.includes(String(role || ""));
+}
+
+export function isHrTeamLead(role?: string) {
+	return HR_TEAM_LEAD_ROLES.includes(String(role || ""));
+}
+
+export function isHrOnboardingAdmin(role?: string) {
+	return HR_ONBOARDING_ROLES.includes(String(role || ""));
 }
 
 export async function writeAudit(payload: {
@@ -698,7 +714,7 @@ export async function getDashboardToday(actor: AnyUser) {
 }
 
 export async function teamUserIdsFor(actor: AnyUser): Promise<number[] | null> {
-	if (isHrAdmin(actor.role)) return null;
+	if (isHrAdmin(actor.role) || isHrLeaveApprover(actor.role)) return null;
 	if (isHrManager(actor.role)) {
 		const profiles: any[] = await employeeProfileRepository.find(
 			{ $or: [{ team_leader_id: actor.id }, { manager_id: actor.id }] },
@@ -718,6 +734,83 @@ export function clientIp(req: any): string {
 		req.ip ||
 		""
 	);
+}
+
+function defaultOnboardingTasks() {
+	return DEFAULT_ONBOARDING_TASKS.map((t) => ({
+		key: t.key,
+		label: t.label,
+		done: false,
+		done_at: null as Date | null,
+	}));
+}
+
+export async function listOnboardingProfiles(filter: Record<string, unknown> = {}) {
+	const rows: any[] = await employeeProfileRepository.find(filter, {
+		lean: true,
+		sort: { id: -1 },
+		populate: [
+			{ path: "user", select: "id name email role_id is_active" },
+			{ path: "manager", select: "id name" },
+			{ path: "team_leader", select: "id name" },
+		],
+	});
+	return rows;
+}
+
+export async function startEmployeeOnboarding(userId: number, actorId: number) {
+	await ensureEmployeeProfile(userId);
+	const profile: any = await employeeProfileRepository.findOne({ user_id: userId }, { lean: true });
+	const tasks =
+		profile?.onboarding_tasks?.length > 0 ? profile.onboarding_tasks : defaultOnboardingTasks();
+	const updated = await employeeProfileRepository.updateById(profile.id, {
+		$set: {
+			employment_status: EmploymentStatus.PROBATION,
+			onboarding_status: "IN_PROGRESS",
+			onboarding_tasks: tasks,
+			onboarding_completed_at: null,
+			notes: profile?.notes || `Onboarding started by user #${actorId}`,
+		},
+	});
+	await notificationController
+		.createNotification({
+			userId,
+			message: "Welcome! Your HR onboarding has started — complete the checklist in HR.",
+			route: "/#/hr/onboarding",
+			meta: { type: "ONBOARDING", user_id: userId },
+		})
+		.catch(() => undefined);
+	return updated;
+}
+
+export async function updateOnboardingTask(
+	userId: number,
+	taskKey: string,
+	done: boolean,
+) {
+	const profile: any = await ensureEmployeeProfile(userId);
+	let tasks = profile.onboarding_tasks?.length ? [...profile.onboarding_tasks] : defaultOnboardingTasks();
+	const idx = tasks.findIndex((t: any) => t.key === taskKey);
+	if (idx >= 0) {
+		tasks[idx] = { ...tasks[idx], done, done_at: done ? new Date() : null };
+	} else {
+		tasks.push({
+			key: taskKey,
+			label: taskKey,
+			done,
+			done_at: done ? new Date() : null,
+		});
+	}
+	const allDone = tasks.length > 0 && tasks.every((t: any) => t.done);
+	const patch: Record<string, unknown> = {
+		onboarding_tasks: tasks,
+		onboarding_status: allDone ? "COMPLETED" : "IN_PROGRESS",
+	};
+	if (allDone) {
+		patch.onboarding_completed_at = new Date();
+		patch.employment_status = EmploymentStatus.ACTIVE;
+	}
+	return employeeProfileRepository.updateById(profile.id, { $set: patch });
 }
 
 export { formatHoursMinutes, dayKey, startOfDay, endOfDay };

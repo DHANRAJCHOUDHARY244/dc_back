@@ -16,6 +16,7 @@ import { bypassTokenCreation, ReE, ReS } from "@services/generalHelper.service";
 import { Response } from "express";
 import { sendEmail } from "@utils/email";
 import notificationController from "./notification.controller";
+import { createOrSyncInstallerJob } from "@services/installerJob.service";
 
 const buildSiteInfoLink = (quoteId: number, token: string, assessmentId?: number) => {
   return `${process.env.FRONT_URL}/#/site-info?token=${token}`;
@@ -162,6 +163,8 @@ class SiteInfo {
         assessment_id = null,
         installation_date,
         installer_id = null,
+        installation_time = "",
+        job_type = "MIXED",
         installer_name = null,
         installer_email = null,
         installer_phone = null,
@@ -191,6 +194,8 @@ class SiteInfo {
         quote_id,
         assessment_id,
         installation_date,
+        installation_time,
+        job_type,
         installer_id: hasInstallerId ? installer_id : null,
         installer_name: hasInstallerDetails ? installer_name : null,
         installer_email: hasInstallerDetails ? installer_email : null,
@@ -209,6 +214,27 @@ class SiteInfo {
         populate: siteInfoInstallerPopulate,
         lean: true,
       });
+
+      if (created.installer_id) {
+        try {
+          const job = await createOrSyncInstallerJob({
+            siteInfo: created,
+            assignedBy: Number(req.user?.id),
+            installationTime: installation_time,
+            jobType: job_type,
+          });
+          if (job && created.installer_id) {
+            await notificationController.createNotification({
+              userId: Number(created.installer_id),
+              message: `New installation job assigned — ${(job as any).job_number || "Job"}`,
+              route: `/installer-jobs/job/${(job as any).id}`,
+              meta: { type: "INSTALLER_JOB_ASSIGNED", job_id: (job as any).id, site_info_id: created.id },
+            });
+          }
+        } catch (err) {
+          console.error("Auto installer job creation failed:", err);
+        }
+      }
 
       if (send_email) {
         (async () => {
@@ -302,6 +328,8 @@ class SiteInfo {
       const {
         installation_date,
         installer_id,
+        installation_time,
+        job_type,
         installer_name,
         installer_email,
         installer_phone,
@@ -313,6 +341,8 @@ class SiteInfo {
 
       const updates: any = {};
       if (installation_date != null) updates.installation_date = installation_date;
+      if (installation_time !== undefined) updates.installation_time = installation_time;
+      if (job_type !== undefined) updates.job_type = job_type;
       if (installer_id !== undefined) updates.installer_id = installer_id;
       if (installer_name !== undefined) updates.installer_name = installer_name;
       if (installer_email !== undefined) updates.installer_email = installer_email;
@@ -326,6 +356,27 @@ class SiteInfo {
         populate: siteInfoInstallerPopulate,
         lean: true,
       });
+
+      if (updated?.installer_id) {
+        try {
+          const job = await createOrSyncInstallerJob({
+            siteInfo: updated,
+            assignedBy: Number(req.user?.id),
+            installationTime: updated.installation_time,
+            jobType: updated.job_type,
+          });
+          if (job) {
+            await notificationController.createNotification({
+              userId: Number(updated.installer_id),
+              message: `Job pack updated for Quote #${updated.quote_id}`,
+              route: `/installer-jobs/job/${(job as any).id}`,
+              meta: { type: "INSTALLER_JOB_UPDATED", job_id: (job as any).id, site_info_id: updated.id },
+            });
+          }
+        } catch (err) {
+          console.error("Installer job sync on site info update failed:", err);
+        }
+      }
 
       if (send_email) {
         (async () => {

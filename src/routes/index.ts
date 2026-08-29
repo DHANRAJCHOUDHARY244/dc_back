@@ -54,7 +54,9 @@ import crmSettingsController from '@controllers/crmSettings.controller';
 import crmCompanyUnitController from '@controllers/crmCompanyUnit.controller';
 import slaRoutes from './sla.routes';
 import masterTaskRoutes from './masterTask.routes';
+import installerJobRoutes from './installerJob.routes';
 import letterStudioRoutes from './letterStudio.routes';
+import assistantRoutes from '../assistant/routes/assistant.routes';
 router.get('/',(req,res)=>{
     res.send("OK")
 })
@@ -116,5 +118,7 @@ router.use('/v1/calculator', calculatorPricingRoutes);
 router.use('/v1/rebate-schemes', rebateSchemesRoutes);
 router.use('/v1/sla', slaRoutes);
 router.use('/v1/master-tasks', masterTaskRoutes);
+router.use('/v1/installer-jobs', installerJobRoutes);
 router.use('/v1/letter-studio', letterStudioRoutes);
+router.use('/v1/assistant', assistantRoutes);
 export default router;

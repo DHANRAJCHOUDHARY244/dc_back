@@ -7,6 +7,8 @@ const SiteInfoSchema = new Schema(
     quote_id: { type: Number, required: true },
     assessment_id: { type: Number },
     installation_date: { type: Date, required: true },
+    installation_time: { type: String, default: "" },
+    job_type: { type: String, default: "MIXED" },
     installer_id: { type: Number },
     installer_name: { type: String },
     installer_email: { type: String },

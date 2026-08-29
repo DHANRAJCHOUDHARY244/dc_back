@@ -1,0 +1,40 @@
+# SOMS local stack — MongoDB stores RAG vectors as embedding arrays.
+# For production scale, use MongoDB Atlas Vector Search (see assistant/README.md).
+#
+# Usage:
+#   docker compose up -d
+#   Set MONGODB_URI=mongodb://soms:soms@localhost:27017/dc_crm?authSource=admin in .env
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: soms-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: soms
+      MONGO_INITDB_ROOT_PASSWORD: soms
+      MONGO_INITDB_DATABASE: dc_crm
+    volumes:
+      - soms_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: local backend (uses host .env)
+  # backend:
+  #   build: .
+  #   ports:
+  #     - "3000:3000"
+  #   env_file: .env
+  #   environment:
+  #     MONGODB_URI: mongodb://soms:soms@mongodb:27017/dc_crm?authSource=admin
+  #   depends_on:
+  #     mongodb:
+  #       condition: service_healthy
+
+volumes:
+  soms_mongo_data:

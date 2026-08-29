@@ -1,0 +1,3672 @@
+[{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38cf"
+  },
+  "id": 1,
+  "name": "Dashboard",
+  "parentId": null,
+  "label": "sys.menu.dashboard",
+  "icon": "local:ic-analysis",
+  "type": 0,
+  "route": "dashboard",
+  "order": 1,
+  "children": [
+    1,
+    2
+  ],
+  "component": null,
+  "created_at": {
+    "$date": "2025-05-26T10:16:44.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-26T10:16:44.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38d0"
+  },
+  "id": 2,
+  "name": "Workbench",
+  "parentId": 1,
+  "label": "sys.menu.workbench",
+  "icon": null,
+  "type": 1,
+  "route": "workbench",
+  "order": null,
+  "children": [],
+  "component": "/dashboard/workbench/index.tsx",
+  "created_at": {
+    "$date": "2025-05-26T10:26:55.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-26T10:26:55.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38d1"
+  },
+  "id": 7,
+  "name": "Analysis",
+  "parentId": 1,
+  "label": "sys.menu.analysis",
+  "icon": null,
+  "type": 1,
+  "route": "analysis",
+  "order": null,
+  "children": [],
+  "component": "/dashboard/analysis/index.tsx",
+  "created_at": {
+    "$date": "2025-05-26T10:30:42.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-26T10:30:42.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": 1,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38d2"
+  },
+  "id": 8,
+  "name": "Management",
+  "parentId": null,
+  "label": "sys.menu.management",
+  "icon": "local:ic-management",
+  "type": 0,
+  "route": "management",
+  "order": 8,
+  "children": [],
+  "component": null,
+  "created_at": {
+    "$date": "2025-05-26T10:33:20.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-26T10:33:20.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38d3"
+  },
+  "id": 9,
+  "name": "User",
+  "parentId": 8,
+  "label": "sys.menu.user.index",
+  "icon": null,
+  "type": 0,
+  "route": "user",
+  "order": null,
+  "children": [
+    10,
+    11
+  ],
+  "component": null,
+  "created_at": {
+    "$date": "2025-05-26T10:39:00.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-26T10:39:00.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38d4"
+  },
+  "id": 10,
+  "name": "Profile",
+  "parentId": 9,
+  "label": "sys.menu.user.profile",
+  "icon": null,
+  "type": 1,
+  "route": "profile",
+  "order": null,
+  "children": [],
+  "component": "/management/user/profile/index.tsx",
+  "created_at": {
+    "$date": "2025-05-26T10:40:44.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-26T10:40:44.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38d5"
+  },
+  "id": 11,
+  "name": "Account",
+  "parentId": 9,
+  "label": "sys.menu.user.account",
+  "icon": null,
+  "type": 1,
+  "route": "account",
+  "order": null,
+  "children": [],
+  "component": "/management/user/account/index.tsx",
+  "created_at": {
+    "$date": "2025-05-26T10:41:32.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-26T10:41:32.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38d6"
+  },
+  "id": 12,
+  "name": "System",
+  "parentId": 8,
+  "label": "sys.menu.system.index",
+  "icon": null,
+  "type": 0,
+  "route": "system",
+  "order": null,
+  "children": [
+    13,
+    14,
+    17,
+    18,
+    19
+  ],
+  "component": null,
+  "created_at": {
+    "$date": "2025-05-26T10:45:36.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-26T10:45:36.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38d7"
+  },
+  "id": 14,
+  "name": "Permission",
+  "parentId": 12,
+  "label": "sys.menu.system.permission",
+  "icon": null,
+  "type": 1,
+  "route": "permission",
+  "order": null,
+  "children": [],
+  "component": "/management/system/permission/index.tsx",
+  "created_at": {
+    "$date": "2025-05-26T10:47:50.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-26T10:47:50.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38d8"
+  },
+  "id": 17,
+  "name": "Role",
+  "parentId": 12,
+  "label": "sys.menu.system.role",
+  "icon": null,
+  "type": 1,
+  "route": "role",
+  "order": null,
+  "children": [],
+  "component": "/management/system/role/index.tsx",
+  "created_at": {
+    "$date": "2025-05-26T10:48:49.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-26T10:48:49.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38d9"
+  },
+  "id": 33,
+  "name": "Calendar",
+  "parentId": null,
+  "label": "sys.menu.calendar",
+  "icon": "solar:calendar-bold-duotone",
+  "type": 1,
+  "route": "calendar",
+  "order": 15,
+  "children": [],
+  "component": "/sys/others/calendar/index.tsx",
+  "created_at": {
+    "$date": "2025-05-27T12:26:06.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-27T12:26:06.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38da"
+  },
+  "id": 38,
+  "name": "Customer",
+  "parentId": null,
+  "label": "sys.menu.customer",
+  "icon": "carbon:customer-service",
+  "type": 0,
+  "route": "customer",
+  "order": 9,
+  "children": [
+    39,
+    40
+  ],
+  "component": null,
+  "created_at": {
+    "$date": "2025-05-31T03:53:05.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-31T03:53:05.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38db"
+  },
+  "id": 39,
+  "name": "Analysis",
+  "parentId": 38,
+  "label": "sys.menu.analysis",
+  "icon": null,
+  "type": 1,
+  "route": "analysis",
+  "order": null,
+  "children": [],
+  "component": "/customer/Customer.tsx",
+  "created_at": {
+    "$date": "2025-05-31T11:48:57.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-31T11:48:57.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38dc"
+  },
+  "id": 40,
+  "name": "User",
+  "parentId": 38,
+  "label": "sys.menu.system.user",
+  "icon": null,
+  "type": 1,
+  "route": "user",
+  "order": null,
+  "children": [],
+  "component": "/customer/user/index.tsx",
+  "created_at": {
+    "$date": "2025-05-31T11:56:19.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-31T11:56:19.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38dd"
+  },
+  "id": 41,
+  "name": "User Detail",
+  "parentId": 38,
+  "label": "sys.menu.system.user_detail",
+  "icon": null,
+  "type": 1,
+  "route": "user/:id/:email",
+  "order": null,
+  "children": [],
+  "component": "/customer/user/account/index.tsx",
+  "created_at": {
+    "$date": "2025-05-31T12:11:39.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-31T12:11:39.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": 1,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38de"
+  },
+  "id": 42,
+  "name": "Installers",
+  "parentId": null,
+  "label": "sys.menu.installers",
+  "icon": "eos-icons:installing",
+  "type": 0,
+  "route": "installers",
+  "order": 11,
+  "children": [],
+  "component": null,
+  "created_at": {
+    "$date": "2025-05-31T12:19:08.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-31T12:19:08.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38df"
+  },
+  "id": 43,
+  "name": "Analysis",
+  "parentId": 42,
+  "label": "sys.menu.analysis",
+  "icon": null,
+  "type": 1,
+  "route": "analysis",
+  "order": null,
+  "children": [],
+  "component": "/installer/Installer.tsx",
+  "created_at": {
+    "$date": "2025-05-31T12:36:53.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-31T12:36:53.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38e0"
+  },
+  "id": 44,
+  "name": "User",
+  "parentId": 42,
+  "label": "sys.menu.system.user",
+  "icon": null,
+  "type": 1,
+  "route": "user",
+  "order": null,
+  "children": [],
+  "component": "/installer/user/index.tsx",
+  "created_at": {
+    "$date": "2025-05-31T12:43:49.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-31T12:43:49.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38e1"
+  },
+  "id": 45,
+  "name": "User Detail",
+  "parentId": 42,
+  "label": "sys.menu.system.user_detail",
+  "icon": null,
+  "type": 1,
+  "route": "user/:id/:email",
+  "order": null,
+  "children": [],
+  "component": "/installer/user/account/index.tsx",
+  "created_at": {
+    "$date": "2025-05-31T12:47:51.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-31T12:47:51.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": 1,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38e2"
+  },
+  "id": 46,
+  "name": "quotient",
+  "parentId": null,
+  "label": "sys.menu.quotient.index",
+  "icon": "line-md:file",
+  "type": 0,
+  "route": "quote",
+  "order": 2,
+  "children": [],
+  "component": null,
+  "created_at": {
+    "$date": "2025-05-31T13:00:46.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-31T13:00:46.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38e3"
+  },
+  "id": 47,
+  "name": "Add New",
+  "parentId": 46,
+  "label": "sys.menu.quotient.add_new",
+  "icon": null,
+  "type": 1,
+  "route": "add-new",
+  "order": null,
+  "children": [],
+  "component": "/quote/Quotient.tsx",
+  "created_at": {
+    "$date": "2025-05-31T13:03:52.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-05-31T13:03:52.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38e4"
+  },
+  "id": 48,
+  "name": "Analysis",
+  "parentId": 46,
+  "label": "sys.menu.analysis",
+  "icon": null,
+  "type": 1,
+  "route": "analysis",
+  "order": null,
+  "children": [],
+  "component": "/quote/analysis/index.tsx",
+  "created_at": {
+    "$date": "2025-06-07T00:37:17.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-06-07T00:37:17.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38e5"
+  },
+  "id": 49,
+  "name": "List",
+  "parentId": 46,
+  "label": "sys.menu.list",
+  "icon": null,
+  "type": 1,
+  "route": "list",
+  "order": null,
+  "children": [],
+  "component": "/quote/quotes/Quotes.tsx",
+  "created_at": {
+    "$date": "2025-06-08T01:55:53.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-06-08T01:55:53.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38e6"
+  },
+  "id": 50,
+  "name": "quote",
+  "parentId": 46,
+  "label": "sys.menu.list",
+  "icon": null,
+  "type": 1,
+  "route": "quote/:id",
+  "order": null,
+  "children": [],
+  "component": "/quote/view/Quote.tsx",
+  "created_at": {
+    "$date": "2025-06-08T05:38:24.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-06-08T05:38:24.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": 1,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38e7"
+  },
+  "id": 51,
+  "name": "Invoice",
+  "parentId": null,
+  "label": "sys.menu.invoice.index",
+  "icon": "ph:invoice-bold",
+  "type": 0,
+  "route": "invoice",
+  "order": 3,
+  "children": [],
+  "component": null,
+  "created_at": {
+    "$date": "2025-06-15T04:35:48.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-06-15T04:35:48.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38e8"
+  },
+  "id": 52,
+  "name": "Invoice",
+  "parentId": 51,
+  "label": "sys.menu.invoice.add_new",
+  "icon": null,
+  "type": 1,
+  "route": "invoice/:id",
+  "order": null,
+  "children": [],
+  "component": "/invoice/view/Invoice.tsx",
+  "created_at": {
+    "$date": "2025-06-15T05:01:47.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-06-15T05:01:47.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": 1,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38e9"
+  },
+  "id": 53,
+  "name": "List",
+  "parentId": 51,
+  "label": "sys.menu.list",
+  "icon": null,
+  "type": 1,
+  "route": "list",
+  "order": null,
+  "children": [],
+  "component": "/invoice/invoice/Invoice.tsx",
+  "created_at": {
+    "$date": "2025-06-15T05:03:30.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-06-15T05:03:30.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": 0,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38ea"
+  },
+  "id": 54,
+  "name": "Job",
+  "parentId": null,
+  "label": "sys.menu.jobs",
+  "icon": "healthicons:job-status-level",
+  "type": 0,
+  "route": "job",
+  "order": 13,
+  "children": [],
+  "component": null,
+  "created_at": {
+    "$date": "2025-06-28T14:08:18.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-06-28T14:08:18.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38eb"
+  },
+  "id": 55,
+  "name": "Qr",
+  "parentId": null,
+  "label": "sys.menu.qr",
+  "icon": "grommet-icons:qr",
+  "type": 1,
+  "route": "qr",
+  "order": 14,
+  "children": [],
+  "component": "/sys/others/qr/Qr.tsx",
+  "created_at": {
+    "$date": "2025-06-30T11:46:11.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-06-30T11:46:11.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38ec"
+  },
+  "id": 56,
+  "name": "List",
+  "parentId": 54,
+  "label": "sys.menu.list",
+  "icon": null,
+  "type": 1,
+  "route": "list",
+  "order": null,
+  "children": [],
+  "component": "/jobs/job/Job.tsx",
+  "created_at": {
+    "$date": "2025-06-30T14:00:31.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-06-30T14:00:31.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38ed"
+  },
+  "id": 57,
+  "name": "Jobs",
+  "parentId": 54,
+  "label": "sys.menu.jobs",
+  "icon": null,
+  "type": 1,
+  "route": "job/:id",
+  "order": null,
+  "children": [],
+  "component": "/jobs/view/index.tsx",
+  "created_at": {
+    "$date": "2025-07-02T13:02:18.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-07-02T13:02:18.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": 1,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38ee"
+  },
+  "id": 58,
+  "name": "Chat",
+  "parentId": null,
+  "label": "sys.menu.chat",
+  "icon": "line-md:chat-round-dots-filled",
+  "type": 1,
+  "route": "chat",
+  "order": 19,
+  "children": [],
+  "component": "/chats/chat.tsx",
+  "created_at": {
+    "$date": "2025-07-17T10:39:34.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-07-17T10:39:34.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38ef"
+  },
+  "id": 59,
+  "name": "Contact Form",
+  "parentId": null,
+  "label": "sys.menu.contact_form",
+  "icon": "openmoji:mobile-message",
+  "type": 1,
+  "route": "contact-form",
+  "order": 7,
+  "children": [],
+  "component": "/contact-form/view/index.tsx",
+  "created_at": {
+    "$date": "2025-07-23T05:14:58.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-07-23T05:14:58.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38f0"
+  },
+  "id": 61,
+  "name": "Add New Redirect Quote",
+  "parentId": 46,
+  "label": "sys.menu.quotient.add_new_redirect",
+  "icon": null,
+  "type": 1,
+  "route": "add-new-redirect-quote/:cf_id",
+  "order": null,
+  "children": [],
+  "component": "/quote/add-new-redirect/InvoiceForm.tsx",
+  "created_at": {
+    "$date": "2025-08-11T11:20:34.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-08-11T11:20:34.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": 1,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38f1"
+  },
+  "id": 62,
+  "name": "Map",
+  "parentId": null,
+  "label": "sys.menu.map",
+  "icon": "line-md:map-marker-radius-twotone",
+  "type": 1,
+  "route": "map",
+  "order": 18,
+  "children": [],
+  "component": "/map/Map.tsx",
+  "created_at": {
+    "$date": "2025-08-11T11:23:20.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-08-11T11:23:20.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38f2"
+  },
+  "id": 63,
+  "name": "Sales Person",
+  "parentId": null,
+  "label": "sys.menu.salesPersons",
+  "icon": "fluent:person-account-16-filled",
+  "type": 0,
+  "route": "sales-person",
+  "order": 10,
+  "children": [],
+  "component": null,
+  "created_at": {
+    "$date": "2025-08-17T07:59:25.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-08-17T07:59:25.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38f3"
+  },
+  "id": 64,
+  "name": "Analysis",
+  "parentId": 63,
+  "label": "sys.menu.analysis",
+  "icon": null,
+  "type": 1,
+  "route": "analysis",
+  "order": null,
+  "children": [],
+  "component": "/sales-person/SalesPerson.tsx",
+  "created_at": {
+    "$date": "2025-08-17T08:02:17.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-08-17T08:02:17.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38f4"
+  },
+  "id": 65,
+  "name": "User",
+  "parentId": 63,
+  "label": "sys.menu.system.user",
+  "icon": null,
+  "type": 1,
+  "route": "user",
+  "order": null,
+  "children": [],
+  "component": "/sales-person/user/index.tsx",
+  "created_at": {
+    "$date": "2025-08-17T08:03:16.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-08-17T08:03:16.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38f5"
+  },
+  "id": 66,
+  "name": "User Detail",
+  "parentId": 63,
+  "label": "sys.menu.system.user_detail",
+  "icon": null,
+  "type": 1,
+  "route": "user/:id/:email",
+  "order": null,
+  "children": [],
+  "component": "/sales-person/user/account/index.tsx",
+  "created_at": {
+    "$date": "2025-08-17T08:04:04.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-08-17T08:04:04.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": 1,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38f6"
+  },
+  "id": 67,
+  "name": "Asessment",
+  "parentId": null,
+  "label": "sys.menu.assessment.index",
+  "icon": "line-md:clipboard-check",
+  "type": 0,
+  "route": "assessment",
+  "order": 4,
+  "children": [],
+  "component": null,
+  "created_at": {
+    "$date": "2025-09-08T04:05:01.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-09-08T04:05:01.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38f7"
+  },
+  "id": 69,
+  "name": "Update Quote",
+  "parentId": 46,
+  "label": "sys.menu.quotient.update",
+  "icon": null,
+  "type": 1,
+  "route": "update-quote/:quote_id/:bypass_token",
+  "order": null,
+  "children": [],
+  "component": "/quote/quotes/update/InvoiceForm.tsx",
+  "created_at": {
+    "$date": "2025-09-11T06:55:41.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-09-11T06:55:41.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": 1,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38f8"
+  },
+  "id": 70,
+  "name": "Documents Center",
+  "parentId": null,
+  "label": "sys.menu.document.index",
+  "icon": "fluent:document-header-16-regular",
+  "type": 0,
+  "route": "document-center",
+  "order": 12,
+  "children": [],
+  "component": null,
+  "created_at": {
+    "$date": "2025-09-18T10:04:20.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-09-18T10:04:20.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38f9"
+  },
+  "id": 71,
+  "name": "Letter pad",
+  "parentId": 70,
+  "label": "sys.menu.document.letterPad",
+  "icon": null,
+  "type": 1,
+  "route": "letter-paid",
+  "order": null,
+  "children": [],
+  "component": "/documents/letterPaid/LetterPaid.tsx",
+  "created_at": {
+    "$date": "2025-09-18T10:13:12.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-09-18T10:13:12.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38fa"
+  },
+  "id": 72,
+  "name": "Joining letter",
+  "parentId": 70,
+  "label": "sys.menu.document.joining_letter",
+  "icon": null,
+  "type": 1,
+  "route": "joining-letter",
+  "order": null,
+  "children": [],
+  "component": "/documents/JoiningLetter/JoiningLetter.tsx",
+  "created_at": {
+    "$date": "2025-09-18T10:16:37.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-09-18T10:16:37.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38fb"
+  },
+  "id": 74,
+  "name": "Add New",
+  "parentId": 51,
+  "label": "sys.menu.invoice.add_new",
+  "icon": null,
+  "type": 1,
+  "route": "custom-invoice",
+  "order": null,
+  "children": [],
+  "component": "/invoice/custom-invoice/InvoiceForm.tsx",
+  "created_at": {
+    "$date": "2025-10-16T04:33:07.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-10-16T04:33:07.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38fc"
+  },
+  "id": 75,
+  "name": "Update",
+  "parentId": 51,
+  "label": "sys.menu.invoice.custom_invoice_update",
+  "icon": null,
+  "type": 1,
+  "route": "custom-invoice-update/:id/:bypass_token",
+  "order": null,
+  "children": [],
+  "component": "/invoice/custom-invoice-update/InvoiceForm.tsx",
+  "created_at": {
+    "$date": "2025-10-16T04:35:00.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-10-16T04:35:00.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": 1,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38fd"
+  },
+  "id": 76,
+  "name": "Task Status",
+  "parentId": 46,
+  "label": "sys.menu.quotient.task_status",
+  "icon": null,
+  "type": 1,
+  "route": "quote/kanban",
+  "order": null,
+  "children": [],
+  "component": "/quote/kanban/index.tsx",
+  "created_at": {
+    "$date": "2025-10-19T12:08:07.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-10-19T12:08:07.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38fe"
+  },
+  "id": 77,
+  "name": "User Document List",
+  "parentId": 70,
+  "label": "sys.menu.document.user_document_list",
+  "icon": null,
+  "type": 1,
+  "route": "user-doc-list",
+  "order": null,
+  "children": [],
+  "component": "/documents/userDocuments/index.tsx",
+  "created_at": {
+    "$date": "2025-10-29T12:03:49.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-10-29T12:03:49.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e38ff"
+  },
+  "id": 78,
+  "name": "User Document View",
+  "parentId": 70,
+  "label": "sys.menu.document.user_document_view",
+  "icon": null,
+  "type": 1,
+  "route": "user-doc-list/:userId",
+  "order": null,
+  "children": [],
+  "component": "/documents/userDocuments/userDocumentView.tsx",
+  "created_at": {
+    "$date": "2025-10-29T12:04:58.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-10-29T12:04:58.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": 1,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3900"
+  },
+  "id": 79,
+  "name": "Product Items",
+  "parentId": null,
+  "label": "sys.menu.product_items",
+  "icon": "fluent-mdl2:product-list",
+  "type": 1,
+  "route": "product-items",
+  "order": 6,
+  "children": [],
+  "component": "/productItems/ProductItems.tsx",
+  "created_at": {
+    "$date": "2025-11-08T05:05:18.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-11-08T05:05:18.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3901"
+  },
+  "id": 80,
+  "name": "Company",
+  "parentId": null,
+  "label": "sys.menu.company",
+  "icon": "mdi:company",
+  "type": 1,
+  "route": "company",
+  "order": 5,
+  "children": [],
+  "component": "/company/CompanyListPage.tsx",
+  "created_at": {
+    "$date": "2025-11-16T10:20:54.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-11-16T10:20:54.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3902"
+  },
+  "id": 81,
+  "name": "Monitor System",
+  "parentId": null,
+  "label": "sys.menu.monitor_system",
+  "icon": "qlementine-icons:system-monitor-16",
+  "type": 1,
+  "route": "system-monitor",
+  "order": 16,
+  "children": [],
+  "component": "/system/system.tsx",
+  "created_at": {
+    "$date": "2025-11-25T12:04:59.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-11-25T12:04:59.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3903"
+  },
+  "id": 82,
+  "name": "System Logs",
+  "parentId": null,
+  "label": "sys.menu.system_logs",
+  "icon": "ix:log",
+  "type": 1,
+  "route": "system-logs",
+  "order": 17,
+  "children": [],
+  "component": "/system/SystemLogs.tsx",
+  "created_at": {
+    "$date": "2025-11-25T12:52:19.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-11-25T12:52:19.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3904"
+  },
+  "id": 83,
+  "name": "Leads",
+  "parentId": null,
+  "label": "sys.menu.leads",
+  "icon": "radix-icons:people",
+  "type": 1,
+  "route": "leads",
+  "order": 5,
+  "children": [],
+  "component": "/leads/index.tsx",
+  "created_at": {
+    "$date": "2025-12-09T13:21:58.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-12-09T13:21:58.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3905"
+  },
+  "id": 84,
+  "name": "Task",
+  "parentId": null,
+  "label": "sys.menu.task.index",
+  "icon": "carbon:task",
+  "type": 1,
+  "route": "task",
+  "order": 5,
+  "children": [],
+  "component": "/task/TaskListPage.tsx",
+  "created_at": {
+    "$date": "2025-12-30T06:35:01.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-12-30T06:35:01.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3906"
+  },
+  "id": 85,
+  "name": "Task View",
+  "parentId": null,
+  "label": "sys.menu.task.view",
+  "icon": "",
+  "type": 1,
+  "route": "task-view/:id",
+  "order": null,
+  "children": [],
+  "component": "/task/View.tsx",
+  "created_at": {
+    "$date": "2025-12-30T09:20:59.000Z"
+  },
+  "updated_at": {
+    "$date": "2025-12-30T09:20:59.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": 1,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3907"
+  },
+  "id": 86,
+  "name": "Activity Tracker",
+  "parentId": null,
+  "label": "sys.menu.activity_tracker.index",
+  "icon": "carbon:user-activity",
+  "type": 0,
+  "route": "activity-tracker",
+  "order": 6,
+  "children": [],
+  "component": null,
+  "created_at": {
+    "$date": "2026-01-07T10:08:07.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-01-07T10:08:07.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3908"
+  },
+  "id": 87,
+  "name": "User Activity",
+  "parentId": 86,
+  "label": "sys.menu.activity_tracker.user_activity",
+  "icon": null,
+  "type": 1,
+  "route": "activity-tracker/user-activity",
+  "order": null,
+  "children": [],
+  "component": "/activity-tracker/user-activity/ActivityTrackerPage.tsx",
+  "created_at": {
+    "$date": "2026-01-07T10:12:12.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-01-07T10:12:12.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3909"
+  },
+  "id": 88,
+  "name": "Activity Report",
+  "parentId": 86,
+  "label": "sys.menu.activity_tracker.activity_report",
+  "icon": null,
+  "type": 1,
+  "route": "activity-tracker/user-report",
+  "order": null,
+  "children": [],
+  "component": "/activity-tracker/analytics/ActivityAnalyticsPage.tsx",
+  "created_at": {
+    "$date": "2026-01-07T10:13:23.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-01-07T10:13:23.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e390a"
+  },
+  "id": 89,
+  "name": "Finance",
+  "parentId": null,
+  "label": "sys.menu.finance.index",
+  "icon": "mdi:finance",
+  "type": 0,
+  "route": "finance",
+  "order": 6,
+  "children": [],
+  "component": null,
+  "created_at": {
+    "$date": "2026-01-11T04:12:09.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-01-11T04:12:09.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e390b"
+  },
+  "id": 90,
+  "name": "Add Salary",
+  "parentId": 89,
+  "label": "sys.menu.finance.add_salary",
+  "icon": null,
+  "type": 1,
+  "route": "finance/add-salary",
+  "order": null,
+  "children": [],
+  "component": "/finance/salary/SalaryPayrollPage.tsx",
+  "created_at": {
+    "$date": "2026-01-11T04:17:40.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-01-11T04:17:40.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e390c"
+  },
+  "id": 91,
+  "name": "Ledger",
+  "parentId": 89,
+  "label": "sys.menu.finance.ledger",
+  "icon": null,
+  "type": 1,
+  "route": "finance/ledger",
+  "order": null,
+  "children": [],
+  "component": "/finance/salary-list/SalaryPage.tsx",
+  "created_at": {
+    "$date": "2026-01-12T11:28:41.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-01-12T11:28:41.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e390d"
+  },
+  "id": 92,
+  "name": "Expense",
+  "parentId": 89,
+  "label": "sys.menu.finance.expense",
+  "icon": null,
+  "type": 1,
+  "route": "finance/expense",
+  "order": null,
+  "children": [],
+  "component": "/finance/expenses/ExpensePage.tsx",
+  "created_at": {
+    "$date": "2026-01-13T14:11:28.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-01-13T14:11:28.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e390e"
+  },
+  "id": 93,
+  "name": "Finance Dashboard",
+  "parentId": 89,
+  "label": "sys.menu.finance.dashboard",
+  "icon": null,
+  "type": 1,
+  "route": "finance/dashboard",
+  "order": null,
+  "children": [],
+  "component": "/finance/dashboard/FinanceDashboard.tsx",
+  "created_at": {
+    "$date": "2026-01-18T13:16:44.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-01-18T13:16:44.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e390f"
+  },
+  "id": 95,
+  "name": "User",
+  "parentId": 12,
+  "label": "sys.menu.system.user",
+  "icon": null,
+  "type": 0,
+  "route": "user",
+  "order": null,
+  "children": [],
+  "component": null,
+  "created_at": {
+    "$date": "2026-01-21T11:21:57.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-01-21T11:21:57.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3910"
+  },
+  "id": 96,
+  "name": "Analysis",
+  "parentId": 95,
+  "label": "sys.menu.analysis",
+  "icon": null,
+  "type": 1,
+  "route": "analysis",
+  "order": null,
+  "children": [],
+  "component": "/management/system/user/User.tsx",
+  "created_at": {
+    "$date": "2026-01-21T11:25:11.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-01-21T11:25:11.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3911"
+  },
+  "id": 97,
+  "name": "Users List",
+  "parentId": 95,
+  "label": "sys.menu.system.user",
+  "icon": null,
+  "type": 1,
+  "route": "list",
+  "order": null,
+  "children": [],
+  "component": "/management/system/user/user/index.tsx",
+  "created_at": {
+    "$date": "2026-01-21T11:26:44.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-01-21T11:26:44.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3912"
+  },
+  "id": 98,
+  "name": "User Details",
+  "parentId": 95,
+  "label": "sys.menu.system.user_detail",
+  "icon": null,
+  "type": 1,
+  "route": "list/:id/:email",
+  "order": null,
+  "children": [],
+  "component": "/management/system/user/user/account/index.tsx",
+  "created_at": {
+    "$date": "2026-01-21T11:28:00.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-01-21T11:28:00.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": 1,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3913"
+  },
+  "id": 99,
+  "name": "List Installer Contact",
+  "parentId": 70,
+  "label": "sys.menu.document.installer_contract",
+  "icon": null,
+  "type": 1,
+  "route": "installer-contract-list",
+  "order": null,
+  "children": [],
+  "component": "/documents/contract/list/index.tsx",
+  "created_at": {
+    "$date": "2026-01-23T01:19:00.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-01-23T01:19:00.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3914"
+  },
+  "id": 100,
+  "name": "Add Installer Contract",
+  "parentId": 70,
+  "label": "sys.menu.document.add_contract",
+  "icon": null,
+  "type": 1,
+  "route": "installer-contract-add-new",
+  "order": null,
+  "children": [],
+  "component": "/documents/contract/add/index.tsx",
+  "created_at": {
+    "$date": "2026-01-23T01:20:40.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-01-23T01:20:40.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3915"
+  },
+  "id": 101,
+  "name": "Update Installer Contract",
+  "parentId": 70,
+  "label": "sys.menu.document.update_contract",
+  "icon": null,
+  "type": 1,
+  "route": "installer-contract-list/:id",
+  "order": null,
+  "children": [],
+  "component": "/documents/contract/add/InstallerAgreementUpdatePage.tsx",
+  "created_at": {
+    "$date": "2026-01-29T11:09:23.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-01-29T11:09:23.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": 1,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3916"
+  },
+  "id": 102,
+  "name": "Analysis",
+  "parentId": 67,
+  "label": "sys.menu.assessment.analysis",
+  "icon": null,
+  "type": 1,
+  "route": "assessment-anlysis",
+  "order": null,
+  "children": [],
+  "component": "/assessment/AssessmentStatsPage.tsx",
+  "created_at": {
+    "$date": "2026-01-29T11:12:21.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-01-29T11:12:21.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3917"
+  },
+  "id": 103,
+  "name": "List",
+  "parentId": 67,
+  "label": "sys.menu.assessment.list",
+  "icon": null,
+  "type": 1,
+  "route": "assessment-list",
+  "order": null,
+  "children": [],
+  "component": "/assessment/AssessmentListPage.tsx",
+  "created_at": {
+    "$date": "2026-01-29T11:13:08.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-01-29T11:13:08.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3918"
+  },
+  "id": 104,
+  "name": "Stock List",
+  "parentId": null,
+  "label": "sys.menu.stock_order_list",
+  "icon": "solar:box-bold-duotone",
+  "type": 1,
+  "route": "stock-list",
+  "order": 1,
+  "children": [],
+  "component": "/stockOrder/list/index.tsx",
+  "created_at": {
+    "$date": "2026-02-17T12:54:50.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-02-17T12:54:50.000Z"
+  },
+  "status": null,
+  "newFeature": 1,
+  "hide": 0,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3919"
+  },
+  "id": 108,
+  "name": "List Custom Contact",
+  "parentId": 70,
+  "label": "sys.menu.document.custom_contract_list",
+  "icon": null,
+  "type": 1,
+  "route": "custom-contact-list",
+  "order": null,
+  "children": [],
+  "component": "/documents/customContact/list/index.tsx",
+  "created_at": {
+    "$date": "2026-02-24T12:22:29.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-02-24T12:22:29.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e391a"
+  },
+  "id": 109,
+  "name": "Add Custom Contact",
+  "parentId": 70,
+  "label": "sys.menu.document.add_custom_contract",
+  "icon": null,
+  "type": 1,
+  "route": "custom-contact-add-new",
+  "order": null,
+  "children": [],
+  "component": "/documents/customContact/add/index.tsx",
+  "created_at": {
+    "$date": "2026-02-24T12:22:55.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-02-24T12:22:55.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e391b"
+  },
+  "id": 110,
+  "name": "Update Custom Contact",
+  "parentId": 70,
+  "label": "sys.menu.document.update_custom_contract",
+  "icon": null,
+  "type": 1,
+  "route": "custom-contact-list/:id",
+  "order": null,
+  "children": [],
+  "component": "/documents/customContact/add/CustomContactUpdatePage.tsx",
+  "created_at": {
+    "$date": "2026-02-24T12:23:18.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-02-24T12:23:18.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": 1,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e391c"
+  },
+  "id": 113,
+  "name": "Workflow",
+  "parentId": null,
+  "label": "sys.menu.workflows.index",
+  "icon": "catppuccin:folder-workflows-open",
+  "type": 0,
+  "route": "workflow",
+  "order": null,
+  "children": [],
+  "component": null,
+  "created_at": {
+    "$date": "2026-03-08T21:16:07.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-03-08T21:16:07.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e391d"
+  },
+  "id": 114,
+  "name": "Admin Workflow",
+  "parentId": 113,
+  "label": "sys.menu.workflows.admin_workflow",
+  "icon": null,
+  "type": 1,
+  "route": "workflow-admin",
+  "order": null,
+  "children": [],
+  "component": "/workflow/WorkflowDashboard.tsx",
+  "created_at": {
+    "$date": "2026-03-08T21:17:18.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-03-08T21:17:18.000Z"
+  },
+  "status": null,
+  "newFeature": null,
+  "hide": null,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e391e"
+  },
+  "id": 115,
+  "name": "Calculator",
+  "parentId": null,
+  "label": "Calculator",
+  "icon": "uil:calcualtor",
+  "type": 1,
+  "route": "calculator",
+  "order": 5,
+  "children": [],
+  "component": "/calculator/index.tsx",
+  "created_at": {
+    "$date": "2026-06-09T10:56:38.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-06-09T10:56:38.000Z"
+  },
+  "status": 1,
+  "newFeature": null,
+  "hide": 0,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e391f"
+  },
+  "id": 116,
+  "name": "Solar Sketch",
+  "parentId": null,
+  "label": "sys.menu.greenSketch",
+  "icon": "solar:map-point-wave-bold-duotone",
+  "type": 1,
+  "route": "green-sketch",
+  "order": 6,
+  "children": [],
+  "component": "/green-sketch/index.tsx",
+  "created_at": {
+    "$date": "2026-06-18T07:08:01.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-28T04:15:49.101Z"
+  },
+  "status": 1,
+  "newFeature": false,
+  "hide": false,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a4e1401d02a79c2989e3920"
+  },
+  "id": 117,
+  "name": "Crm-Setting",
+  "parentId": 12,
+  "label": "Crm-Setting",
+  "icon": "streamline-plump:page-setting",
+  "type": 1,
+  "route": "crm-settings",
+  "order": null,
+  "children": [],
+  "component": "/management/system/crm-settings/index.tsx",
+  "created_at": {
+    "$date": "2026-07-05T19:42:36.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-07-05T19:42:36.000Z"
+  },
+  "status": 1,
+  "newFeature": null,
+  "hide": 0,
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a647352f6259883d11e67fb"
+  },
+  "name": "Accounts",
+  "parentId": 89,
+  "label": "sys.menu.finance.accounts",
+  "type": 1,
+  "route": "finance/accounts",
+  "component": "/finance/accounts/AccountsPage.tsx",
+  "deleted_at": null,
+  "children": [],
+  "created_at": {
+    "$date": "2026-07-25T08:26:58.551Z"
+  },
+  "updated_at": {
+    "$date": "2026-07-25T08:26:58.551Z"
+  },
+  "id": 118
+},
+{
+  "_id": {
+    "$oid": "6a6474faf6259883d11e681f"
+  },
+  "name": "Accounts",
+  "parentId": 89,
+  "label": "sys.menu.finance.accounts",
+  "icon": "",
+  "type": 1,
+  "route": "accounts",
+  "order": 6,
+  "children": [],
+  "component": "/finance/accounts/AccountsPage.tsx",
+  "newFeature": null,
+  "hide": false,
+  "status": 1,
+  "deleted_at": null,
+  "created_at": {
+    "$date": "2026-07-25T08:34:02.242Z"
+  },
+  "updated_at": {
+    "$date": "2026-07-25T08:34:02.242Z"
+  },
+  "id": 119
+},
+{
+  "_id": {
+    "$oid": "6a677cdbbe8e471b5e29c597"
+  },
+  "name": "Pre Approval + Grid Assessment",
+  "label": "sys.menu.all_in_one.index",
+  "icon": "solar:widget-5-bold-duotone",
+  "type": 0,
+  "route": "all-in-one",
+  "order": 5,
+  "deleted_at": null,
+  "children": [],
+  "created_at": {
+    "$date": "2026-07-27T15:44:27.760Z"
+  },
+  "updated_at": {
+    "$date": "2026-07-27T15:54:40.426Z"
+  },
+  "id": 120
+},
+{
+  "_id": {
+    "$oid": "6a677cdcbe8e471b5e29c598"
+  },
+  "name": "Jobs",
+  "parentId": 120,
+  "label": "sys.menu.all_in_one.jobs",
+  "type": 1,
+  "route": "list",
+  "component": "/all-in-one/AllInOneJobsListPage.tsx",
+  "deleted_at": null,
+  "children": [],
+  "created_at": {
+    "$date": "2026-07-27T15:44:28.175Z"
+  },
+  "updated_at": {
+    "$date": "2026-07-27T15:44:28.175Z"
+  },
+  "id": 121
+},
+{
+  "_id": {
+    "$oid": "6a677cdcbe8e471b5e29c599"
+  },
+  "name": "New Job",
+  "parentId": 120,
+  "label": "sys.menu.all_in_one.job_new",
+  "type": 1,
+  "route": "job/new",
+  "component": "/all-in-one/AllInOneJobDetailPage.tsx",
+  "hide": true,
+  "deleted_at": null,
+  "children": [],
+  "created_at": {
+    "$date": "2026-07-27T15:44:28.540Z"
+  },
+  "updated_at": {
+    "$date": "2026-07-27T15:44:28.540Z"
+  },
+  "id": 122
+},
+{
+  "_id": {
+    "$oid": "6a677cdcbe8e471b5e29c59a"
+  },
+  "name": "Job Detail",
+  "parentId": 120,
+  "label": "sys.menu.all_in_one.job_detail",
+  "type": 1,
+  "route": "job/:id",
+  "component": "/all-in-one/AllInOneJobDetailPage.tsx",
+  "hide": true,
+  "deleted_at": null,
+  "children": [],
+  "created_at": {
+    "$date": "2026-07-27T15:44:28.905Z"
+  },
+  "updated_at": {
+    "$date": "2026-07-27T15:44:28.905Z"
+  },
+  "id": 123
+},
+{
+  "_id": {
+    "$oid": "6a677f915824a981482b3069"
+  },
+  "name": "Pre Approval + Grid Assessment",
+  "parentId": null,
+  "label": "sys.menu.all_in_one.index",
+  "icon": "solar:widget-5-bold-duotone",
+  "type": 0,
+  "route": "all-in-one",
+  "order": 5,
+  "children": [],
+  "component": null,
+  "newFeature": false,
+  "hide": false,
+  "status": 1,
+  "deleted_at": null,
+  "created_at": {
+    "$date": "2026-07-27T15:56:01.839Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-28T04:15:49.697Z"
+  },
+  "id": 124
+},
+{
+  "_id": {
+    "$oid": "6a67804a5824a981482b3086"
+  },
+  "name": "Jobs",
+  "parentId": 124,
+  "label": "sys.menu.all_in_one.jobs",
+  "icon": "",
+  "type": 1,
+  "route": "list",
+  "order": null,
+  "children": [],
+  "component": "/all-in-one/AllInOneJobsListPage.tsx",
+  "newFeature": false,
+  "hide": false,
+  "status": 1,
+  "deleted_at": null,
+  "created_at": {
+    "$date": "2026-07-27T15:59:06.813Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-28T04:15:49.896Z"
+  },
+  "id": 125
+},
+{
+  "_id": {
+    "$oid": "6a6780b55824a981482b30a5"
+  },
+  "name": "New Job",
+  "parentId": 124,
+  "label": "sys.menu.all_in_one.job_new",
+  "icon": "",
+  "type": 1,
+  "route": "job/new",
+  "order": null,
+  "children": [],
+  "component": "/all-in-one/AllInOneJobDetailPage.tsx",
+  "newFeature": false,
+  "hide": true,
+  "status": 1,
+  "deleted_at": null,
+  "created_at": {
+    "$date": "2026-07-27T16:00:53.375Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-28T04:15:50.108Z"
+  },
+  "id": 126
+},
+{
+  "_id": {
+    "$oid": "6a67817d5824a981482b30d9"
+  },
+  "name": "Job Detail",
+  "parentId": 124,
+  "label": "sys.menu.all_in_one.job_detail",
+  "icon": "",
+  "type": 1,
+  "route": "job/:id",
+  "order": null,
+  "children": [],
+  "component": "/all-in-one/AllInOneJobDetailPage.tsx",
+  "newFeature": false,
+  "hide": true,
+  "status": 1,
+  "deleted_at": null,
+  "created_at": {
+    "$date": "2026-07-27T16:04:13.558Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-28T04:15:50.350Z"
+  },
+  "id": 127
+},
+{
+  "_id": {
+    "$oid": "6a73527cd34da52c3cb11e1b"
+  },
+  "name": "Sales Pipeline",
+  "parentId": 1,
+  "label": "Sales Pipeline",
+  "icon": "",
+  "type": 1,
+  "route": "sales-pipeline",
+  "order": null,
+  "children": [],
+  "component": "/dashboard/sales-pipeline/index.tsx",
+  "newFeature": null,
+  "hide": false,
+  "status": 1,
+  "deleted_at": null,
+  "created_at": {
+    "$date": "2026-08-05T15:10:52.662Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-05T15:10:52.662Z"
+  },
+  "id": 3
+},
+{
+  "_id": {
+    "$oid": "6a79f05783d8124eb4349cae"
+  },
+  "id": 128,
+  "name": "HR & Employees",
+  "parentId": null,
+  "label": "sys.menu.hr.index",
+  "icon": "mdi:account-group-outline",
+  "type": 0,
+  "route": "hr",
+  "order": 4,
+  "children": [],
+  "component": null,
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a79f05783d8124eb4349caf"
+  },
+  "id": 129,
+  "name": "Employees",
+  "parentId": 128,
+  "label": "sys.menu.hr.employees",
+  "icon": "",
+  "type": 1,
+  "route": "hr/employees",
+  "order": null,
+  "children": [],
+  "component": "/hr/employees/EmployeesPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a79f05783d8124eb4349cb0"
+  },
+  "id": 130,
+  "name": "Attendance",
+  "parentId": 128,
+  "label": "sys.menu.hr.attendance",
+  "icon": "",
+  "type": 1,
+  "route": "hr/attendance",
+  "order": null,
+  "children": [],
+  "component": "/hr/attendance/AttendancePage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a79f05883d8124eb4349cb1"
+  },
+  "id": 131,
+  "name": "Leave Management",
+  "parentId": 128,
+  "label": "sys.menu.hr.leave",
+  "icon": "",
+  "type": 1,
+  "route": "hr/leave",
+  "order": null,
+  "children": [],
+  "component": "/hr/leave/LeavePage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a79f05883d8124eb4349cb2"
+  },
+  "id": 132,
+  "name": "Attendance Corrections",
+  "parentId": 128,
+  "label": "sys.menu.hr.corrections",
+  "icon": "",
+  "type": 1,
+  "route": "hr/corrections",
+  "order": null,
+  "children": [],
+  "component": "/hr/corrections/CorrectionsPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a79f05883d8124eb4349cb3"
+  },
+  "id": 133,
+  "name": "Attendance Reports",
+  "parentId": 128,
+  "label": "sys.menu.hr.reports",
+  "icon": "",
+  "type": 1,
+  "route": "hr/reports",
+  "order": null,
+  "children": [],
+  "component": "/hr/reports/ReportsPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a79f05983d8124eb4349cb4"
+  },
+  "id": 134,
+  "name": "Attendance Analytics",
+  "parentId": 128,
+  "label": "sys.menu.hr.analytics",
+  "icon": "",
+  "type": 1,
+  "route": "hr/analytics",
+  "order": null,
+  "children": [],
+  "component": "/hr/analytics/AnalyticsPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a79f05983d8124eb4349cb5"
+  },
+  "id": 135,
+  "name": "Payroll",
+  "parentId": 128,
+  "label": "sys.menu.hr.payroll",
+  "icon": "",
+  "type": 1,
+  "route": "hr/payroll",
+  "order": null,
+  "children": [],
+  "component": "/hr/payroll/PayrollPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a79f05983d8124eb4349cb6"
+  },
+  "id": 136,
+  "name": "Salary Slips",
+  "parentId": 128,
+  "label": "sys.menu.hr.salary_slips",
+  "icon": "",
+  "type": 1,
+  "route": "hr/salary-slips",
+  "order": null,
+  "children": [],
+  "component": "/hr/salary-slips/SalarySlipsPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a79f05a83d8124eb4349cb7"
+  },
+  "id": 137,
+  "name": "Holidays",
+  "parentId": 128,
+  "label": "sys.menu.hr.holidays",
+  "icon": "",
+  "type": 1,
+  "route": "hr/holidays",
+  "order": null,
+  "children": [],
+  "component": "/hr/holidays/HolidaysPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a79f05a83d8124eb4349cb8"
+  },
+  "id": 138,
+  "name": "Shift Management",
+  "parentId": 128,
+  "label": "sys.menu.hr.shifts",
+  "icon": "",
+  "type": 1,
+  "route": "hr/shifts",
+  "order": null,
+  "children": [],
+  "component": "/hr/shifts/ShiftsPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a79f05b83d8124eb4349cb9"
+  },
+  "id": 139,
+  "name": "Attendance Settings",
+  "parentId": 128,
+  "label": "sys.menu.hr.settings",
+  "icon": "",
+  "type": 1,
+  "route": "hr/settings",
+  "order": null,
+  "children": [],
+  "component": "/hr/settings/SettingsPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a79f05b83d8124eb4349cba"
+  },
+  "id": 140,
+  "name": "Audit Logs",
+  "parentId": 128,
+  "label": "sys.menu.hr.audit",
+  "icon": "",
+  "type": 1,
+  "route": "hr/audit",
+  "order": null,
+  "children": [],
+  "component": "/hr/audit/AuditLogsPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-10T15:37:57.510Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4a95febffb6907f860df"
+  },
+  "id": 141,
+  "name": "Training & Learning Hub",
+  "parentId": null,
+  "label": "sys.menu.training.index",
+  "icon": "mdi:school-outline",
+  "type": 0,
+  "route": "training",
+  "order": 5,
+  "children": [],
+  "component": null,
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4a95febffb6907f860e0"
+  },
+  "id": 142,
+  "name": "Training Dashboard",
+  "parentId": 141,
+  "label": "sys.menu.training.dashboard",
+  "icon": "",
+  "type": 1,
+  "route": "training/dashboard",
+  "order": null,
+  "children": [],
+  "component": "/training/TrainingDashboardPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4a96febffb6907f860e1"
+  },
+  "id": 143,
+  "name": "My Training",
+  "parentId": 141,
+  "label": "sys.menu.training.my",
+  "icon": "",
+  "type": 1,
+  "route": "training/my",
+  "order": null,
+  "children": [],
+  "component": "/training/MyTrainingPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4a96febffb6907f860e2"
+  },
+  "id": 144,
+  "name": "Library",
+  "parentId": 141,
+  "label": "sys.menu.training.library",
+  "icon": "",
+  "type": 1,
+  "route": "training/library",
+  "order": null,
+  "children": [],
+  "component": "/training/TrainingLibraryPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4a96febffb6907f860e3"
+  },
+  "id": 145,
+  "name": "Mandatory Training",
+  "parentId": 141,
+  "label": "sys.menu.training.mandatory",
+  "icon": "",
+  "type": 1,
+  "route": "training/mandatory",
+  "order": null,
+  "children": [],
+  "component": "/training/TrainingMandatoryPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4a97febffb6907f860e4"
+  },
+  "id": 146,
+  "name": "Role-Based Training",
+  "parentId": 141,
+  "label": "sys.menu.training.role_based",
+  "icon": "",
+  "type": 1,
+  "route": "training/role-based",
+  "order": null,
+  "children": [],
+  "component": "/training/TrainingLibraryPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4a97febffb6907f860e5"
+  },
+  "id": 147,
+  "name": "Progress",
+  "parentId": 141,
+  "label": "sys.menu.training.progress",
+  "icon": "",
+  "type": 1,
+  "route": "training/progress",
+  "order": null,
+  "children": [],
+  "component": "/training/TrainingProgressPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4a97febffb6907f860e6"
+  },
+  "id": 148,
+  "name": "Sales Training",
+  "parentId": 141,
+  "label": "sys.menu.training.sales",
+  "icon": "",
+  "type": 1,
+  "route": "training/sales",
+  "order": null,
+  "children": [],
+  "component": "/training/TrainingLibraryPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4a98febffb6907f860e7"
+  },
+  "id": 149,
+  "name": "Operations Training",
+  "parentId": 141,
+  "label": "sys.menu.training.operations",
+  "icon": "",
+  "type": 1,
+  "route": "training/operations",
+  "order": null,
+  "children": [],
+  "component": "/training/TrainingLibraryPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4a98febffb6907f860e8"
+  },
+  "id": 150,
+  "name": "Finance Training",
+  "parentId": 141,
+  "label": "sys.menu.training.finance",
+  "icon": "",
+  "type": 1,
+  "route": "training/finance",
+  "order": null,
+  "children": [],
+  "component": "/training/TrainingLibraryPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4a98febffb6907f860e9"
+  },
+  "id": 151,
+  "name": "CRM Training",
+  "parentId": 141,
+  "label": "sys.menu.training.crm",
+  "icon": "",
+  "type": 1,
+  "route": "training/crm",
+  "order": null,
+  "children": [],
+  "component": "/training/TrainingLibraryPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4a99febffb6907f860ea"
+  },
+  "id": 152,
+  "name": "Videos",
+  "parentId": 141,
+  "label": "sys.menu.training.videos",
+  "icon": "",
+  "type": 1,
+  "route": "training/videos",
+  "order": null,
+  "children": [],
+  "component": "/training/TrainingLibraryPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4a99febffb6907f860eb"
+  },
+  "id": 153,
+  "name": "PDFs",
+  "parentId": 141,
+  "label": "sys.menu.training.pdfs",
+  "icon": "",
+  "type": 1,
+  "route": "training/pdfs",
+  "order": null,
+  "children": [],
+  "component": "/training/TrainingLibraryPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4a99febffb6907f860ec"
+  },
+  "id": 154,
+  "name": "Images",
+  "parentId": 141,
+  "label": "sys.menu.training.images",
+  "icon": "",
+  "type": 1,
+  "route": "training/images",
+  "order": null,
+  "children": [],
+  "component": "/training/TrainingLibraryPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4a9afebffb6907f860ed"
+  },
+  "id": 155,
+  "name": "Training Settings",
+  "parentId": 141,
+  "label": "sys.menu.training.settings",
+  "icon": "",
+  "type": 1,
+  "route": "training/settings",
+  "order": null,
+  "children": [],
+  "component": "/training/TrainingSettingsPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:15:13.059Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4d4ac67616107433758f"
+  },
+  "id": 156,
+  "name": "Confidential Feedback",
+  "parentId": null,
+  "label": "sys.menu.feedback.index",
+  "icon": "mdi:shield-lock-outline",
+  "type": 0,
+  "route": "feedback",
+  "order": 6,
+  "children": [],
+  "component": null,
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4d4ac676161074337590"
+  },
+  "id": 157,
+  "name": "Feedback Home",
+  "parentId": 156,
+  "label": "sys.menu.feedback.home",
+  "icon": "",
+  "type": 1,
+  "route": "feedback/home",
+  "order": null,
+  "children": [],
+  "component": "/feedback/FeedbackLandingPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4d4ac676161074337591"
+  },
+  "id": 158,
+  "name": "Submit Complaint",
+  "parentId": 156,
+  "label": "sys.menu.feedback.complaint",
+  "icon": "",
+  "type": 1,
+  "route": "feedback/complaint",
+  "order": null,
+  "children": [],
+  "component": "/feedback/ComplaintFormPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4d4ac676161074337592"
+  },
+  "id": 159,
+  "name": "Submit Suggestion",
+  "parentId": 156,
+  "label": "sys.menu.feedback.suggestion",
+  "icon": "",
+  "type": 1,
+  "route": "feedback/suggestion",
+  "order": null,
+  "children": [],
+  "component": "/feedback/SuggestionFormPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4d4bc676161074337593"
+  },
+  "id": 160,
+  "name": "My Submissions",
+  "parentId": 156,
+  "label": "sys.menu.feedback.my",
+  "icon": "",
+  "type": 1,
+  "route": "feedback/my",
+  "order": null,
+  "children": [],
+  "component": "/feedback/MySubmissionsPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4d4bc676161074337594"
+  },
+  "id": 161,
+  "name": "Admin Dashboard",
+  "parentId": 156,
+  "label": "sys.menu.feedback.admin_dashboard",
+  "icon": "",
+  "type": 1,
+  "route": "feedback/admin",
+  "order": null,
+  "children": [],
+  "component": "/feedback/AdminDashboardPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4d4cc676161074337595"
+  },
+  "id": 162,
+  "name": "All Cases",
+  "parentId": 156,
+  "label": "sys.menu.feedback.admin_cases",
+  "icon": "",
+  "type": 1,
+  "route": "feedback/admin/cases",
+  "order": null,
+  "children": [],
+  "component": "/feedback/AdminCasesPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4d4cc676161074337596"
+  },
+  "id": 163,
+  "name": "Investigation",
+  "parentId": 156,
+  "label": "sys.menu.feedback.investigation",
+  "icon": "",
+  "type": 1,
+  "route": "feedback/admin/investigation",
+  "order": null,
+  "children": [],
+  "component": "/feedback/AdminCasesPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4d4cc676161074337597"
+  },
+  "id": 164,
+  "name": "Action Required",
+  "parentId": 156,
+  "label": "sys.menu.feedback.action_required",
+  "icon": "",
+  "type": 1,
+  "route": "feedback/admin/action-required",
+  "order": null,
+  "children": [],
+  "component": "/feedback/AdminCasesPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4d4dc676161074337598"
+  },
+  "id": 165,
+  "name": "Resolved Cases",
+  "parentId": 156,
+  "label": "sys.menu.feedback.resolved",
+  "icon": "",
+  "type": 1,
+  "route": "feedback/admin/resolved",
+  "order": null,
+  "children": [],
+  "component": "/feedback/AdminCasesPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4d4dc676161074337599"
+  },
+  "id": 166,
+  "name": "Anonymous Feedback",
+  "parentId": 156,
+  "label": "sys.menu.feedback.anonymous",
+  "icon": "",
+  "type": 1,
+  "route": "feedback/admin/anonymous",
+  "order": null,
+  "children": [],
+  "component": "/feedback/AdminCasesPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4d4dc67616107433759a"
+  },
+  "id": 167,
+  "name": "Case Detail",
+  "parentId": 156,
+  "label": "sys.menu.feedback.case_detail",
+  "icon": "",
+  "type": 1,
+  "route": "feedback/cases/:id",
+  "order": null,
+  "children": [],
+  "component": "/feedback/CaseDetailPage.tsx",
+  "hide": true,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4d4ec67616107433759b"
+  },
+  "id": 168,
+  "name": "Feedback Audit Logs",
+  "parentId": 156,
+  "label": "sys.menu.feedback.audit",
+  "icon": "",
+  "type": 1,
+  "route": "feedback/admin/audit",
+  "order": null,
+  "children": [],
+  "component": "/feedback/FeedbackAuditPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a7b4d4ec67616107433759c"
+  },
+  "id": 169,
+  "name": "Feedback Settings",
+  "parentId": 156,
+  "label": "sys.menu.feedback.settings",
+  "icon": "",
+  "type": 1,
+  "route": "feedback/admin/settings",
+  "order": null,
+  "children": [],
+  "component": "/feedback/FeedbackSettingsPage.tsx",
+  "hide": false,
+  "status": 1,
+  "created_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-11T16:26:44.916Z"
+  },
+  "deleted_at": null
+},
+{
+  "_id": {
+    "$oid": "6a8083e9b47735061d6f03cf"
+  },
+  "name": "Offer letter",
+  "parentId": 70,
+  "label": "sys.menu.document.offer_letter",
+  "type": 1,
+  "route": "offer-letter",
+  "component": "/documents/offerLetter/OfferLetter.tsx",
+  "deleted_at": null,
+  "children": [],
+  "created_at": {
+    "$date": "2026-08-15T15:21:13.993Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-15T15:21:13.993Z"
+  },
+  "id": 170
+},
+{
+  "_id": {
+    "$oid": "6a8087a0adb6d153a016ec46"
+  },
+  "name": "Appointment letter",
+  "parentId": 70,
+  "label": "sys.menu.document.appointment_letter",
+  "type": 1,
+  "route": "appointment-letter",
+  "component": "/documents/appointmentLetter/AppointmentLetter.tsx",
+  "deleted_at": null,
+  "children": [],
+  "created_at": {
+    "$date": "2026-08-15T15:37:04.879Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-15T15:37:04.879Z"
+  },
+  "id": 171
+},
+{
+  "_id": {
+    "$oid": "6a8087b1adb6d153a016ec5f"
+  },
+  "name": "Price agreement",
+  "parentId": 70,
+  "label": "sys.menu.document.price_agreement",
+  "type": 1,
+  "route": "price-agreement",
+  "component": "/documents/priceAgreement/PriceAgreementLetter.tsx",
+  "deleted_at": null,
+  "children": [],
+  "created_at": {
+    "$date": "2026-08-15T15:37:21.115Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-15T15:37:21.115Z"
+  },
+  "id": 172
+},
+{
+  "_id": {
+    "$oid": "6a910b2cf57f320f623bcfd9"
+  },
+  "name": "Analysis",
+  "parentId": 38,
+  "label": "sys.menu.analysis",
+  "icon": "",
+  "type": 1,
+  "route": "analysis",
+  "order": null,
+  "children": [],
+  "component": null,
+  "newFeature": false,
+  "hide": false,
+  "status": 1,
+  "deleted_at": null,
+  "created_at": {
+    "$date": "2026-08-28T04:14:36.529Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-28T04:14:36.529Z"
+  },
+  "id": 173
+},
+{
+  "_id": {
+    "$oid": "6a910b2df57f320f623bcfda"
+  },
+  "name": "Installer Jobs",
+  "parentId": 42,
+  "label": "Installer Jobs",
+  "icon": "",
+  "type": 1,
+  "route": "../installer-jobs",
+  "order": null,
+  "children": [],
+  "component": "/installer-jobs/dashboard/index.tsx",
+  "newFeature": false,
+  "hide": false,
+  "status": 1,
+  "deleted_at": {
+    "$date": "2026-08-28T04:26:41.417Z"
+  },
+  "created_at": {
+    "$date": "2026-08-28T04:14:37.336Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-28T04:26:41.417Z"
+  },
+  "id": 174
+},
+{
+  "_id": {
+    "$oid": "6a910b3bf57f320f623bcff2"
+  },
+  "name": "Installer Job Workspace",
+  "parentId": 42,
+  "label": "Installer Job",
+  "icon": "",
+  "type": 1,
+  "route": "../installer-jobs/job/:id",
+  "order": null,
+  "children": [],
+  "component": "/installer-jobs/job/index.tsx",
+  "newFeature": false,
+  "hide": true,
+  "status": 1,
+  "deleted_at": {
+    "$date": "2026-08-28T04:26:41.417Z"
+  },
+  "created_at": {
+    "$date": "2026-08-28T04:14:51.606Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-28T04:26:41.417Z"
+  },
+  "id": 175
+},
+{
+  "_id": {
+    "$oid": "6a910b4af57f320f623bd00a"
+  },
+  "name": "Installer Calendar",
+  "parentId": 42,
+  "label": "Installer Calendar",
+  "icon": "",
+  "type": 1,
+  "route": "../installer-jobs/calendar",
+  "order": null,
+  "children": [],
+  "component": "/installer-jobs/calendar/index.tsx",
+  "newFeature": false,
+  "hide": true,
+  "status": 1,
+  "deleted_at": {
+    "$date": "2026-08-28T04:26:41.417Z"
+  },
+  "created_at": {
+    "$date": "2026-08-28T04:15:06.057Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-28T04:26:41.417Z"
+  },
+  "id": 176
+},
+{
+  "_id": {
+    "$oid": "6a910b58f57f320f623bd022"
+  },
+  "name": "Installer Jobs",
+  "parentId": 46,
+  "label": "Installer Jobs",
+  "icon": "",
+  "type": 1,
+  "route": "../installer-jobs",
+  "order": null,
+  "children": [],
+  "component": "/installer-jobs/dashboard/index.tsx",
+  "newFeature": false,
+  "hide": false,
+  "status": 1,
+  "deleted_at": {
+    "$date": "2026-08-28T04:26:41.417Z"
+  },
+  "created_at": {
+    "$date": "2026-08-28T04:15:20.364Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-28T04:26:41.417Z"
+  },
+  "id": 177
+},
+{
+  "_id": {
+    "$oid": "6a910b66f57f320f623bd03a"
+  },
+  "name": "Installer Job Detail",
+  "parentId": 46,
+  "label": "Installer Job",
+  "icon": "",
+  "type": 1,
+  "route": "../installer-jobs/job/:id",
+  "order": null,
+  "children": [],
+  "component": "/installer-jobs/job/index.tsx",
+  "newFeature": false,
+  "hide": true,
+  "status": 1,
+  "deleted_at": {
+    "$date": "2026-08-28T04:26:41.417Z"
+  },
+  "created_at": {
+    "$date": "2026-08-28T04:15:34.907Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-28T04:26:41.417Z"
+  },
+  "id": 178
+},
+{
+  "_id": {
+    "$oid": "6a910b75f57f320f623bd052"
+  },
+  "name": "Installer Jobs",
+  "parentId": null,
+  "label": "sys.menu.installer_jobs",
+  "icon": "solar:case-round-bold-duotone",
+  "type": 1,
+  "route": "installer-jobs",
+  "order": 4,
+  "children": [],
+  "component": "/installer-jobs/dashboard/index.tsx",
+  "newFeature": false,
+  "hide": false,
+  "status": 1,
+  "deleted_at": null,
+  "created_at": {
+    "$date": "2026-08-28T04:15:49.314Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-28T04:44:57.877Z"
+  },
+  "id": 179
+},
+{
+  "_id": {
+    "$oid": "6a910e02d19e43f87b997b1c"
+  },
+  "name": "Installer Jobs",
+  "parentId": null,
+  "label": "sys.menu.installer_jobs",
+  "icon": "solar:case-round-bold-duotone",
+  "type": 0,
+  "route": "installer-jobs",
+  "order": 4,
+  "children": [],
+  "component": null,
+  "newFeature": false,
+  "hide": false,
+  "status": 1,
+  "deleted_at": null,
+  "created_at": {
+    "$date": "2026-08-28T04:26:42.064Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-28T04:26:42.064Z"
+  },
+  "id": 180
+},
+{
+  "_id": {
+    "$oid": "6a910e10d19e43f87b997b34"
+  },
+  "name": "Job Dashboard",
+  "parentId": 180,
+  "label": "sys.menu.installer_jobs.dashboard",
+  "icon": "",
+  "type": 1,
+  "route": "list",
+  "order": null,
+  "children": [],
+  "component": "/installer-jobs/dashboard/index.tsx",
+  "newFeature": false,
+  "hide": false,
+  "status": 1,
+  "deleted_at": {
+    "$date": "2026-08-28T04:44:57.346Z"
+  },
+  "created_at": {
+    "$date": "2026-08-28T04:26:56.275Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-28T04:44:57.346Z"
+  },
+  "id": 181
+},
+{
+  "_id": {
+    "$oid": "6a911143fc8c06c173354553"
+  },
+  "name": "Installer Job Workspace",
+  "parentId": null,
+  "label": "sys.menu.installer_jobs.workspace",
+  "icon": "",
+  "type": 1,
+  "route": "installer-jobs/job/:id",
+  "order": null,
+  "children": [],
+  "component": "/installer-jobs/job/index.tsx",
+  "newFeature": false,
+  "hide": true,
+  "status": 1,
+  "deleted_at": null,
+  "created_at": {
+    "$date": "2026-08-28T04:40:35.248Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-28T04:45:10.206Z"
+  },
+  "id": 182
+},
+{
+  "_id": {
+    "$oid": "6a911151fc8c06c17335456b"
+  },
+  "name": "Installer Calendar",
+  "parentId": null,
+  "label": "sys.menu.installer_jobs.calendar",
+  "icon": "",
+  "type": 1,
+  "route": "installer-jobs/calendar",
+  "order": null,
+  "children": [],
+  "component": "/installer-jobs/calendar/index.tsx",
+  "newFeature": false,
+  "hide": true,
+  "status": 1,
+  "deleted_at": null,
+  "created_at": {
+    "$date": "2026-08-28T04:40:49.689Z"
+  },
+  "updated_at": {
+    "$date": "2026-08-28T04:45:14.923Z"
+  },
+  "id": 183
+}]

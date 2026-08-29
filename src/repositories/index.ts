@@ -63,6 +63,8 @@ export { SalaryRepository, salaryRepository } from "./salary.repository";
 export { FinanceSnapshotRepository, financeSnapshotRepository } from "./financeSnapshot.repository";
 export { CompanyBudgetYearRepository, companyBudgetYearRepository } from "./companyBudgetYear.repository";
 export { CompanyBudgetMonthRepository, companyBudgetMonthRepository } from "./companyBudgetMonth.repository";
+export { InstallerJobRepository, installerJobRepository } from "./installerJob.repository";
+export { InstallerAvailabilityRepository, installerAvailabilityRepository } from "./installerAvailability.repository";
 export { InstallerAgreementRepository, installerAgreementRepository } from "./installerAgreement.repository";
 export { InstallerDocumentRepository, installerDocumentRepository } from "./installerDocument.repository";
 export { CustomContactRepository, customContactRepository } from "./customContact.repository";

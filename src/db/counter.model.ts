@@ -17,3 +17,16 @@ export async function getNextSequence(name: string): Promise<number> {
 
   return (doc as { seq?: number } | null)?.seq ?? 1;
 }
+
+/** Align counter with max numeric `id` in a collection (fixes E11000 after manual DB edits). */
+export async function syncSequenceFromMax(
+  counterName: string,
+  maxId: number,
+): Promise<void> {
+  if (!Number.isFinite(maxId) || maxId < 0) return;
+  await Counter.collection.updateOne(
+    { name: counterName },
+    { $max: { seq: maxId } },
+    { upsert: true },
+  );
+}

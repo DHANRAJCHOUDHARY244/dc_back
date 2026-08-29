@@ -83,6 +83,27 @@ export const DEFAULT_LEAVE_TYPES = [
 export const HR_ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "HR_EXECUTIVE", "CEO"];
 export const HR_MANAGER_ROLES = [...HR_ADMIN_ROLES, "MANAGER", "OPERATIONS_MANAGER"];
 
+/** Final HR approval (leave, corrections) — HR Executive + Super Admin only. */
+export const HR_LEAVE_APPROVER_ROLES = ["SUPER_ADMIN", "HR_EXECUTIVE"];
+
+/** Team-lead first approval (managers only — not CEO/Admin). */
+export const HR_TEAM_LEAD_ROLES = ["MANAGER", "OPERATIONS_MANAGER"];
+
+/** Onboarding & employee setup — HR Executive + Super Admin. */
+export const HR_ONBOARDING_ROLES = ["SUPER_ADMIN", "HR_EXECUTIVE"];
+
+export const ONBOARDING_STATUSES = ["NOT_STARTED", "IN_PROGRESS", "COMPLETED"] as const;
+
+export const DEFAULT_ONBOARDING_TASKS = [
+	{ key: "profile", label: "Complete employee profile" },
+	{ key: "documents", label: "Offer / appointment letter" },
+	{ key: "shift", label: "Assign shift & weekly off" },
+	{ key: "manager", label: "Assign manager & team leader" },
+	{ key: "id_card", label: "Generate employee ID card" },
+	{ key: "training", label: "Assign mandatory training" },
+	{ key: "probation", label: "Probation review" },
+] as const;
+
 export function dayKey(d: Date | string): string {
 	const x = new Date(d);
 	const y = x.getFullYear();

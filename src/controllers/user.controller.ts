@@ -18,6 +18,7 @@ import { fileUpload } from 'express-fileupload';
 import { Roles } from "src/data/dataInserter";
 import { getRelativeFilePath, uploadFiles } from "@utils/fileUpload.helper";
 import { UploadCategory } from "@constants/common.enum";
+import { isProtectedSuperAdminEmail } from "@config/protectedUsers.config";
 
 const invoicePopulate = [
   { path: "sender", select: "id name email profile_image" },
@@ -31,6 +32,9 @@ class UserController {
     async deleteUser(req: AuthenticatedRequest, res: Response) {
         try {
             const { user } = req;
+            if (isProtectedSuperAdminEmail(user?.email)) {
+              return ReE(res, BAD_REQUEST_CODE, "This system owner account cannot be removed");
+            }
             if (Roles.SUPER_ADMIN === user.role) return ReE(res, BAD_REQUEST_CODE, "Super Admin role cannot be deleted");
 
             let roleDoc: any = null;
@@ -81,6 +85,9 @@ class UserController {
         about,
         is_active,
       };
+      if (isProtectedSuperAdminEmail(user.email)) {
+        $set.is_active = true;
+      }
       if (active_crm_company_unit_id !== undefined) {
         $set.active_crm_company_unit_id = active_crm_company_unit_id;
       }
