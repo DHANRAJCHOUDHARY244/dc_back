@@ -32,7 +32,7 @@ export default[
                 "name": "Sales Pipeline",
                 "parentId": 1,
                 "label": "Sales Pipeline",
-                "type": 1,
+                        "type": 1,
                 "route": "sales-pipeline",
                 "component": "/dashboard/sales-pipeline/index.tsx",
             }
@@ -43,7 +43,7 @@ export default[
         "name": "Chat",
         "label": "sys.menu.chat",
         "icon": "line-md:chat-round-dots-filled",
-        "type": 1,
+                        "type": 1,
         "route": "chat",
         "order": 2,
         "component": "/chats/chat.tsx",
@@ -93,7 +93,7 @@ export default[
                 "label": "sys.menu.quotient.add_new",
                 "type": 1,
                 "route": "add-new",
-                "component": "/quote/Quotient.tsx",
+                "component": "/quote/Quotient.tsx", 
             },
             {
                 "id": 48,
@@ -121,7 +121,7 @@ export default[
                 "type": 1,
                 "route": "quote/:id",
                 "component": "/quote/view/Quote.tsx",
-                "hide": true,
+                "hide": true,  
             },
             {
                 "id": 61,
@@ -131,7 +131,7 @@ export default[
                 "type": 1,
                 "route": "add-new-redirect-quote/:cf_id",
                 "component": "/quote/add-new-redirect/InvoiceForm.tsx",
-                "hide": true,
+                "hide": true,     
             },
             {
                 "id": 69,
@@ -150,7 +150,7 @@ export default[
                 "label": "sys.menu.quotient.task_status",
                 "type": 1,
                 "route": "quote/kanban",
-                "component": "/quote/kanban/index.tsx",
+                "component": "/quote/kanban/index.tsx",  
             }
         ]
     },
@@ -199,7 +199,7 @@ export default[
                 "label": "sys.menu.invoice.add_new",
                 "type": 1,
                 "route": "custom-invoice",
-                "component": "/invoice/custom-invoice/InvoiceForm.tsx",
+                "component": "/invoice/custom-invoice/InvoiceForm.tsx", 
             },
             {
                 "id": 75,
@@ -209,7 +209,7 @@ export default[
                 "type": 1,
                 "route": "custom-invoice-update/:id/:bypass_token",
                 "component": "/invoice/custom-invoice-update/InvoiceForm.tsx",
-                "hide": true,
+                "hide": true, 
             }
         ]
     },
@@ -824,10 +824,10 @@ export default[
                         "children": [
                             {
                                 "id": 96,
-                                "name": "Analysis",
+                "name": "Analysis",
                                 "parentId": 95,
                                 "label": "sys.menu.analysis",
-                                "type": 1,
+                "type": 1,
                                 "route": "analysis",
                                 "component": "/management/system/user/User.tsx",
                             },
@@ -836,7 +836,7 @@ export default[
                                 "name": "Users List",
                                 "parentId": 95,
                                 "label": "sys.menu.system.user",
-                                "type": 1,
+                "type": 1,
                                 "route": "list",
                                 "component": "/management/system/user/user/index.tsx",
                             },
@@ -929,7 +929,7 @@ export default[
                 "label": "sys.menu.document.installer_contract",
                 "type": 1,
                 "route": "installer-contract-list",
-                "component": "/documents/contract/list/index.tsx",
+                "component": "/documents/contract/list/index.tsx", 
             },
             {
                 "id": 100,
@@ -948,7 +948,7 @@ export default[
                 "type": 1,
                 "route": "installer-contract-list/:id",
                 "component": "/documents/contract/add/InstallerAgreementUpdatePage.tsx",
-                "hide": true,
+                "hide": true,  
             },
             {
                 "id": 108,
@@ -983,7 +983,7 @@ export default[
                 "name": "Offer letter",
                 "parentId": 70,
                 "label": "sys.menu.document.offer_letter",
-                "type": 1,
+        "type": 1,
                 "route": "offer-letter",
                 "component": "/documents/offerLetter/OfferLetter.tsx",
             },
@@ -1043,7 +1043,7 @@ export default[
                 "label": "sys.menu.activity_tracker.user_activity",
                 "type": 1,
                 "route": "activity-tracker/user-activity",
-                "component": "/activity-tracker/user-activity/ActivityTrackerPage.tsx",
+                "component": "/activity-tracker/user-activity/ActivityTrackerPage.tsx", 
             },
             {
                 "id": 88,
