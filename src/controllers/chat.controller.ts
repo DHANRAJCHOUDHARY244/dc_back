@@ -252,6 +252,7 @@ class ChatController {
             name,
             avatar,
             type: chat.type,
+            otherUserId: !isGroup ? memberIds.find((id: number) => id !== userId) : undefined,
             content: preview,
             timestamp: lastMessage ? formatChatTime(lastMessage.created_at) : "",
             lastMessage: lastMessage
@@ -630,6 +631,7 @@ class ChatController {
       if (error) return ReE(res, SERVER_ERROR_CODE, error);
       const meta = getUserMemberMeta(chat, req.user.id);
       const updated = await updateUserMemberMeta(chatId, req.user.id, { pinned: !meta.pinned });
+      emitChatEvent(chatId, "chat_updated", { chatId, userId: req.user.id, pinned: !meta.pinned });
       return ReS(res, SUCCESS_CODE, meta.pinned ? "Unpinned" : "Pinned", { pinned: !meta.pinned, chat: updated });
     } catch (error) {
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);

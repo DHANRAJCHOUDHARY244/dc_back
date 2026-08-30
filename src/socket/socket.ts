@@ -42,12 +42,10 @@ export async function setupSocket(httpServer: any) {
       void sendPresenceSync(socket);
     });
 
-    socket.emit(SOCKET_EVENTS.USER_NOTIFICATION + `${user?.id}`, {
+    socket.emit(SOCKET_EVENTS.HANDSHAKE_SUCCESS, {
       time: new Date().toISOString(),
-      ...user,
-      message: `Socket Connected id: ${socket.id}`,
-      type: SOCKET_EVENTS.CONNECTION,
-      task_type: SOCKET_EVENTS.HANDSHAKE_SUCCESS,
+      userId: user?.id,
+      socketId: socket.id,
     });
 
     socket.on(SOCKET_EVENTS.QUOTE_CHAT_JOIN, (quoteId: number | string) => {

@@ -520,6 +520,7 @@ class MessageController {
       for (const targetChatId of targetChatIds) {
         const memberCheck = await assertChatMember(targetChatId, req.user.id);
         if (memberCheck.error) continue;
+        const targetChat = memberCheck.chat!;
 
         const created: any = await messageRepository.create({
           chatId: targetChatId,
@@ -539,6 +540,51 @@ class MessageController {
         });
 
         const payload = formatMessagePayload(created, sender);
+        const notifyText = previewText(source.content || "", source.attachments || []);
+
+        await chatRepository.updateById(targetChatId, { $set: { updated_at: new Date() } }).catch(() => undefined);
+
+        const members: number[] = targetChat.members || [];
+        members.forEach((m: number) => {
+          if (m === req.user.id) return;
+          SocketService.emitToUser(m, `message_created_${targetChatId}_${m}`, {
+            event: "created",
+            data: payload,
+          });
+
+          const muted = isUserMuted(targetChat, m);
+          if (muted) return;
+
+          const route = chatNotificationRoute(targetChatId);
+          const notifyMessage = `${req.user.name} forwarded a message: ${notifyText || "New message"}`;
+
+          void notificationController
+            .createNotification({
+              userId: m,
+              message: notifyMessage,
+              route,
+              meta: {
+                type: USER_NOTIFICATION_EVENT_TYPE.CHAT,
+                senderName: req.user.name,
+                chatId: targetChatId,
+                messageId: payload.id,
+                link: route,
+              },
+            })
+            .catch(() => undefined);
+
+          SocketService.emitToUser(m, SOCKET_EVENTS.USER_NOTIFICATION + `${m}`, {
+            type: USER_NOTIFICATION_EVENT_TYPE.CHAT,
+            name: req.user.name,
+            profile_image: req.user.profile_image,
+            task_type: EVENT_TASK_TYPE.CREATED,
+            message: notifyMessage,
+            chatId: targetChatId,
+            messageId: payload.id,
+            route,
+          });
+        });
+
         emitChatEvent(targetChatId, "created_message", { chatId: targetChatId, message: payload });
         forwarded.push(payload);
       }

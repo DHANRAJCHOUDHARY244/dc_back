@@ -58,7 +58,7 @@ export async function buildAssistantContextBlock(options: {
 
   if (access.mcp) {
     parts.push(
-      "INTERNAL: Admin/Super Admin — LIVE CRM DATA above is real. Quote exact counts. Never say you cannot access live numbers. Never share passwords, OTPs, bank details, or tokens.",
+      "INTERNAL: Admin/Super Admin — LIVE CRM DATA above is real database output. Quote exact counts and names from it. Answer the user's question directly using that data. Never say you cannot access live numbers. Never share passwords, OTPs, API keys, bank details, or auth tokens.",
     );
   } else if (access.unrestricted) {
     parts.push(
