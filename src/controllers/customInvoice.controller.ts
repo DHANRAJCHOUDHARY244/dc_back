@@ -2,11 +2,16 @@ import { AuthenticatedRequest } from "@constants/common.interface";
 import { newCustomInvoice } from "@constants/customInvoice.constants";
 import { customInvoiceRepository, roleRepository, userRepository } from "@repositories";
 import { generate_Hash_Password, generateRandomString, generateUUID, ReE, ReS } from "@services/generalHelper.service";
-import { BAD_REQUEST_CODE, SERVER_ERROR_CODE, SUCCESS_CODE } from "@constants/serverCode";
+import { BAD_REQUEST_CODE, FORBIDDEN_CODE, SERVER_ERROR_CODE, SUCCESS_CODE, UNAUTHORIZED_CODE } from "@constants/serverCode";
 import { PaymentStatus } from "@constants/common.enum";
 import { EVENT_TASK_TYPE } from "@constants/socket.constants";
 import notificationController from "./notification.controller";
 import { sendEventEmail } from "@services/email.service";
+import {
+    canMutateCustomInvoice,
+    isInvoiceElevated,
+} from "@services/invoiceAccess.service";
+import { isQuoteAdmin } from "@services/adminPermission.service";
 import { Response } from "express";
 import { fileUpload } from 'express-fileupload';
 import { s3Service } from "@services/s3.service";
@@ -23,7 +28,12 @@ const customInvoiceListPopulate = [
 ];
 
 class CustomInvoiceController {
-    async updateOrCreateCustomInvoice(data: newCustomInvoice, sender_id: number, emailData: any) {
+    async updateOrCreateCustomInvoice(
+        data: newCustomInvoice,
+        actingUser: { id: number; role?: string },
+        emailData: any,
+    ) {
+        const sender_id = actingUser.id;
         const {
             customerId: customer_id,
             invoiceNumber = null,
@@ -76,18 +86,26 @@ class CustomInvoiceController {
         let customInvoice;
         let isUpdate = false;
         if (invoiceNumber) {
-            const updated = await customInvoiceRepository.updateById(Number(invoiceNumber), {
-                $set: payload,
-            });
-            if (updated) {
-                isUpdate = true;
-                customInvoice = await customInvoiceRepository.findOne({
-                    id: Number(invoiceNumber),
-                    customer_id,
-                });
+            const existing: any = await customInvoiceRepository.findOne(
+                { id: Number(invoiceNumber) },
+                { lean: true },
+            );
+            if (!existing) {
+                throw new Error(`Custom invoice #${invoiceNumber} not found`);
             }
-        }
-        if (!customInvoice) {
+            const canEdit =
+                canMutateCustomInvoice(actingUser, existing) || (await isQuoteAdmin(actingUser));
+            if (!canEdit) {
+                const err: any = new Error("You do not have permission to update this invoice");
+                err.statusCode = FORBIDDEN_CODE;
+                throw err;
+            }
+
+            payload.sender_id = existing.sender_id ?? sender_id;
+            await customInvoiceRepository.updateById(Number(invoiceNumber), { $set: payload });
+            customInvoice = await customInvoiceRepository.findOne({ id: Number(invoiceNumber) });
+            isUpdate = true;
+        } else {
             payload.bypass_token = generateRandomString();
             customInvoice = await customInvoiceRepository.create({ ...payload });
         }
@@ -138,7 +156,7 @@ class CustomInvoiceController {
                     customerId,
                     invoiceNumber,
                 },
-                adminData.id,
+                adminData,
                 emailData,
             );
 
@@ -179,8 +197,11 @@ class CustomInvoiceController {
                 }
             })();
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error in addNew:", error);
+            if (error?.statusCode === FORBIDDEN_CODE) {
+                return ReE(res, FORBIDDEN_CODE, error.message);
+            }
             return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
         }
     }
@@ -196,12 +217,15 @@ class CustomInvoiceController {
                     customerId,
                     invoiceNumber,
                 },
-                adminData.id,
+                adminData,
                 {}
             );
             return ReS(res, SUCCESS_CODE, "Invoice updated successfully", customInvoice);
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error in Update:", error);
+            if (error?.statusCode === FORBIDDEN_CODE) {
+                return ReE(res, FORBIDDEN_CODE, error.message);
+            }
             return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
         }
     }
@@ -213,10 +237,12 @@ class CustomInvoiceController {
                 return ReE(res, SERVER_ERROR_CODE, "CustomInvoice ID is required");
             }
 
-            const customInvoice = await customInvoiceRepository.findOne({
-                id,
-                sender_id: req.user.id,
-            });
+            const deleteFilter: Record<string, unknown> = { id };
+            if (!isInvoiceElevated(req.user)) {
+                deleteFilter.sender_id = req.user.id;
+            }
+
+            const customInvoice = await customInvoiceRepository.findOne(deleteFilter);
 
             if (!customInvoice) {
                 return ReE(
@@ -247,9 +273,19 @@ class CustomInvoiceController {
         try {
             const id = Number(req.params.id);
             const bypass_token = req.bypass_token;
-            const filters: any = { id };
             if (!id) return ReE(res, SERVER_ERROR_CODE, "CustomInvoice ID is required");
-            if (bypass_token) filters.bypass_token = bypass_token
+
+            let filters: Record<string, unknown>;
+            if (bypass_token) {
+                filters = { id, bypass_token };
+            } else if (!req.user?.id) {
+                return ReE(res, UNAUTHORIZED_CODE, "Unauthorized");
+            } else {
+                filters = { id };
+                if (!isInvoiceElevated(req.user)) {
+                    filters.$or = [{ sender_id: req.user.id }, { customer_id: req.user.id }];
+                }
+            }
 
             const customInvoice = await customInvoiceRepository.findOne(
                 { ...filters },
@@ -289,8 +325,7 @@ class CustomInvoiceController {
             const parsedPage = parseInt(page as string, 10);
 
             const filter: any = {};
-           if (user.role !== Roles.SUPER_ADMIN && user.role!== Roles.CUSTOMER_SUPPORT_EXECUTIVE ) {
-                
+           if (!isInvoiceElevated(user)) {
                  filter.$or = [{ sender_id: user.id }, { customer_id: user.id }]
             }
             if (pay_status) applyInvoicePaymentChipFilter(filter, pay_status, { supportDiscountFields: true });
@@ -347,8 +382,8 @@ class CustomInvoiceController {
             } = req.body || {};
 
             const filter: any = {};
-            if (user.role !== Roles.SUPER_ADMIN && user.role !== Roles.CUSTOMER_SUPPORT_EXECUTIVE) {
-                if (user.id !== 299) filter.$or = [{ sender_id: user.id }, { customer_id: user.id }];
+            if (!isInvoiceElevated(user)) {
+                filter.$or = [{ sender_id: user.id }, { customer_id: user.id }];
             }
 
             if (start_date && end_date) {
@@ -425,7 +460,7 @@ class CustomInvoiceController {
             }
 
             const invoiceFilter: Record<string, unknown> = { id: Number(id) };
-            if (req.user.role !== Roles.SUPER_ADMIN) {
+            if (!isInvoiceElevated(req.user)) {
                 invoiceFilter.sender_id = req.user.id;
             }
 
@@ -458,6 +493,8 @@ class CustomInvoiceController {
             if (pay_status === PaymentStatus.PAID) updateData.paid_date = now;
             if (pay_status === PaymentStatus.PARTIALLY_PAID) {
                 updateData.partialAmount = partialAmount;
+            } else {
+                updateData.partialAmount = null;
             }
 
             const updated = await customInvoiceRepository.updateById(Number(id), { $set: updateData });

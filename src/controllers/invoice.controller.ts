@@ -2,10 +2,11 @@ import { Response } from "express";
 import {
   invoiceRepository,
   quoteRepository,
+  quoteWorkflowRepository,
   userRepository,
 } from "@repositories";
 import { ReE, ReS } from "@services/generalHelper.service";
-import { SERVER_ERROR_CODE, SUCCESS_CODE, FORBIDDEN_CODE, RESOURCE_NOT_FOUND, BAD_REQUEST_CODE } from "@constants/serverCode";
+import { SERVER_ERROR_CODE, SUCCESS_CODE, FORBIDDEN_CODE, RESOURCE_NOT_FOUND, BAD_REQUEST_CODE, UNAUTHORIZED_CODE } from "@constants/serverCode";
 import { AuthenticatedRequest } from "@constants/common.interface";
 import { PaymentStatus, QuoteCustomerStatus } from "@constants/common.enum";
 import { EVENT_TASK_TYPE, SOCKET_EVENTS, USER_NOTIFICATION_EVENT_TYPE } from "@constants/socket.constants";
@@ -13,6 +14,11 @@ import { sendEventEmail } from "@services/email.service";
 import { SocketService } from "@services/socket.service";
 import notificationController from "./notification.controller";
 import { Roles } from './../data/dataInserter';
+import { isQuoteAdmin } from "@services/adminPermission.service";
+import {
+  buildQuoteInvoiceListFilter,
+  canAccessQuoteInvoice,
+} from "@services/invoiceAccess.service";
 import {
   applyInvoicePaymentChipFilter,
   computeInvoicePaymentChipCounts,
@@ -55,7 +61,7 @@ class InvoiceController {
       const quote: any = await quoteRepository.findOne(
         { id: quote_id },
         {
-          select: "bypass_token customer_accepted name mobile_no",
+          select: "bypass_token customer_accepted name mobile_no sender_id customer_id",
           populate: { path: "customer", select: "id name email" },
           lean: true,
         },
@@ -63,6 +69,14 @@ class InvoiceController {
 
       if (!quote)
         return ReE(res, RESOURCE_NOT_FOUND, "Quote not found for the provided quote_id and sender.");
+
+      const canInvoice =
+        Number(quote.sender_id) === Number(sender_id) ||
+        req.user.role === Roles.SUPER_ADMIN ||
+        (await isQuoteAdmin(req.user));
+      if (!canInvoice) {
+        return ReE(res, FORBIDDEN_CODE, "You do not have permission to invoice this quote");
+      }
 
       const CustName = name
                        ? name
@@ -78,16 +92,15 @@ class InvoiceController {
         return ReE(res, BAD_REQUEST_CODE, "Quote customer email is required to create an invoice");
       }
 
-      const existingInvoice = await invoiceRepository.findOne({
-        quote_id, sender_id,
-      });
+      const existingInvoice = await invoiceRepository.findOne({ quote_id });
 
       if (existingInvoice)
         return ReS(res, SUCCESS_CODE, "Invoice already exists", existingInvoice);
       const invoice: any = await invoiceRepository.create({
         quote_id, sender_id,
         bypass_token: quote.bypass_token,
-        pay_status, dateOfDue, address,
+        pay_status: PaymentStatus.PENDING,
+        dateOfDue, address,
         name: CustName,
         mobile_no: quote.mobile_no,
         status_updated_date: new Date(),
@@ -99,12 +112,16 @@ class InvoiceController {
         id: invoice.id,
         type: "INVOICE",
         title: `Invoice #${invoice.id}`,
-        status: pay_status,
+        status: PaymentStatus.PENDING,
         due_date: dateOfDue,
         link: `${process.env.FRONT_URL}/#/invoice/customer-view/${invoice.id}/${quote.bypass_token}`,
         event: EVENT_TASK_TYPE.CREATED
       };
       ReS(res, SUCCESS_CODE, "Invoice created successfully", invoice);
+      await quoteWorkflowRepository.updateMany(
+        { quote_id },
+        { $set: { invoice_id: invoice.id } },
+      );
       await notificationController.createNotification({
         userId: sender_id,
         message: `new Invoice created`,
@@ -145,7 +162,8 @@ class InvoiceController {
       const parsedLimit = parseInt(limit as string, 10);
       const parsedPage = parseInt(page as string, 10);
 
-      const filter: Record<string, unknown> = {};
+      const accessFilter = await buildQuoteInvoiceListFilter(req.user);
+      const filter: Record<string, unknown> = { ...accessFilter };
 
       if (pay_status) applyInvoicePaymentChipFilter(filter, pay_status, { supportDiscountFields: false });
 
@@ -207,15 +225,31 @@ class InvoiceController {
       const { id }:any = req.params;
       const bypass_token = req.bypass_token;
 
-      const filter: Record<string, unknown> = { id: Number(id) };
       if (!id) return ReE(res, SERVER_ERROR_CODE, "Invoice ID is required");
-      if (bypass_token) filter.bypass_token = bypass_token
 
-      const invoice = await invoiceRepository.findOne(filter, {
+      let filter: Record<string, unknown>;
+      if (bypass_token) {
+        filter = { id: Number(id), bypass_token };
+      } else if (!req.user?.id) {
+        return ReE(res, UNAUTHORIZED_CODE, "Unauthorized");
+      } else {
+        // Match getInvoices: any authenticated staff user may view invoices by id.
+        filter = { id: Number(id) };
+      }
+
+      const invoice: any = await invoiceRepository.findOne(filter, {
         populate: invoiceDetailPopulate,
       });
 
       if (!invoice) return ReE(res, SERVER_ERROR_CODE, "Invoice not found");
+
+      if (!bypass_token) {
+        const quote = invoice.quote as { customer_id?: number; sender_id?: number } | undefined;
+        const allowed = await canAccessQuoteInvoice(req.user, invoice, quote);
+        if (!allowed) {
+          return ReE(res, FORBIDDEN_CODE, "Forbidden");
+        }
+      }
 
       return ReS(res, SUCCESS_CODE, "Invoice fetched successfully", invoice);
     } catch (error: any) {
@@ -232,11 +266,17 @@ class InvoiceController {
       const filter: Record<string, unknown> = { id: Number(id) };
       if(req.user.role !== Roles.SUPER_ADMIN)
           filter.sender_id = req.user.id
-      const invoice = await invoiceRepository.findOne(filter);
+      const invoice: any = await invoiceRepository.findOne(filter);
 
       if (!invoice) return ReE(res, SERVER_ERROR_CODE, "Invoice not found or access denied");
 
       await invoiceRepository.deleteById(Number(id));
+      if (invoice.quote_id) {
+        await quoteWorkflowRepository.updateMany(
+          { quote_id: invoice.quote_id },
+          { $unset: { invoice_id: "" } },
+        );
+      }
       await notificationController.createNotification({
         userId: req.user.id,
         message: `Invoice deleted ${id}`,
@@ -257,7 +297,8 @@ class InvoiceController {
   async getPaymentStatusCounts(req: AuthenticatedRequest, res: Response) {
     try {
       const { customer_name, customer_email, start_date, end_date } = req.body || {};
-      const filter: Record<string, unknown> = {};
+      const accessFilter = await buildQuoteInvoiceListFilter(req.user);
+      const filter: Record<string, unknown> = { ...accessFilter };
 
       if (customer_name || customer_email) {
         const userFilter: Record<string, unknown> = {};
@@ -371,8 +412,12 @@ class InvoiceController {
         payment_status_date: parsedStatusDate,
         payment_history: history,
         address,
-        partialAmount,
       };
+      if (pay_status === PaymentStatus.PARTIALLY_PAID) {
+        updateData.partialAmount = partialAmount;
+      } else {
+        updateData.partialAmount = null;
+      }
       if (pay_status === PaymentStatus.PAID) updateData.paid_date = now;
       if (dateOfDue) updateData.dateOfDue = dateOfDue;
       if(name) updateData.name = name;

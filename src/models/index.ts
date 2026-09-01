@@ -54,6 +54,7 @@ import EmployeeProfile from "./employeeProfile.model";
 import Shift from "./shift.model";
 import Holiday from "./holiday.model";
 import AttendanceRecord from "./attendanceRecord.model";
+import AttendancePunch from "./attendancePunch.model";
 import AttendanceSettings from "./attendanceSettings.model";
 import { LeaveType, LeaveBalance, LeaveRequest } from "./leave.model";
 import AttendanceCorrection from "./attendanceCorrection.model";
@@ -137,6 +138,7 @@ export {
   EmployeeProfile,
   Shift,
   Holiday,
+  AttendancePunch,
   AttendanceRecord,
   AttendanceSettings,
   LeaveType,

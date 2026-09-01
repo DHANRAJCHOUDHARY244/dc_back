@@ -20,6 +20,7 @@ import {
 	attendanceAuditLogRepository,
 	attendanceCorrectionRepository,
 	attendanceMonthLockRepository,
+	attendancePunchRepository,
 	attendanceRecordRepository,
 	attendanceSettingsRepository,
 	employeeProfileRepository,
@@ -35,6 +36,290 @@ import notificationController from "@controllers/notification.controller";
 import { displayEmployeeCode, resolveEmployeeCode } from "@services/employeeId.service";
 
 type AnyUser = { id: number; role?: string; name?: string };
+
+export type AttendanceLocation = {
+	lat: number;
+	lng: number;
+	accuracy?: number;
+	address?: string;
+	captured_at?: string;
+};
+
+export function normalizeAttendanceLocation(input: unknown): AttendanceLocation | null {
+	if (!input || typeof input !== "object") return null;
+	const raw = input as Record<string, unknown>;
+	const lat = Number(raw.lat ?? raw.latitude);
+	const lng = Number(raw.lng ?? raw.longitude);
+	if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+	const accuracy = raw.accuracy != null ? Number(raw.accuracy) : undefined;
+	return {
+		lat,
+		lng,
+		accuracy: Number.isFinite(accuracy) ? accuracy : undefined,
+		address: raw.address ? String(raw.address) : undefined,
+		captured_at: new Date().toISOString(),
+	};
+}
+
+function hasCoords(location: unknown): location is AttendanceLocation {
+	return (
+		!!location &&
+		typeof location === "object" &&
+		Number.isFinite((location as AttendanceLocation).lat) &&
+		Number.isFinite((location as AttendanceLocation).lng)
+	);
+}
+
+async function getOpenPunch(userId: number, dateKey: string) {
+	return attendancePunchRepository.findOne(
+		{ user_id: userId, date_key: dateKey, check_out_at: null },
+		{ lean: true, sort: { check_in_at: -1 } },
+	);
+}
+
+async function listPunchesForDay(userId: number, dateKey: string) {
+	return attendancePunchRepository.find(
+		{ user_id: userId, date_key: dateKey },
+		{ lean: true, sort: { check_in_at: 1 } },
+	);
+}
+
+function sumPunchMinutes(punches: any[], includeOpen = true) {
+	const now = new Date();
+	return punches.reduce((sum, punch) => {
+		if (punch.check_out_at) return sum + Number(punch.duration_minutes || 0);
+		if (!includeOpen) return sum;
+		return sum + minutesBetween(new Date(punch.check_in_at), now);
+	}, 0);
+}
+
+async function syncDailyRecordFromPunches(userId: number, dateKey: string, shift: any, settings: any) {
+	const punches: any[] = await listPunchesForDay(userId, dateKey);
+	if (!punches.length) return null;
+
+	const record: any = await attendanceRecordRepository.findOne(
+		{ user_id: userId, date_key: dateKey },
+		{ lean: true },
+	);
+	if (!record) return null;
+
+	const openPunch = punches.find((p) => !p.check_out_at);
+	const firstIn = new Date(punches[0].check_in_at);
+	const lastClosed = [...punches].reverse().find((p) => p.check_out_at);
+	const lastOut = openPunch ? null : lastClosed ? new Date(lastClosed.check_out_at) : null;
+	const totalMinutes = sumPunchMinutes(punches, true);
+	const breakMinutes = Number(record.break_minutes || settings?.default_break_minutes || 0);
+	const netMinutes = Math.max(0, totalMinutes - (lastOut ? breakMinutes : 0));
+	const metrics = computePunchMetrics(firstIn, lastOut, shift, settings);
+
+	await attendanceRecordRepository.updateById(record.id, {
+		$set: {
+			check_in: firstIn,
+			check_out: lastOut,
+			total_minutes: totalMinutes,
+			net_minutes: netMinutes,
+			status: metrics.status,
+			late_minutes: metrics.late_minutes,
+			early_departure_minutes: lastOut ? metrics.early_departure_minutes : 0,
+			overtime_minutes: lastOut ? metrics.overtime_minutes : 0,
+		},
+	});
+
+	return attendanceRecordRepository.findOne({ id: record.id }, { lean: true });
+}
+
+export async function buildTodayAttendancePayload(userId: number, dateKey = dayKey(new Date())) {
+	const [record, punches, openPunch] = await Promise.all([
+		attendanceRecordRepository.findOne({ user_id: userId, date_key: dateKey }, { lean: true }),
+		listPunchesForDay(userId, dateKey),
+		getOpenPunch(userId, dateKey),
+	]);
+	const totalSpentMinutes = sumPunchMinutes(punches, true);
+	return {
+		date_key: dateKey,
+		record,
+		punches,
+		active_punch: openPunch,
+		is_checked_in: !!openPunch,
+		total_spent_minutes: totalSpentMinutes,
+		total_spent_label: formatHoursMinutes(totalSpentMinutes),
+		live_location: openPunch?.live_location || null,
+	};
+}
+
+export async function getAttendanceMapPunches(user: AnyUser, days = 10, targetUserId?: number) {
+	const scope = await teamUserIdsFor(user);
+	const userId = targetUserId ?? user.id;
+	if (scope && !scope.includes(userId) && userId !== user.id) {
+		throw new Error("Unauthorized");
+	}
+	if (!scope && targetUserId && !isHrAdmin(user.role) && !isHrManager(user.role) && targetUserId !== user.id) {
+		throw new Error("Unauthorized");
+	}
+
+	const since = new Date();
+	since.setDate(since.getDate() - Math.max(1, Math.min(days, 30)));
+	since.setHours(0, 0, 0, 0);
+
+	const punches: any[] = await attendancePunchRepository.find(
+		{
+			user_id: userId,
+			check_in_at: { $gte: since },
+		},
+		{ lean: true, sort: { check_in_at: -1 } },
+	);
+
+	const markers = buildPunchMarkers(punches);
+
+	const totalSpentMinutes = sumPunchMinutes(punches, true);
+	const openPunch = await getOpenPunch(userId, dayKey(new Date()));
+
+	return {
+		days,
+		user_id: userId,
+		since: since.toISOString(),
+		is_checked_in: !!openPunch,
+		punches,
+		markers,
+		total_spent_minutes: totalSpentMinutes,
+		total_spent_label: formatHoursMinutes(totalSpentMinutes),
+		live_location: openPunch?.live_location || null,
+	};
+}
+
+export async function getTeamAttendanceMapToday(user: AnyUser) {
+	if (!canViewTeamAttendanceMap(user.role)) {
+		throw new Error("Unauthorized");
+	}
+
+	const scope = await teamUserIdsFor(user);
+	const key = dayKey(new Date());
+	const filter: Record<string, unknown> = { date_key: key };
+	if (scope) filter.user_id = { $in: scope };
+
+	const punches: any[] = await attendancePunchRepository.find(filter, {
+		lean: true,
+		sort: { check_in_at: -1 },
+	});
+
+	const userIds = punches.map((p) => p.user_id);
+	const userMeta = await loadUserMeta(userIds);
+	const enrichedPunches = punches.map((punch) => ({
+		...punch,
+		user_name: userMeta.get(punch.user_id)?.name || `User #${punch.user_id}`,
+		employee_code: userMeta.get(punch.user_id)?.employee_code || "",
+	}));
+	const markers = buildPunchMarkers(punches, userMeta);
+	const totalSpentMinutes = sumPunchMinutes(punches, true);
+	const activeEmployees = new Set(
+		punches.filter((p) => !p.check_out_at).map((p) => p.user_id),
+	).size;
+
+	return {
+		mode: "team_today",
+		date_key: key,
+		scope: scope ? "team" : "all",
+		employee_count: new Set(userIds).size,
+		active_employee_count: activeEmployees,
+		punches: enrichedPunches,
+		markers,
+		total_spent_minutes: totalSpentMinutes,
+		total_spent_label: formatHoursMinutes(totalSpentMinutes),
+		is_checked_in: activeEmployees > 0,
+	};
+}
+
+export async function updateLiveAttendanceLocation(user: AnyUser, locationInput: unknown) {
+	const location = normalizeAttendanceLocation(locationInput);
+	if (!location) throw new Error("Valid location is required");
+
+	const key = dayKey(new Date());
+	const openPunch: any = await getOpenPunch(user.id, key);
+	if (!openPunch) throw new Error("No active check-in session");
+
+	const updated = await attendancePunchRepository.updateById(openPunch.id, {
+		$set: { live_location: location },
+	});
+	return updated;
+}
+
+function buildPunchMarkers(
+	punches: any[],
+	userMeta?: Map<number, { name: string; employee_code?: string }>,
+) {
+	return punches.flatMap((punch) => {
+		const meta = {
+			user_id: punch.user_id,
+			user_name: userMeta?.get(punch.user_id)?.name || `User #${punch.user_id}`,
+			employee_code: userMeta?.get(punch.user_id)?.employee_code || "",
+		};
+		const items: any[] = [];
+		if (hasCoords(punch.check_in_location)) {
+			items.push({
+				id: `${punch.id}-in`,
+				punch_id: punch.id,
+				type: "check_in",
+				at: punch.check_in_at,
+				location: punch.check_in_location,
+				duration_minutes: punch.duration_minutes,
+				open: !punch.check_out_at,
+				...meta,
+			});
+		}
+		if (hasCoords(punch.check_out_location)) {
+			items.push({
+				id: `${punch.id}-out`,
+				punch_id: punch.id,
+				type: "check_out",
+				at: punch.check_out_at,
+				location: punch.check_out_location,
+				duration_minutes: punch.duration_minutes,
+				open: false,
+				...meta,
+			});
+		}
+		if (!punch.check_out_at && hasCoords(punch.live_location)) {
+			items.push({
+				id: `${punch.id}-live`,
+				punch_id: punch.id,
+				type: "live",
+				at: punch.live_location?.captured_at || punch.check_in_at,
+				location: punch.live_location,
+				duration_minutes: punch.duration_minutes,
+				open: true,
+				...meta,
+			});
+		}
+		return items;
+	});
+}
+
+async function loadUserMeta(userIds: number[]) {
+	const unique = [...new Set(userIds.filter((id) => id > 0))];
+	if (!unique.length) return new Map<number, { name: string; employee_code?: string }>();
+
+	const [users, profiles] = await Promise.all([
+		userRepository.find({ id: { $in: unique } }, { select: "id name", lean: true }),
+		employeeProfileRepository.find({ user_id: { $in: unique } }, { select: "user_id employee_code", lean: true }),
+	]);
+
+	const map = new Map<number, { name: string; employee_code?: string }>();
+	for (const user of users as any[]) {
+		map.set(user.id, { name: user.name || `User #${user.id}`, employee_code: "" });
+	}
+	for (const profile of profiles as any[]) {
+		const existing = map.get(profile.user_id) || { name: `User #${profile.user_id}` };
+		map.set(profile.user_id, {
+			...existing,
+			employee_code: profile.employee_code || existing.employee_code,
+		});
+	}
+	return map;
+}
+
+export function canViewTeamAttendanceMap(role?: string) {
+	return isHrAdmin(role) || isHrManager(role);
+}
 
 export function isHrAdmin(role?: string) {
 	return HR_ADMIN_ROLES.includes(String(role || ""));
@@ -284,7 +569,7 @@ function computePunchMetrics(checkIn: Date, checkOut: Date | null, shift: any, s
 	};
 }
 
-export async function checkIn(user: AnyUser, ip = "") {
+export async function checkIn(user: AnyUser, ip = "", locationInput?: unknown) {
 	const now = new Date();
 	await assertMonthEditable(now, user.role);
 	const profile = await ensureEmployeeProfile(user.id);
@@ -294,6 +579,7 @@ export async function checkIn(user: AnyUser, ip = "") {
 	const settings = await getSettings();
 	const shift = await getShiftForUser(profile, settings);
 	const key = dayKey(now);
+	const location = normalizeAttendanceLocation(locationInput);
 
 	const holiday = await isPublicHoliday(now);
 	if (holiday) throw new Error("Today is a public holiday");
@@ -301,50 +587,67 @@ export async function checkIn(user: AnyUser, ip = "") {
 	const weeklyOff = await isWeeklyOff(now, profile, settings, false);
 	if (weeklyOff) throw new Error("Today is weekly off");
 
+	const openPunch = await getOpenPunch(user.id, key);
+	if (openPunch) throw new Error("Already checked in");
+
 	let record: any = await attendanceRecordRepository.findOne(
 		{ user_id: user.id, date_key: key },
 		{ lean: true },
 	);
-	if (record?.check_in && !record?.check_out) throw new Error("Already checked in");
-	if (record?.check_out) throw new Error("Already completed attendance for today");
 
 	const metrics = computePunchMetrics(now, null, shift, settings);
-	const payload = {
+	const recordPayload = {
 		user_id: user.id,
 		employee_code: profile.employee_code || displayEmployeeCode(user.id),
 		date: startOfDay(now),
 		date_key: key,
 		status: metrics.status,
-		check_in: now,
+		check_in: record?.check_in ? new Date(record.check_in) : now,
 		check_out: null,
 		check_in_ip: ip,
+		check_in_location: record?.check_in_location?.lat ? record.check_in_location : location || {},
 		source: AttendanceSource.SELF_PUNCH,
 		late_minutes: metrics.late_minutes,
 		break_minutes: metrics.break_minutes,
-		total_minutes: 0,
-		net_minutes: 0,
+		total_minutes: record?.total_minutes || 0,
+		net_minutes: record?.net_minutes || 0,
 		early_departure_minutes: 0,
 		overtime_minutes: 0,
 		is_locked: false,
 	};
 
 	if (record) {
-		record = await attendanceRecordRepository.updateById(record.id, { $set: payload });
+		record = await attendanceRecordRepository.updateById(record.id, { $set: recordPayload });
 	} else {
-		record = await attendanceRecordRepository.create(payload);
+		record = await attendanceRecordRepository.create(recordPayload);
 	}
+
+	const punch = await attendancePunchRepository.create({
+		user_id: user.id,
+		attendance_record_id: record.id,
+		date_key: key,
+		check_in_at: now,
+		check_out_at: null,
+		duration_minutes: 0,
+		check_in_location: location || {},
+		live_location: location || {},
+		check_in_ip: ip,
+		source: AttendanceSource.SELF_PUNCH,
+	});
 
 	await writeAudit({
 		actor_id: user.id,
 		target_user_id: user.id,
 		action: "CHECK_IN",
-		entity: "attendance_records",
-		entity_id: record.id,
+		entity: "attendance_punches",
+		entity_id: punch.id,
 		date_key: key,
-		new_value: payload,
+		new_value: { punch, location },
 	});
 
 	if (metrics.late_minutes > 0) {
+		const punchesToday = await listPunchesForDay(user.id, key);
+		if (punchesToday.length === 1) {
 		await notificationController
 			.createNotification({
 				userId: user.id,
@@ -353,12 +656,13 @@ export async function checkIn(user: AnyUser, ip = "") {
 				meta: { type: "ATTENDANCE", action: "LATE" },
 			})
 			.catch(() => undefined);
+		}
 	}
 
-	return record;
+	return buildTodayAttendancePayload(user.id, key);
 }
 
-export async function checkOut(user: AnyUser, ip = "") {
+export async function checkOut(user: AnyUser, ip = "", locationInput?: unknown) {
 	const now = new Date();
 	await assertMonthEditable(now, user.role);
 	const profile = await ensureEmployeeProfile(user.id);
@@ -366,37 +670,45 @@ export async function checkOut(user: AnyUser, ip = "") {
 	const settings = await getSettings();
 	const shift = await getShiftForUser(profile, settings);
 	const key = dayKey(now);
+	const location = normalizeAttendanceLocation(locationInput);
+
+	const openPunch: any = await getOpenPunch(user.id, key);
+	if (!openPunch) throw new Error("Please check in first");
+
+	const durationMinutes = minutesBetween(new Date(openPunch.check_in_at), now);
+	const closedPunch = await attendancePunchRepository.updateById(openPunch.id, {
+		$set: {
+			check_out_at: now,
+			duration_minutes: durationMinutes,
+			check_out_location: location || {},
+			live_location: {},
+			check_out_ip: ip,
+		},
+	});
 
 	const record: any = await attendanceRecordRepository.findOne(
 		{ user_id: user.id, date_key: key },
 		{ lean: true },
 	);
-	if (!record?.check_in) throw new Error("Please check in first");
-	if (record.check_out) throw new Error("Already checked out");
+	if (!record) throw new Error("Attendance record not found");
 
-	const checkInAt = new Date(record.check_in);
-	const metrics = computePunchMetrics(checkInAt, now, shift, settings);
-	const updated = await attendanceRecordRepository.updateById(record.id, {
-		$set: {
-			check_out: now,
-			check_out_ip: ip,
-			...metrics,
-			source: AttendanceSource.SELF_PUNCH,
-		},
-	});
+	const updatedRecord = await syncDailyRecordFromPunches(user.id, key, shift, settings);
 
 	await writeAudit({
 		actor_id: user.id,
 		target_user_id: user.id,
 		action: "CHECK_OUT",
-		entity: "attendance_records",
-		entity_id: record.id,
+		entity: "attendance_punches",
+		entity_id: openPunch.id,
 		date_key: key,
-		old_value: record,
-		new_value: updated,
+		old_value: openPunch,
+		new_value: { punch: closedPunch, location, duration_minutes: durationMinutes },
 	});
 
-	return updated;
+	return {
+		...(await buildTodayAttendancePayload(user.id, key)),
+		record: updatedRecord || record,
+	};
 }
 
 export async function hrMarkAttendance(actor: AnyUser, body: any) {

@@ -17,12 +17,22 @@ type PresenceEntry = {
 
 const PRESENCE_USERS_KEY = "presence:users";
 const PRESENCE_WATCHERS_ROOM = "presence-watchers";
+const PRESENCE_SOCKET_TTL_SEC = 120;
 const presenceSocketKey = (userId: string | number) => `presence:sockets:${userId}`;
 
 const onlineByUserId = new Map<string, PresenceEntry>();
+let presenceIo: Server | null = null;
+
+export function initPresenceIo(io: Server) {
+  presenceIo = io;
+}
 
 function userKey(userId: number | string) {
   return String(userId);
+}
+
+function userRoom(userId: number | string) {
+  return `user-${userId}`;
 }
 
 function toOnlineUser(user: Record<string, unknown>): OnlineUserPayload {
@@ -35,30 +45,73 @@ function toOnlineUser(user: Record<string, unknown>): OnlineUserPayload {
   };
 }
 
-async function listOnlineUsersFromRedis(): Promise<OnlineUserPayload[] | null> {
+async function liveSocketIdsForUser(userId: number | string): Promise<Set<string>> {
+  if (!presenceIo) return new Set();
+  const sockets = await presenceIo.in(userRoom(userId)).fetchSockets();
+  return new Set(sockets.map((s) => s.id));
+}
+
+async function reconcileRedisPresence(): Promise<OnlineUserPayload[] | null> {
   const redis = getRedisClient();
   if (!redis) return null;
+
   try {
     const raw = await redis.hgetall(PRESENCE_USERS_KEY);
-    const users = Object.values(raw)
-      .map((v) => {
-        try {
-          return JSON.parse(v) as OnlineUserPayload;
-        } catch {
-          return null;
+    const users: OnlineUserPayload[] = [];
+
+    for (const [key, value] of Object.entries(raw)) {
+      const liveIds = await liveSocketIdsForUser(key);
+
+      if (liveIds.size === 0) {
+        await redis.hdel(PRESENCE_USERS_KEY, key);
+        await redis.del(presenceSocketKey(key));
+        continue;
+      }
+
+      const storedIds = await redis.smembers(presenceSocketKey(key));
+      for (const socketId of storedIds) {
+        if (!liveIds.has(socketId)) {
+          await redis.srem(presenceSocketKey(key), socketId);
         }
-      })
-      .filter(Boolean) as OnlineUserPayload[];
+      }
+      for (const socketId of liveIds) {
+        await redis.sadd(presenceSocketKey(key), socketId);
+      }
+      await redis.expire(presenceSocketKey(key), PRESENCE_SOCKET_TTL_SEC);
+
+      try {
+        users.push(JSON.parse(value) as OnlineUserPayload);
+      } catch {
+        await redis.hdel(PRESENCE_USERS_KEY, key);
+      }
+    }
+
     return users.sort((a, b) => a.name.localeCompare(b.name));
   } catch {
     return null;
   }
 }
 
+function reconcileMemoryPresence() {
+  if (!presenceIo) return;
+
+  for (const [key, entry] of onlineByUserId.entries()) {
+    for (const socketId of [...entry.socketIds]) {
+      if (!presenceIo.sockets.sockets.has(socketId)) {
+        entry.socketIds.delete(socketId);
+      }
+    }
+    if (entry.socketIds.size === 0) {
+      onlineByUserId.delete(key);
+    }
+  }
+}
+
 export async function listOnlineUsers(): Promise<OnlineUserPayload[]> {
-  const fromRedis = await listOnlineUsersFromRedis();
+  const fromRedis = await reconcileRedisPresence();
   if (fromRedis) return fromRedis;
 
+  reconcileMemoryPresence();
   return Array.from(onlineByUserId.values())
     .map((e) => e.user)
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -87,10 +140,12 @@ async function registerPresenceRedis(user: OnlineUserPayload, socketId: string) 
   if (!redis) return { ok: false, isNew: false };
   const key = userKey(user.id);
   try {
+    const wasOnline = await redis.hexists(PRESENCE_USERS_KEY, key);
     await redis.hset(PRESENCE_USERS_KEY, key, JSON.stringify(user));
     await redis.sadd(presenceSocketKey(key), socketId);
-    const count = await redis.scard(presenceSocketKey(key));
-    return { ok: true, isNew: count === 1 };
+    await redis.expire(presenceSocketKey(key), PRESENCE_SOCKET_TTL_SEC);
+    const liveIds = await liveSocketIdsForUser(user.id);
+    return { ok: true, isNew: !wasOnline && liveIds.size === 1 };
   } catch {
     return { ok: false, isNew: false };
   }
@@ -102,16 +157,40 @@ async function unregisterPresenceRedis(userId: number | string, socketId: string
   const key = userKey(userId);
   try {
     await redis.srem(presenceSocketKey(key), socketId);
-    const remaining = await redis.scard(presenceSocketKey(key));
-    if (remaining === 0) {
+    const liveIds = await liveSocketIdsForUser(userId);
+    if (liveIds.size === 0) {
       await redis.hdel(PRESENCE_USERS_KEY, key);
       await redis.del(presenceSocketKey(key));
       return true;
     }
+    await redis.expire(presenceSocketKey(key), PRESENCE_SOCKET_TTL_SEC);
     return false;
   } catch {
     return null;
   }
+}
+
+export async function touchPresence(socket: Socket) {
+  const rawUser = (socket as any).user;
+  if (rawUser?.id == null) return;
+
+  const user = toOnlineUser(rawUser);
+  const key = userKey(rawUser.id);
+  const redis = getRedisClient();
+
+  if (redis) {
+    try {
+      await redis.hset(PRESENCE_USERS_KEY, key, JSON.stringify(user));
+      await redis.sadd(presenceSocketKey(key), socket.id);
+      await redis.expire(presenceSocketKey(key), PRESENCE_SOCKET_TTL_SEC);
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
+
+  const entry = onlineByUserId.get(key);
+  if (entry) entry.user = user;
 }
 
 export async function registerPresence(io: Server, socket: Socket) {
@@ -155,8 +234,11 @@ export async function unregisterPresence(io: Server, socket: Socket) {
     const user = entry?.user || toOnlineUser(rawUser);
     const count = (await listOnlineUsers()).length;
     broadcastUpdate(io, "leave", user, count);
+    onlineByUserId.delete(key);
     return;
   }
+
+  if (redisLeft === false) return;
 
   const entry = onlineByUserId.get(key);
   if (!entry) return;

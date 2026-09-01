@@ -2,6 +2,7 @@ import EmployeeProfile from "@models/employeeProfile.model";
 import Shift from "@models/shift.model";
 import Holiday from "@models/holiday.model";
 import AttendanceRecord from "@models/attendanceRecord.model";
+import AttendancePunch from "@models/attendancePunch.model";
 import AttendanceSettings from "@models/attendanceSettings.model";
 import { LeaveType, LeaveBalance, LeaveRequest } from "@models/leave.model";
 import AttendanceCorrection from "@models/attendanceCorrection.model";
@@ -26,6 +27,11 @@ export class HolidayRepository extends BaseRepository {
 export class AttendanceRecordRepository extends BaseRepository {
 	constructor() {
 		super(AttendanceRecord, true);
+	}
+}
+export class AttendancePunchRepository extends BaseRepository {
+	constructor() {
+		super(AttendancePunch, true);
 	}
 }
 export class AttendanceSettingsRepository extends BaseRepository {
@@ -68,6 +74,7 @@ export const employeeProfileRepository = new EmployeeProfileRepository();
 export const shiftRepository = new ShiftRepository();
 export const holidayRepository = new HolidayRepository();
 export const attendanceRecordRepository = new AttendanceRecordRepository();
+export const attendancePunchRepository = new AttendancePunchRepository();
 export const attendanceSettingsRepository = new AttendanceSettingsRepository();
 export const leaveTypeRepository = new LeaveTypeRepository();
 export const leaveBalanceRepository = new LeaveBalanceRepository();

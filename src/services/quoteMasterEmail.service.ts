@@ -48,7 +48,7 @@ export const sendMasterQuoteEmail = async (
 
     const objectId = quote._id ? String(quote._id) : "";
     const link = quote.is_solar_sketch && objectId
-      ? `${process.env.FRONT_URL}/#/green-sketch/proposal/${objectId}/${quote_id}`
+      ? `${process.env.FRONT_URL}/#/green-sketch/proposal/${objectId}/${quote_id}/${bypass_token}`
       : `${process.env.FRONT_URL}/#/quote/customer-view/${quote_id}/${bypass_token}`;
 
     let ccList = [...cc];

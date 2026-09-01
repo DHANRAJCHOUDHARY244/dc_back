@@ -1,4 +1,4 @@
-import XLSX from "xlsx";
+import { readExcelBuffer, worksheetToJson } from "@utils/excel.helper";
 import { Response, Request } from "express";
 import { ReS, ReE } from "@services/generalHelper.service";
 import { SUCCESS_CODE, SERVER_ERROR_CODE, RESOURCE_NOT_FOUND } from "@constants/serverCode";
@@ -94,15 +94,14 @@ class LeadsController {
       const file = req.files?.leadDocs as any;
       if (!file) return ReE(res, SERVER_ERROR_CODE, "File is required");
 
-      const workbook = XLSX.read(file.data, { type: "buffer" });
+      const workbook = await readExcelBuffer(file.data);
 
-      const sheets = workbook.SheetNames.map((name) => {
-        const ws = workbook.Sheets[name];
-        const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+      const sheets = workbook.worksheets.map((worksheet) => {
+        const rows = worksheetToJson(worksheet, "");
         const columns = Object.keys(rows[0] || {}).map((c) => c.toLowerCase().trim());
 
         return {
-          sheetName: name,
+          sheetName: worksheet.name,
           columns,
           columnCount: columns.length,
           recordCount: rows.length,
@@ -130,11 +129,11 @@ class LeadsController {
       if (!file) return ReE(res, SERVER_ERROR_CODE, "File is required");
       if (!sheetName) return ReE(res, SERVER_ERROR_CODE, "sheetName is required");
 
-      const workbook = XLSX.read(file.data, { type: "buffer" });
-      const sheet = workbook.Sheets[sheetName];
+      const workbook = await readExcelBuffer(file.data);
+      const sheet = workbook.getWorksheet(sheetName);
       if (!sheet) return ReE(res, SERVER_ERROR_CODE, "Invalid sheetName");
 
-      const excelRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      const excelRows = worksheetToJson(sheet, "");
 
       const formatted = excelRows.map((row: any) => {
         const normalized = Object.fromEntries(
@@ -913,8 +912,11 @@ class LeadsController {
         return res.status(403).send("Forbidden");
       }
       const secret = process.env.LEAD_WEBHOOK_SECRET;
-      if (secret && req.headers["x-lead-secret"] && req.headers["x-lead-secret"] !== secret) {
-        return ReE(res, SERVER_ERROR_CODE, "Invalid webhook secret");
+      if (secret) {
+        const provided = req.headers["x-lead-secret"];
+        if (!provided || provided !== secret) {
+          return ReE(res, SERVER_ERROR_CODE, "Invalid webhook secret");
+        }
       }
       const body: any = req.body || {};
       let mapped: any = {

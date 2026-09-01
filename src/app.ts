@@ -1,10 +1,12 @@
 import "./polyfills/crypto";
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import env from "dotenv";
 import { createServer } from "http";
 
 env.config();
+import { getCorsOptions, validateSecurityEnv } from "@config/security";
 
 import logger, { overrideLoggerMethods } from "@utils/pino";
 import fileUpload from "express-fileupload";
@@ -27,13 +29,17 @@ import { bootstrapOnStartup } from "./data/dataInserter";
 import "@models/index";
 import "./assistant/models/index";
 
+validateSecurityEnv();
+
 const app = express();
 const httpServer = createServer(app);
 
-app.use(cors());
+app.disable("x-powered-by");
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+app.use(cors(getCorsOptions()));
 app.use(fileUpload({ limits: { fileSize: 50 * 1024 * 1024 }, abortOnLimit: true }));
-app.use(express.json({ limit: "100mb" }));
-app.use(express.urlencoded({ limit: "100mb", extended: false }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: false }));
 app.use(reqResLogger);
 app.use(morgan("dev"));
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
@@ -48,7 +54,11 @@ app.use("/api", routes);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   logger.error(err.stack);
-  ReE(res, SERVER_ERROR_CODE, "Internal Server Error" + err.stack);
+  const message =
+    process.env.NODE_ENV === "production"
+      ? "Internal Server Error"
+      : `Internal Server Error: ${err.message}`;
+  ReE(res, SERVER_ERROR_CODE, message);
 });
 
 (async () => {

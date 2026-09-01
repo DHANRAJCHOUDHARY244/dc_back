@@ -192,8 +192,8 @@ class HrController {
 	/* ---------- punch ---------- */
 	async checkIn(req: AuthenticatedRequest, res: Response) {
 		try {
-			const record = await hr.checkIn(actor(req), hr.clientIp(req));
-			return ReS(res, SUCCESS_CODE, "Checked in", record);
+			const payload = await hr.checkIn(actor(req), hr.clientIp(req), req.body?.location);
+			return ReS(res, SUCCESS_CODE, "Checked in", payload);
 		} catch (e: any) {
 			return ReE(res, BAD_REQUEST_CODE, e.message);
 		}
@@ -201,8 +201,41 @@ class HrController {
 
 	async checkOut(req: AuthenticatedRequest, res: Response) {
 		try {
-			const record = await hr.checkOut(actor(req), hr.clientIp(req));
-			return ReS(res, SUCCESS_CODE, "Checked out", record);
+			const payload = await hr.checkOut(actor(req), hr.clientIp(req), req.body?.location);
+			return ReS(res, SUCCESS_CODE, "Checked out", payload);
+		} catch (e: any) {
+			return ReE(res, BAD_REQUEST_CODE, e.message);
+		}
+	}
+
+	async updateLiveLocation(req: AuthenticatedRequest, res: Response) {
+		try {
+			const punch = await hr.updateLiveAttendanceLocation(actor(req), req.body?.location);
+			return ReS(res, SUCCESS_CODE, "Live location updated", punch);
+		} catch (e: any) {
+			return ReE(res, BAD_REQUEST_CODE, e.message);
+		}
+	}
+
+	async attendanceMap(req: AuthenticatedRequest, res: Response) {
+		try {
+			const days = Number(req.query.days || req.body?.days || 10);
+			const userId = req.query.user_id ? Number(req.query.user_id) : req.body?.user_id;
+			const payload = await hr.getAttendanceMapPunches(
+				actor(req),
+				days,
+				userId ? Number(userId) : undefined,
+			);
+			return ReS(res, SUCCESS_CODE, "Attendance map data", payload);
+		} catch (e: any) {
+			return ReE(res, BAD_REQUEST_CODE, e.message);
+		}
+	}
+
+	async teamAttendanceMapToday(req: AuthenticatedRequest, res: Response) {
+		try {
+			const payload = await hr.getTeamAttendanceMapToday(actor(req));
+			return ReS(res, SUCCESS_CODE, "Team attendance map", payload);
 		} catch (e: any) {
 			return ReE(res, BAD_REQUEST_CODE, e.message);
 		}
@@ -211,12 +244,8 @@ class HrController {
 	async todayMine(req: AuthenticatedRequest, res: Response) {
 		try {
 			await hr.ensureEmployeeProfile(req.user.id);
-			const key = dayKey(new Date());
-			const record = await attendanceRecordRepository.findOne(
-				{ user_id: req.user.id, date_key: key },
-				{ lean: true },
-			);
-			return ReS(res, SUCCESS_CODE, "Today", { date_key: key, record });
+			const payload = await hr.buildTodayAttendancePayload(req.user.id);
+			return ReS(res, SUCCESS_CODE, "Today", payload);
 		} catch (e: any) {
 			return ReE(res, SERVER_ERROR_CODE, e.message);
 		}

@@ -95,6 +95,7 @@ export {
 	shiftRepository,
 	holidayRepository,
 	attendanceRecordRepository,
+	attendancePunchRepository,
 	attendanceSettingsRepository,
 	leaveTypeRepository,
 	leaveBalanceRepository,

@@ -47,6 +47,8 @@ import { stockDeliveryScheduledTemplate } from "@template/stockDeliveryScheduled
 import { getCompanyConfig } from "@services/crmSettings.service";
 import { sendEmail } from "@utils/email";
 import { isQuoteAdmin } from "@services/adminPermission.service";
+import { assertQuoteAccess, canAccessQuote } from "@services/quoteAccess.service";
+import { UNAUTHORIZED_CODE } from "@constants/serverCode";
 
 import path  from 'path';
 import  fs  from 'fs';
@@ -140,7 +142,8 @@ class QuotesController {
       this.baseUploadDir = path.join(process.cwd(), "uploads", "sign");
       if (!fs.existsSync(this.baseUploadDir)) fs.mkdirSync(this.baseUploadDir, { recursive: true });
     }
-  async updateOrCreateQuote(data: newQuote, sender_id: number, emailData: any) {
+  async updateOrCreateQuote(data: newQuote, actingUser: { id: number; role?: string }, emailData: any) {
+    const sender_id = actingUser.id;
     const {
       customerId: customer_id,
       invoiceNumber,
@@ -264,16 +267,23 @@ class QuotesController {
       if (existingQuote) throw new Error(`A quote for this assessment already exists. Quote ID: ${existingQuote.id}`);
     }
     if (invoiceNumber) {
+      const existingQuote: any = await quoteRepository.findOne({ id: invoiceNumber }, { lean: true });
+      if (!existingQuote) {
+        throw new Error(`Quote #${invoiceNumber} not found`);
+      }
+      await assertQuoteAccess(actingUser, existingQuote);
+      payload.sender_id = existingQuote.sender_id ?? sender_id;
+
       const updateResult = await quoteRepository.updateMany(
-        { id: invoiceNumber, customer_id },
+        { id: invoiceNumber },
         { $set: payload },
       );
 
       if (updateResult.matchedCount > 0) {
         isUpdate = true;
-        quote = await quoteRepository.findOne({ id: invoiceNumber, customer_id });
+        quote = await quoteRepository.findOne({ id: invoiceNumber });
       } else {
-        throw new Error(`Quote #${invoiceNumber} not found for this customer`);
+        throw new Error(`Quote #${invoiceNumber} not found`);
       }
     }
 
@@ -329,7 +339,7 @@ class QuotesController {
           customerId,
           invoiceNumber,
         },
-        adminData.id,
+        adminData,
         emailData,
       );
 
@@ -551,9 +561,21 @@ class QuotesController {
     try {
       const id = Number(req.params.id);
       const bypass_token = req.bypass_token;
-      const filters: any = { id };
       if (!id) return ReE(res, SERVER_ERROR_CODE, "Quote ID is required");
-      if (bypass_token) filters.bypass_token = bypass_token
+
+      let filters: Record<string, unknown>;
+      if (bypass_token) {
+        filters = { id, bypass_token };
+      } else if (!req.user?.id) {
+        return ReE(res, UNAUTHORIZED_CODE, "Unauthorized");
+      } else {
+        filters = { id };
+        const isAdmin =
+          req.user.role === Roles.SUPER_ADMIN || (await isQuoteAdmin(req.user));
+        if (!isAdmin) {
+          filters.$or = [{ sender_id: req.user.id }, { customer_id: req.user.id }];
+        }
+      }
 
       const quote = await quoteRepository.findOne(
         { ...filters },
@@ -1145,21 +1167,29 @@ class QuotesController {
   async getQuoteAnalysisQuoteId(req: AuthenticatedRequest, res: Response) {
     try {
       const quoteId = req.query.quoteId;
-      if (!quoteId)
-        ReE(res, BAD_REQUEST_CODE, "quoteid not null or undefined")
-      const [quoteData, invoiceData]: any = await Promise.all([
-        quoteRepository.findOne(
-          { id: Number(quoteId) },
-          {
-            populate: { path: "customer", select: "id name email profile_image" },
-            lean: true,
-          },
-        ),
-        invoiceRepository.findOne(
-          { quote_id: Number(quoteId) },
-          { select: "id pay_status partialAmount", lean: true },
-        ),
-      ]);
+      if (!quoteId) {
+        return ReE(res, BAD_REQUEST_CODE, "quoteid not null or undefined");
+      }
+
+      const quoteData: any = await quoteRepository.findOne(
+        { id: Number(quoteId) },
+        {
+          populate: { path: "customer", select: "id name email profile_image" },
+          lean: true,
+        },
+      );
+      if (!quoteData) {
+        return ReE(res, RESOURCE_NOT_FOUND, "Quote not found");
+      }
+      if (!(await canAccessQuote(req.user, quoteData))) {
+        return ReE(res, FORBIDDEN_CODE, "Forbidden");
+      }
+
+      const invoiceData: any = await invoiceRepository.findOne(
+        { quote_id: Number(quoteId) },
+        { select: "id pay_status partialAmount", lean: true },
+      );
+
       const resData = {
         customer: quoteData?.customer,
         quote_status: quoteData?.customer_accepted,
@@ -1170,7 +1200,7 @@ class QuotesController {
         partialAmount: invoiceData?.partialAmount,
         isInvoiceCreated: invoiceData ? true : false
       }
-      ReS(res, SUCCESS_CODE, "Quote information fetch successfully!", resData)
+      return ReS(res, SUCCESS_CODE, "Quote information fetch successfully!", resData)
     } catch (error) {
       console.error("Error in getQuoteAllInfoByQuoteId:", error);
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
@@ -1572,7 +1602,6 @@ class QuotesController {
         accepted_date: quote.accepted_date,
         signed_date: quote.signed_date,
         reason: quote.reason,
-        bypass_token: quote.bypass_token,
         customer: quote.customer
           ? {
               id: quote.customer.id,
