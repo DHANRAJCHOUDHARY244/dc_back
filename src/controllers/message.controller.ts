@@ -72,6 +72,10 @@ function stripHtml(text: string) {
   return String(text || "").replace(/<[^>]*>/g, "");
 }
 
+function uniqueMemberIds(members: number[] = []): number[] {
+  return [...new Set(members.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0))];
+}
+
 class MessageController {
   async sendMessage(req: AuthenticatedRequest, res: Response) {
     try {
@@ -88,7 +92,7 @@ class MessageController {
 
       const { error, chat } = await assertChatMember(chatId, userId);
       if (error) return ReE(res, SERVER_ERROR_CODE, error);
-      const members: number[] = chat!.members || [];
+      const members: number[] = uniqueMemberIds(chat!.members || []);
 
       if (replyToId) {
         const parent: any = await messageRepository.findById(replyToId, { lean: true });
@@ -544,7 +548,7 @@ class MessageController {
 
         await chatRepository.updateById(targetChatId, { $set: { updated_at: new Date() } }).catch(() => undefined);
 
-        const members: number[] = targetChat.members || [];
+        const members: number[] = uniqueMemberIds(targetChat.members || []);
         members.forEach((m: number) => {
           if (m === req.user.id) return;
           SocketService.emitToUser(m, `message_created_${targetChatId}_${m}`, {

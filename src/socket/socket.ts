@@ -1,3 +1,4 @@
+import { parseAllowedOrigins } from "@config/origins";
 import { SOCKET_EVENTS } from "@constants/socket.constants";
 import { roleRoom } from "@services/permissionNotify.service";
 import {
@@ -16,13 +17,7 @@ import { attachChatSocketHandlers } from "./chat.socket";
 import logger from "@utils/pino";
 
 function parseSocketOrigins(): string[] | boolean {
-  const raw = [process.env.FRONTEND_URL, process.env.FRONT_URL]
-    .filter(Boolean)
-    .map((url) => String(url).trim().replace(/\/$/, ""));
-  if (process.env.NODE_ENV !== "production") {
-    raw.push("http://localhost:3001", "http://localhost:5173");
-  }
-  const origins = [...new Set(raw)];
+  const origins = parseAllowedOrigins();
   return origins.length ? origins : false;
 }
 

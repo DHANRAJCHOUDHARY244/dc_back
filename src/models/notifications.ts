@@ -17,6 +17,7 @@ applyBasePlugins(NotificationSchema, { collection: "notifications", paranoid: fa
 
 NotificationSchema.index({ userId: 1, created_at: -1 });
 NotificationSchema.index({ userId: 1, isRead: 1, created_at: -1 });
+NotificationSchema.index({ userId: 1, "meta_information.dedupKey": 1, created_at: -1 });
 
 const Notification = mongoose.models.Notification ?? mongoose.model("Notification", NotificationSchema);
 export default Notification;

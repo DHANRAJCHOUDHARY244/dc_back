@@ -10,6 +10,10 @@ import { Response } from "express";
 import { notificationRepository } from "@repositories";
 import { Roles } from "src/data/dataInserter";
 import { notificationCutoffDate } from "@services/notificationLifecycle.service";
+import {
+  buildNotificationDedupKey,
+  notificationDedupCutoffDate,
+} from "@services/notificationDedup.service";
 
 function escapeRegex(value: string) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -17,9 +21,25 @@ function escapeRegex(value: string) {
 
 class NotificationController {
   async  createNotification ({userId,message,route,meta = {},}:
-     {userId: number;message: string;route: string;meta?: Record<string, any>;}) {
+     {userId: number;message: string;route: string | null;meta?: Record<string, any>;}) {
   try {
-    const notification = await notificationRepository.create({ userId, message, route, meta_information: meta,});
+    const dedupKey = buildNotificationDedupKey(userId, message, route, meta);
+    const existing = await notificationRepository.findOne(
+      {
+        userId,
+        "meta_information.dedupKey": dedupKey,
+        created_at: { $gte: notificationDedupCutoffDate() },
+      },
+      { lean: true },
+    );
+    if (existing) return existing;
+
+    const notification = await notificationRepository.create({
+      userId,
+      message,
+      route,
+      meta_information: { ...meta, dedupKey },
+    });
     return notification;
   } catch (error) {
     console.error("Error creating notification:", error);
