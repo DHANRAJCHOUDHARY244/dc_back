@@ -5,6 +5,7 @@ const CustomInvoiceSchema = new Schema(
   {
     id: { type: Number, unique: true, index: true },
     customer_id: { type: Number },
+    sender_id: { type: Number, index: true },
     currency: { type: String, required: true },
     subTotal: { type: Number, required: true },
     address: { type: String },

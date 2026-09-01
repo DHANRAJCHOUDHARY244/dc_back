@@ -4,9 +4,10 @@ import { ReE } from "@services/generalHelper.service";
 import { UNAUTHORIZED_CODE } from "@constants/serverCode";
 import { AuthenticatedRequest } from "@constants/common.interface";
 import { roleRepository } from "@repositories";
+import { extractAuthToken } from "@utils/extractToken";
 
 export const authenticate = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  const token = req.body.token || req.query.token || req.headers['token'];
+  const token = extractAuthToken(req);
   try {
     if (!token) return ReE(res, UNAUTHORIZED_CODE, "Unauthorized");
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as Record<string, unknown>;

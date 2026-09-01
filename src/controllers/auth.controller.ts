@@ -98,13 +98,18 @@ class AuthController {
       const hashedPassword = await generate_Hash_Password(password);
       const genOtp = generate_6_Digit_Otp();
 
-      const roleName = role ? normalizeRoleName(role) : Roles.CUSTOMER;
+      // Public self-signup is always CUSTOMER. Internal provisioning (admin/installer/sales) may set role.
+      const roleName =
+        is_signup === false && role ? normalizeRoleName(role) : Roles.CUSTOMER;
 
       const roleDoc: any = await resolveRoleDocFromInput(roleName);
       const roleId = roleDoc?.id ?? null;
 
-      if (role && !roleId) {
+      if (is_signup === false && role && !roleId) {
         return ReE(res, BAD_REQUEST_CODE, "Invalid role — role not found in database");
+      }
+      if (!roleId) {
+        return ReE(res, BAD_REQUEST_CODE, "Customer role is not configured");
       }
 
       const user: any = await userRepository.create({

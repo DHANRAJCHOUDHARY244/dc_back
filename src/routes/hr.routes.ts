@@ -13,7 +13,11 @@ router.put("/employees/:userId", hrController.updateEmployee.bind(hrController))
 
 router.post("/check-in", hrController.checkIn.bind(hrController));
 router.post("/check-out", hrController.checkOut.bind(hrController));
+router.post("/live-location", hrController.updateLiveLocation.bind(hrController));
 router.get("/today", hrController.todayMine.bind(hrController));
+router.get("/attendance/map", hrController.attendanceMap.bind(hrController));
+router.post("/attendance/map", hrController.attendanceMap.bind(hrController));
+router.get("/attendance/map/team-today", hrController.teamAttendanceMapToday.bind(hrController));
 router.post("/mark", hrController.hrMark.bind(hrController));
 router.post("/attendance/list", hrController.listAttendance.bind(hrController));
 router.get("/dashboard", hrController.dashboard.bind(hrController));

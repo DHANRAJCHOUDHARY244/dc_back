@@ -24,6 +24,7 @@ export const SOCKET_EVENTS = {
   PRESENCE_SYNC: 'presence:sync',
   PRESENCE_UPDATE: 'presence:update',
   PRESENCE_REQUEST: 'presence:request',
+  PRESENCE_HEARTBEAT: 'presence:heartbeat',
   /** Header badge live refresh — clients refetch or apply payload */
   BADGE_MASTER_TASKS: 'badge:master-tasks',
   BADGE_SLA_DELAYS: 'badge:sla-delays',

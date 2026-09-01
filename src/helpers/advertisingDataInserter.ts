@@ -1,16 +1,18 @@
 import { advertisingRepository } from "@repositories";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import path from "path";
+import { worksheetToJson } from "@utils/excel.helper";
 
 const filePath = path.resolve(__dirname, "./MELBOURNE_EMAIL_DATA.xlsx");
 
 export async function importAdvertisingData() {
   try {
-    const workbook = XLSX.readFile(filePath);
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(filePath);
+    const sheet = workbook.worksheets[0];
+    if (!sheet) throw new Error("No worksheet found in advertising import file");
 
-    const jsonData: any[] = XLSX.utils.sheet_to_json(sheet);
+    const jsonData: any[] = worksheetToJson(sheet);
 
     const records = jsonData.map((row) => ({
       full_name: row.full_name || "",

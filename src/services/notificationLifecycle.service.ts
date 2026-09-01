@@ -1,6 +1,6 @@
 import { notificationRepository } from "@repositories";
 
-const NOTIFICATION_RETENTION_DAYS = 30;
+const NOTIFICATION_RETENTION_DAYS = 5;
 
 export function notificationCutoffDate() {
   const cutoff = new Date();

@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 import { ResponseData } from "@constants/common.interface";
 import { Response } from "express";
-import  bcrypt  from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import  jwt  from 'jsonwebtoken';
 
 export function ReS (res: Response, status: number, message: string, data?: any)  {

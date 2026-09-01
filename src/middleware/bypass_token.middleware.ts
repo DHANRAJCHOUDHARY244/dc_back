@@ -1,11 +1,12 @@
-import { Request, Response, NextFunction } from "express";
+import { Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { ReE } from "@services/generalHelper.service";
 import { UNAUTHORIZED_CODE } from "@constants/serverCode";
 import { AuthenticatedRequest } from "@constants/common.interface";
+import { extractAuthToken } from "@utils/extractToken";
 
 export const bypassValidation = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const token = req.body.token || req.query.token || req.headers['token'];
+    const token = extractAuthToken(req);
     try {
         const bypass_token:any =
           req.query.bypass_token ||
