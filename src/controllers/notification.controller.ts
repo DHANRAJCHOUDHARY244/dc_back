@@ -9,12 +9,7 @@ import { AuthenticatedRequest } from "@constants/common.interface";
 import { Response } from "express";
 import { notificationRepository } from "@repositories";
 import { Roles } from "src/data/dataInserter";
-import { notificationCutoffDate } from "@services/notificationLifecycle.service";
-import {
-  buildNotificationDedupKey,
-  notificationDedupCutoffDate,
-  withNotificationDedupLock,
-} from "@services/notificationDedup.service";
+import { notificationCutoffDate, purgeChatNotificationsForUser } from "@services/notificationLifecycle.service";
 
 function escapeRegex(value: string) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -42,63 +37,7 @@ function dedupeNotificationRows(rows: any[], userId?: number): any[] {
   });
 }
 
-export type CreateNotificationResult = {
-  notification: any;
-  created: boolean;
-};
-
 class NotificationController {
-  async createNotification({
-    userId,
-    message,
-    route,
-    meta = {},
-  }: {
-    userId: number;
-    message: string;
-    route: string | null;
-    meta?: Record<string, any>;
-  }): Promise<CreateNotificationResult> {
-    const dedupKey = buildNotificationDedupKey(userId, message, route, meta);
-    const cutoff = notificationDedupCutoffDate();
-    const meta_information = { ...meta, dedupKey };
-
-    return withNotificationDedupLock(dedupKey, async () => {
-      try {
-        const existing = await notificationRepository.findOne(
-          {
-            userId,
-            "meta_information.dedupKey": dedupKey,
-            created_at: { $gte: cutoff },
-          },
-          { lean: true },
-        );
-        if (existing) return { notification: existing, created: false };
-
-        try {
-          const notification = await notificationRepository.create({
-            userId,
-            message,
-            route,
-            meta_information,
-          });
-          return { notification, created: true };
-        } catch (error: any) {
-          if (error?.code === 11000) {
-            const dup = await notificationRepository.findOne(
-              { userId, "meta_information.dedupKey": dedupKey },
-              { lean: true },
-            );
-            if (dup) return { notification: dup, created: false };
-          }
-          throw error;
-        }
-      } catch (error) {
-        console.error("Error creating notification:", error);
-        throw error;
-      }
-    });
-  }
   async getUserNotifications(req: AuthenticatedRequest, res: Response) {
     try {
       const { limit = 10, page = 1, status = null, type = null } = req.body;
@@ -109,6 +48,11 @@ class NotificationController {
       if (role !== Roles.SUPER_ADMIN) {
         filter.userId = userId;
         filter.$nor = [{ "meta_information.type": "CHAT", "meta_information.senderId": userId }];
+      }
+
+      // Chat alerts use the header chat icon — keep them out of the bell drawer.
+      if (!type) {
+        filter["meta_information.type"] = { $ne: "CHAT" };
       }
 
       if (status === "read") filter.isRead = true;
@@ -134,8 +78,13 @@ class NotificationController {
 
       const userFilter =
         role !== Roles.SUPER_ADMIN
-          ? { userId, created_at: { $gte: cutoff }, $nor: [{ "meta_information.type": "CHAT", "meta_information.senderId": userId }] }
-          : { created_at: { $gte: cutoff } };
+          ? {
+              userId,
+              created_at: { $gte: cutoff },
+              $nor: [{ "meta_information.type": "CHAT", "meta_information.senderId": userId }],
+              "meta_information.type": { $ne: "CHAT" },
+            }
+          : { created_at: { $gte: cutoff }, "meta_information.type": { $ne: "CHAT" } };
       const summaryRows: any[] = await notificationRepository.aggregateRaw([
         { $match: userFilter },
         {
@@ -208,6 +157,17 @@ class NotificationController {
       return ReS(res, SUCCESS_CODE, "Notifications deleted successfully", { deletedIds: ids });
     } catch (error) {
       console.error("Error deleting notifications:", error);
+      return ReE(res, SERVER_ERROR_CODE, "Something went wrong");
+    }
+  }
+
+  async deleteChatNotifications(req: AuthenticatedRequest, res: Response) {
+    try {
+      const chatId = req.body?.chatId != null ? Number(req.body.chatId) : undefined;
+      const deletedCount = await purgeChatNotificationsForUser(req.user.id, chatId);
+      return ReS(res, SUCCESS_CODE, "Chat notifications cleared", { deletedCount });
+    } catch (error) {
+      console.error("Error deleting chat notifications:", error);
       return ReE(res, SERVER_ERROR_CODE, "Something went wrong");
     }
   }

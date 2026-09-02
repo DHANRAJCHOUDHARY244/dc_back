@@ -15,7 +15,7 @@ import {
 import { bypassTokenCreation, ReE, ReS } from "@services/generalHelper.service";
 import { Response } from "express";
 import { sendEmail } from "@utils/email";
-import notificationController from "./notification.controller";
+import { dispatchNotification } from "@services/notificationHandler.service";
 import { createOrSyncInstallerJob } from "@services/installerJob.service";
 
 const buildSiteInfoLink = (quoteId: number, token: string, assessmentId?: number) => {
@@ -224,7 +224,7 @@ class SiteInfo {
             jobType: job_type,
           });
           if (job && created.installer_id) {
-            await notificationController.createNotification({
+            await dispatchNotification({
               userId: Number(created.installer_id),
               message: `New installation job assigned — ${(job as any).job_number || "Job"}`,
               route: `/installer-jobs/job/${(job as any).id}`,
@@ -261,7 +261,7 @@ class SiteInfo {
                 link,
               });
               await sendEmail(email, `Site Assessment Information - Quote #${quote_id}`, html);
-              await notificationController.createNotification({
+              await dispatchNotification({
                 userId: req.user.id,
                 message: `Site info sent for Quote #${quote_id}.`,
                 route: link,
@@ -366,7 +366,7 @@ class SiteInfo {
             jobType: updated.job_type,
           });
           if (job) {
-            await notificationController.createNotification({
+            await dispatchNotification({
               userId: Number(updated.installer_id),
               message: `Job pack updated for Quote #${updated.quote_id}`,
               route: `/installer-jobs/job/${(job as any).id}`,
@@ -403,7 +403,7 @@ class SiteInfo {
                 link,
               });
               await sendEmail(email, `Site Assessment Information - Quote #${updated.quote_id}`, html);
-              await notificationController.createNotification({
+              await dispatchNotification({
                 userId: req.user.id,
                 message: `Site info sent for Quote #${updated.quote_id}.`,
                 route: link,
@@ -454,7 +454,7 @@ class SiteInfo {
         link,
       });
       await sendEmail(email, `Site Assessment Information - Quote #${siteInfo.quote_id}`, html);
-      await notificationController.createNotification({
+      await dispatchNotification({
         userId: req.user.id,
         message: `Site info resent for Quote #${siteInfo.quote_id}.`,
         route: link,
@@ -500,7 +500,7 @@ class SiteInfo {
         isFollowUp: true,
       });
       await sendEmail(email, `Follow-up: Site Assessment Information - Quote #${siteInfo.quote_id}`, html);
-      await notificationController.createNotification({
+      await dispatchNotification({
         userId: req.user.id,
         message: `Site info follow-up sent for Quote #${siteInfo.quote_id}.`,
         route: link,

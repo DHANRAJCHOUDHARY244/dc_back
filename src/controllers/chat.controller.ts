@@ -26,7 +26,7 @@ import { computeUnreadForChat, computeUnreadStatsForChats } from "@services/chat
 import { UploadCategory } from "@constants/common.enum";
 import { uploadFiles } from "@utils/fileUpload.helper";
 import { UploadedFile } from "express-fileupload";
-import { chatNotificationRoute, dispatchChatInAppNotification } from "@services/notificationLifecycle.service";
+import { chatNotificationRoute, dispatchChatInAppNotification, purgeChatNotificationsForUser } from "@services/notificationLifecycle.service";
 import { EVENT_TASK_TYPE } from "@constants/socket.constants";
 
 function formatChatTime(dateString?: string | Date): string {
@@ -550,6 +550,7 @@ class ChatController {
       }
 
       emitChatEvent(chatId, "read_receipt", { chatId, userId, messageId });
+      await purgeChatNotificationsForUser(userId, chatId);
       return ReS(res, SUCCESS_CODE, "Marked as read", { chatId, messageId });
     } catch (error) {
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);

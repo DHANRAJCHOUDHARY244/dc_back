@@ -9,10 +9,10 @@ import { ReE, ReS } from "@services/generalHelper.service";
 import { SERVER_ERROR_CODE, SUCCESS_CODE, FORBIDDEN_CODE, RESOURCE_NOT_FOUND, BAD_REQUEST_CODE, UNAUTHORIZED_CODE } from "@constants/serverCode";
 import { AuthenticatedRequest } from "@constants/common.interface";
 import { PaymentStatus, QuoteCustomerStatus } from "@constants/common.enum";
-import { EVENT_TASK_TYPE, SOCKET_EVENTS, USER_NOTIFICATION_EVENT_TYPE } from "@constants/socket.constants";
+import { EVENT_TASK_TYPE, USER_NOTIFICATION_EVENT_TYPE } from "@constants/socket.constants";
 import { sendEventEmail } from "@services/email.service";
-import { SocketService } from "@services/socket.service";
-import notificationController from "./notification.controller";
+import { dispatchNotification } from "@services/notificationHandler.service";
+import { buildInvoiceNotificationSocketPayload } from "@services/notificationPayload.service";
 import { Roles } from './../data/dataInserter';
 import { isQuoteAdmin } from "@services/adminPermission.service";
 import {
@@ -122,32 +122,40 @@ class InvoiceController {
         { quote_id },
         { $set: { invoice_id: invoice.id } },
       );
-      await notificationController.createNotification({
+      const invoiceRoute = `${process.env.FRONT_URL}/#/invoice/customer-view/${invoice.id}/${quote.bypass_token}`;
+      const invoiceMessage = "new Invoice created";
+      const socketPayload = buildInvoiceNotificationSocketPayload({
+        message: invoiceMessage,
+        task_type: EVENT_TASK_TYPE.CREATED,
+        sender: { name: req.user.name, profile_image: req.user.profile_image },
+        route: invoiceRoute,
+      });
+      await dispatchNotification({
         userId: sender_id,
-        message: `new Invoice created`,
-        route:`${process.env.FRONT_URL}/#/invoice/customer-view/${invoice.id}/${quote.bypass_token}`,
-        meta:{
+        message: invoiceMessage,
+        route: invoiceRoute,
+        meta: {
           type: USER_NOTIFICATION_EVENT_TYPE.INVOICE,
           customerId: customerData.id,
           customerName: customerData.name,
           senderName: req.user.name,
-          role: req.user.role
-        }
+          role: req.user.role,
+        },
+        socket: { payload: socketPayload },
       });
-      SocketService.emitToUser(sender_id, SOCKET_EVENTS.USER_NOTIFICATION + `${sender_id}`, {
-        type: USER_NOTIFICATION_EVENT_TYPE.INVOICE,
-        name: req.user.name,
-        profile_image: req.user.profile_image,
-        task_type: EVENT_TASK_TYPE.CREATED,
-        message: `new Invoice created`,
-      })
-      SocketService.emitToUser(customerData.id, SOCKET_EVENTS.USER_NOTIFICATION + `${customerData.id}`, {
-        type: USER_NOTIFICATION_EVENT_TYPE.INVOICE,
-        name: req.user.name,
-        profile_image: req.user.profile_image,
-        task_type: EVENT_TASK_TYPE.CREATED,
-        message: `new Invoice created`,
-      })
+      await dispatchNotification({
+        userId: customerData.id,
+        message: invoiceMessage,
+        route: invoiceRoute,
+        meta: {
+          type: USER_NOTIFICATION_EVENT_TYPE.INVOICE,
+          customerId: customerData.id,
+          customerName: customerData.name,
+          senderName: req.user.name,
+          role: req.user.role,
+        },
+        socket: { payload: socketPayload },
+      });
       return sendEventEmail(emailPayload);
     } catch (error: any) {
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
@@ -277,7 +285,7 @@ class InvoiceController {
           { $unset: { invoice_id: "" } },
         );
       }
-      await notificationController.createNotification({
+      await dispatchNotification({
         userId: req.user.id,
         message: `Invoice deleted ${id}`,
         route: null,
@@ -446,10 +454,18 @@ class InvoiceController {
             link: `${process.env.FRONT_URL}/#/invoice/customer-view/${plain.id}/${plain.bypass_token}`,
             event: EVENT_TASK_TYPE.UPDATED,
           };
-          await notificationController.createNotification({
+          const statusMessage = `Invoice payment status updated to ${pay_status}`;
+          const statusRoute = `${process.env.FRONT_URL}/#/invoice/customer-view/${plain.id}/${plain.bypass_token}`;
+          const statusSocketPayload = buildInvoiceNotificationSocketPayload({
+            message: statusMessage,
+            task_type: EVENT_TASK_TYPE.UPDATED,
+            sender: { name: req.user.name, profile_image: req.user.profile_image },
+            route: statusRoute,
+          });
+          await dispatchNotification({
             userId: req.user.id,
-            message: `Invoice payment status updated to ${pay_status}`,
-            route: `${process.env.FRONT_URL}/#/invoice/customer-view/${plain.id}/${plain.bypass_token}`,
+            message: statusMessage,
+            route: statusRoute,
             meta: {
               type: USER_NOTIFICATION_EVENT_TYPE.INVOICE,
               customerId,
@@ -457,21 +473,36 @@ class InvoiceController {
               senderName: req.user.name,
               role: req.user.role,
             },
+            socket: { payload: statusSocketPayload },
           });
-          SocketService.emitToUser(plain.sender_id, SOCKET_EVENTS.USER_NOTIFICATION + `${plain.sender_id}`, {
-            type: USER_NOTIFICATION_EVENT_TYPE.INVOICE,
-            name: req.user.name,
-            profile_image: req.user.profile_image,
-            task_type: EVENT_TASK_TYPE.CREATED,
-            message: `new Invoice created`,
-          });
+          if (plain.sender_id) {
+            await dispatchNotification({
+              userId: plain.sender_id,
+              message: statusMessage,
+              route: statusRoute,
+              meta: {
+                type: USER_NOTIFICATION_EVENT_TYPE.INVOICE,
+                customerId,
+                customerName,
+                senderName: req.user.name,
+                role: req.user.role,
+              },
+              socket: { payload: statusSocketPayload },
+            });
+          }
           if (customerId) {
-            SocketService.emitToUser(customerId, SOCKET_EVENTS.USER_NOTIFICATION + `${customerId}`, {
-              type: USER_NOTIFICATION_EVENT_TYPE.INVOICE,
-              name: req.user.name,
-              profile_image: req.user.profile_image,
-              task_type: EVENT_TASK_TYPE.CREATED,
-              message: `new Invoice created`,
+            await dispatchNotification({
+              userId: customerId,
+              message: statusMessage,
+              route: statusRoute,
+              meta: {
+                type: USER_NOTIFICATION_EVENT_TYPE.INVOICE,
+                customerId,
+                customerName,
+                senderName: req.user.name,
+                role: req.user.role,
+              },
+              socket: { payload: statusSocketPayload },
             });
           }
           await sendEventEmail(emailPayload);

@@ -107,6 +107,10 @@ export interface newQuote {
     extraWiringMeters?: number;
     boardUpgrade?: boolean;
     miniSubboardRequired?: boolean;
+    /** Calculator catalog extra ids (legacy) */
+    selectedExtras?: number[];
+    /** Calculator catalog extras with quantity */
+    extraSelections?: { extraId: number; quantity: number }[];
     /** Virtual Power Plant */
     vpp?: boolean;
     vppProvider?: string;

@@ -32,7 +32,7 @@ import {
 	userRepository,
 } from "@repositories";
 import { Roles } from "src/data/dataInserter";
-import notificationController from "@controllers/notification.controller";
+import { dispatchNotification } from "@services/notificationHandler.service";
 import { displayEmployeeCode, resolveEmployeeCode } from "@services/employeeId.service";
 
 type AnyUser = { id: number; role?: string; name?: string };
@@ -145,6 +145,12 @@ export async function buildTodayAttendancePayload(userId: number, dateKey = dayK
 		total_spent_label: formatHoursMinutes(totalSpentMinutes),
 		live_location: openPunch?.live_location || null,
 	};
+}
+
+/** Public API for today's attendance — used by HTTP layer and future clients. */
+export async function getTodayAttendance(userId: number) {
+	await ensureEmployeeProfile(userId);
+	return buildTodayAttendancePayload(userId);
 }
 
 export async function getAttendanceMapPunches(user: AnyUser, days = 10, targetUserId?: number) {
@@ -648,8 +654,7 @@ export async function checkIn(user: AnyUser, ip = "", locationInput?: unknown) {
 	if (metrics.late_minutes > 0) {
 		const punchesToday = await listPunchesForDay(user.id, key);
 		if (punchesToday.length === 1) {
-		await notificationController
-			.createNotification({
+		await dispatchNotification({
 				userId: user.id,
 				message: `Late check-in recorded (${metrics.late_minutes} min).`,
 				route: "/#/hr/attendance",
@@ -838,8 +843,7 @@ export async function finalizeMissingAbsents(forDate = new Date()) {
 		);
 		if (existing) {
 			if (existing.check_in && !existing.check_out) {
-				await notificationController
-					.createNotification({
+				await dispatchNotification({
 						userId: p.user_id,
 						message: `Missing check-out for ${key}`,
 						route: "/#/hr/attendance",
@@ -1084,8 +1088,7 @@ export async function startEmployeeOnboarding(userId: number, actorId: number) {
 			notes: profile?.notes || `Onboarding started by user #${actorId}`,
 		},
 	});
-	await notificationController
-		.createNotification({
+	await dispatchNotification({
 			userId,
 			message: "Welcome! Your HR onboarding has started — complete the checklist in HR.",
 			route: "/#/hr/onboarding",

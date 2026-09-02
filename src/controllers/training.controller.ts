@@ -12,7 +12,7 @@ import { UploadCategory } from "@constants/common.enum";
 import { ReE, ReS } from "@services/generalHelper.service";
 import { uploadFiles } from "@utils/fileUpload.helper";
 import { Roles } from "src/data/dataInserter";
-import notificationController from "@controllers/notification.controller";
+import { dispatchNotification } from "@services/notificationHandler.service";
 import {
 	employeeProfileRepository,
 	roleRepository,
@@ -561,7 +561,7 @@ class TrainingController {
 				}
 
 				try {
-					await notificationController.createNotification({
+					await dispatchNotification({
 						userId: uid,
 						message: `New training assigned: ${title}${body.deadline ? ` (due ${new Date(body.deadline).toLocaleDateString()})` : ""}`,
 						route: "training/my",
@@ -802,7 +802,7 @@ class TrainingController {
 
 			if (shouldComplete) {
 				try {
-					await notificationController.createNotification({
+					await dispatchNotification({
 						userId,
 						message: `Training completed: ${resource?.title || "resource"}`,
 						route: "training/my",

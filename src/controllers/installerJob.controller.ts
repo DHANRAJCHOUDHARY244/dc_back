@@ -19,7 +19,7 @@ import { UploadCategory } from "@constants/common.enum";
 import { uploadFiles } from "@utils/fileUpload.helper";
 import { Response } from "express";
 import fileUpload from "express-fileupload";
-import notificationController from "./notification.controller";
+import { dispatchNotification } from "@services/notificationHandler.service";
 import { Roles } from "src/data/dataInserter";
 
 const ADMIN_ROLES = new Set([
@@ -51,7 +51,7 @@ async function assertJobAccess(req: AuthenticatedRequest, job: any) {
 
 async function notifyInstaller(userId: number, message: string, route: string, meta: Record<string, unknown> = {}) {
   try {
-    await notificationController.createNotification({ userId, message, route, meta });
+    await dispatchNotification({ userId, message, route, meta });
   } catch (e) {
     console.error("Installer job notification failed:", e);
   }

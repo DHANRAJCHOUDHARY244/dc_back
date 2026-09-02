@@ -292,7 +292,7 @@ export type EstimateInput = {
   panel_removal_count?: number;
   /** Optional override; defaults to settings.panel_removal_cost_per_panel */
   panel_removal_cost_per_panel?: number;
-  selected_extras?: number[];
+  selected_extras?: Array<number | { id: number; quantity?: number }>;
   rebates?: Record<string, number>;
   include_sales_commission?: boolean;
   /** When false, skip distance/delivery charges (quotes). Default true. */
@@ -322,6 +322,23 @@ export type EstimateInput = {
 
 function round(n: number) {
   return Math.round(n * 100) / 100;
+}
+
+function normalizeSelectedExtras(
+  input?: Array<number | { id: number; quantity?: number }>,
+): { id: number; quantity: number }[] {
+  if (!input?.length) return [];
+  const map = new Map<number, number>();
+  for (const item of input) {
+    if (typeof item === "number") {
+      if (Number.isFinite(item) && item > 0) map.set(item, (map.get(item) || 0) + 1);
+      continue;
+    }
+    const id = Number(item?.id);
+    const qty = Math.max(1, Number(item?.quantity) || 1);
+    if (Number.isFinite(id) && id > 0) map.set(id, (map.get(id) || 0) + qty);
+  }
+  return Array.from(map.entries()).map(([id, quantity]) => ({ id, quantity }));
 }
 
 type RebateConfig = {
@@ -882,14 +899,29 @@ export async function estimateCalculatorPrice(input: EstimateInput) {
   const distanceTierLabel = distanceDelivery.label;
 
   let extrasCost = 0;
-  const extrasBreakdown: { id: number; label: string; amount: number }[] = [];
-  if (input.selected_extras?.length) {
-    for (const extraId of input.selected_extras) {
-      const extra: any = await calculatorExtraRepository.findOne({ id: extraId }, { lean: true });
+  const extrasBreakdown: {
+    id: number;
+    label: string;
+    amount: number;
+    quantity?: number;
+    unitAmount?: number;
+  }[] = [];
+  const normalizedExtras = normalizeSelectedExtras(input.selected_extras);
+  if (normalizedExtras.length) {
+    for (const sel of normalizedExtras) {
+      const extra: any = await calculatorExtraRepository.findOne({ id: sel.id }, { lean: true });
       if (extra) {
-        const amount = pickStatePrice(extra.prices, state);
+        const unitAmount = pickStatePrice(extra.prices, state);
+        const quantity = Math.max(1, sel.quantity);
+        const amount = round(unitAmount * quantity);
         extrasCost += amount;
-        extrasBreakdown.push({ id: extra.id, label: extra.label, amount });
+        extrasBreakdown.push({
+          id: extra.id,
+          label: extra.label,
+          amount,
+          quantity,
+          unitAmount,
+        });
       }
     }
   }

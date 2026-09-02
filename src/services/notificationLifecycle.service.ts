@@ -1,6 +1,6 @@
-import notificationController from "@controllers/notification.controller";
-import { EVENT_TASK_TYPE, SOCKET_EVENTS, USER_NOTIFICATION_EVENT_TYPE } from "@constants/socket.constants";
+import { EVENT_TASK_TYPE, USER_NOTIFICATION_EVENT_TYPE } from "@constants/socket.constants";
 import { chatRoom } from "@services/chat.service";
+import { dispatchNotification } from "@services/notificationHandler.service";
 import { SocketService } from "@services/socket.service";
 import { notificationRepository } from "@repositories";
 
@@ -73,25 +73,37 @@ export async function dispatchChatInAppNotification(opts: {
     meta.messageId = messageId;
   }
 
-  const { notification, created } = await notificationController.createNotification({
+  const { notification } = await dispatchNotification({
     userId: recipientId,
     message: opts.message,
     route: opts.route,
     meta,
-  });
-
-  if (!created) return notification;
-
-  SocketService.emitToUser(recipientId, SOCKET_EVENTS.USER_NOTIFICATION + `${recipientId}`, {
-    type: USER_NOTIFICATION_EVENT_TYPE.CHAT,
-    name: opts.senderName,
-    profile_image: opts.senderProfileImage,
-    task_type: opts.taskType,
-    message: opts.message,
-    chatId: opts.chatId,
-    messageId: Number.isFinite(messageId) && messageId > 0 ? messageId : undefined,
-    route: opts.route,
+    socket: {
+      payload: {
+        type: USER_NOTIFICATION_EVENT_TYPE.CHAT,
+        name: opts.senderName,
+        profile_image: opts.senderProfileImage,
+        task_type: opts.taskType,
+        message: opts.message,
+        chatId: opts.chatId,
+        messageId: Number.isFinite(messageId) && messageId > 0 ? messageId : undefined,
+        route: opts.route,
+      },
+    },
   });
 
   return notification;
+}
+
+/** Remove persisted in-app chat alerts for a user (optionally scoped to one chat). */
+export async function purgeChatNotificationsForUser(userId: number, chatId?: number) {
+  const filter: Record<string, unknown> = {
+    userId: Number(userId),
+    "meta_information.type": USER_NOTIFICATION_EVENT_TYPE.CHAT,
+  };
+  if (chatId != null && Number.isFinite(Number(chatId))) {
+    filter["meta_information.chatId"] = Number(chatId);
+  }
+  const result: any = await notificationRepository.deleteMany(filter);
+  return result?.deletedCount ?? 0;
 }

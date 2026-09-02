@@ -15,7 +15,7 @@ import {
 	userRepository,
 	taskRepository,
 } from "@repositories";
-import notificationController from "@controllers/notification.controller";
+import { dispatchNotification } from "@services/notificationHandler.service";
 import { notifySlaBadgeChanged } from "@services/badgeNotify.service";
 import logger from "@utils/pino";
 
@@ -241,8 +241,7 @@ async function notifyManagers(message: string, meta: Record<string, unknown>) {
 	const users = await findManagementUsers();
 	await Promise.all(
 		users.map((u) =>
-			notificationController
-				.createNotification({
+			dispatchNotification({
 					userId: u.id,
 					message,
 					route: "sla/delayed-jobs",

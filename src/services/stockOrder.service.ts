@@ -1,5 +1,5 @@
 import { sendEventEmail } from "@services/email.service";
-import notificationController from "@controllers/notification.controller";
+import { dispatchNotification } from "@services/notificationHandler.service";
 import { followUpEmailTemplate } from "@template/followUpEmailTemplate";
 import { stockDeliveryScheduledTemplate } from "@template/stockDeliveryScheduled";
 import { getCompanyConfig } from "@services/crmSettings.service";
@@ -54,7 +54,7 @@ class StockOrderService {
       if (emailPayload.email)
         await sendEventEmail(emailPayload as any, order.emails_sent?.cc, order.emails_sent?.bcc);
 
-      await notificationController.createNotification({
+      await dispatchNotification({
         userId: order.sender_id,
         message: `Stock Order #${order.id} has been created.`,
         route: crmLink,
@@ -84,7 +84,7 @@ class StockOrderService {
       if (emailPayload.email)
         await sendEventEmail(emailPayload as any, order.emails_sent?.cc, order.emails_sent?.bcc);
 
-      await notificationController.createNotification({
+      await dispatchNotification({
         userId: order.sender_id,
         message: `Stock Order #${order.id} has been confirmed.`,
         route: crmLink,
@@ -160,7 +160,7 @@ class StockOrderService {
       if (emailPayload.email)
         await sendEventEmail(emailPayload as any, order.emails_sent?.cc, order.emails_sent?.bcc);
 
-      await notificationController.createNotification({
+      await dispatchNotification({
         userId: order.sender_id,
         message: `Stock Order #${order.id} has been delivered.`,
         route: crmLink,
@@ -189,7 +189,7 @@ class StockOrderService {
       if (emailPayload.email)
         await sendEventEmail(emailPayload as any, order.emails_sent?.cc, order.emails_sent?.bcc);
 
-      await notificationController.createNotification({
+      await dispatchNotification({
         userId: order.sender_id,
         message: `Stock Order #${order.id} status changed from ${oldStatus} to ${newStatus} by ${user?.name || "System"}.`,
         route: crmLink,
@@ -252,7 +252,7 @@ class StockOrderService {
         );
       }
 
-      await notificationController.createNotification({
+      await dispatchNotification({
         userId: order.sender_id,
         message: `New follow-up on Stock Order #${order.id}: ${noteSnippet}`,
         route: crmLink,
