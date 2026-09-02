@@ -13,39 +13,92 @@ import { notificationCutoffDate } from "@services/notificationLifecycle.service"
 import {
   buildNotificationDedupKey,
   notificationDedupCutoffDate,
+  withNotificationDedupLock,
 } from "@services/notificationDedup.service";
 
 function escapeRegex(value: string) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-class NotificationController {
-  async  createNotification ({userId,message,route,meta = {},}:
-     {userId: number;message: string;route: string | null;meta?: Record<string, any>;}) {
-  try {
-    const dedupKey = buildNotificationDedupKey(userId, message, route, meta);
-    const existing = await notificationRepository.findOne(
-      {
-        userId,
-        "meta_information.dedupKey": dedupKey,
-        created_at: { $gte: notificationDedupCutoffDate() },
-      },
-      { lean: true },
-    );
-    if (existing) return existing;
-
-    const notification = await notificationRepository.create({
-      userId,
-      message,
-      route,
-      meta_information: { ...meta, dedupKey },
-    });
-    return notification;
-  } catch (error) {
-    console.error("Error creating notification:", error);
-    throw error;
-  }
+function dedupeNotificationRows(rows: any[], userId?: number): any[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const meta = row?.meta_information || {};
+    if (
+      userId != null &&
+      String(meta.type || "").toUpperCase() === "CHAT" &&
+      Number(meta.senderId) === Number(userId)
+    ) {
+      return false;
+    }
+    const key =
+      meta.dedupKey ||
+      (meta.type === "CHAT" && meta.chatId != null && meta.messageId != null
+        ? `chat:${meta.chatId}:msg:${meta.messageId}:user:${row.userId}`
+        : `id:${row.id}`);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
+
+export type CreateNotificationResult = {
+  notification: any;
+  created: boolean;
+};
+
+class NotificationController {
+  async createNotification({
+    userId,
+    message,
+    route,
+    meta = {},
+  }: {
+    userId: number;
+    message: string;
+    route: string | null;
+    meta?: Record<string, any>;
+  }): Promise<CreateNotificationResult> {
+    const dedupKey = buildNotificationDedupKey(userId, message, route, meta);
+    const cutoff = notificationDedupCutoffDate();
+    const meta_information = { ...meta, dedupKey };
+
+    return withNotificationDedupLock(dedupKey, async () => {
+      try {
+        const existing = await notificationRepository.findOne(
+          {
+            userId,
+            "meta_information.dedupKey": dedupKey,
+            created_at: { $gte: cutoff },
+          },
+          { lean: true },
+        );
+        if (existing) return { notification: existing, created: false };
+
+        try {
+          const notification = await notificationRepository.create({
+            userId,
+            message,
+            route,
+            meta_information,
+          });
+          return { notification, created: true };
+        } catch (error: any) {
+          if (error?.code === 11000) {
+            const dup = await notificationRepository.findOne(
+              { userId, "meta_information.dedupKey": dedupKey },
+              { lean: true },
+            );
+            if (dup) return { notification: dup, created: false };
+          }
+          throw error;
+        }
+      } catch (error) {
+        console.error("Error creating notification:", error);
+        throw error;
+      }
+    });
+  }
   async getUserNotifications(req: AuthenticatedRequest, res: Response) {
     try {
       const { limit = 10, page = 1, status = null, type = null } = req.body;
@@ -53,7 +106,10 @@ class NotificationController {
       const cutoff = notificationCutoffDate();
 
       const filter: any = { created_at: { $gte: cutoff } };
-      if (role !== Roles.SUPER_ADMIN) filter.userId = userId;
+      if (role !== Roles.SUPER_ADMIN) {
+        filter.userId = userId;
+        filter.$nor = [{ "meta_information.type": "CHAT", "meta_information.senderId": userId }];
+      }
 
       if (status === "read") filter.isRead = true;
       if (status === "unread") filter.isRead = false;
@@ -70,11 +126,16 @@ class NotificationController {
         sort: { created_at: -1 },
       });
 
-      if (!rows || rows.length === 0) {
+      const dedupedRows = dedupeNotificationRows(rows || [], role !== Roles.SUPER_ADMIN ? userId : undefined);
+
+      if (!dedupedRows.length) {
         return ReE(res, NO_CONTENT, "No notifications found");
       }
 
-      const userFilter = role !== Roles.SUPER_ADMIN ? { userId, created_at: { $gte: cutoff } } : { created_at: { $gte: cutoff } };
+      const userFilter =
+        role !== Roles.SUPER_ADMIN
+          ? { userId, created_at: { $gte: cutoff }, $nor: [{ "meta_information.type": "CHAT", "meta_information.senderId": userId }] }
+          : { created_at: { $gte: cutoff } };
       const summaryRows: any[] = await notificationRepository.aggregateRaw([
         { $match: userFilter },
         {
@@ -104,7 +165,7 @@ class NotificationController {
           unreadCount,
           readCount,
         },
-        data: rows,
+        data: dedupedRows,
       });
     } catch (error) {
       console.error("Error fetching notifications:", error);

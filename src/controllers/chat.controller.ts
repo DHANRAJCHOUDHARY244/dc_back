@@ -26,9 +26,8 @@ import { computeUnreadForChat, computeUnreadStatsForChats } from "@services/chat
 import { UploadCategory } from "@constants/common.enum";
 import { uploadFiles } from "@utils/fileUpload.helper";
 import { UploadedFile } from "express-fileupload";
-import notificationController from "@controllers/notification.controller";
-import { EVENT_TASK_TYPE, SOCKET_EVENTS, USER_NOTIFICATION_EVENT_TYPE } from "@constants/socket.constants";
-import { chatNotificationRoute } from "@services/notificationLifecycle.service";
+import { chatNotificationRoute, dispatchChatInAppNotification } from "@services/notificationLifecycle.service";
+import { EVENT_TASK_TYPE } from "@constants/socket.constants";
 
 function formatChatTime(dateString?: string | Date): string {
   if (!dateString) return "";
@@ -340,28 +339,17 @@ class ChatController {
 
         const route = chatNotificationRoute(chatId);
         const notifyMessage = `${req.user.name} added you to ${chat!.name || "a group"}`;
-        void notificationController
-          .createNotification({
-            userId: u.id,
-            message: notifyMessage,
-            route,
-            meta: {
-              type: USER_NOTIFICATION_EVENT_TYPE.CHAT,
-              senderName: req.user.name,
-              chatId,
-              link: route,
-            },
-          })
-          .catch(() => undefined);
-        SocketService.emitToUser(u.id, SOCKET_EVENTS.USER_NOTIFICATION + `${u.id}`, {
-          type: USER_NOTIFICATION_EVENT_TYPE.CHAT,
-          name: req.user.name,
-          profile_image: req.user.profile_image,
-          task_type: EVENT_TASK_TYPE.CREATED,
-          message: notifyMessage,
+        void dispatchChatInAppNotification({
+          userId: u.id,
           chatId,
+          messageId: 0,
+          senderId: req.user.id,
+          message: notifyMessage,
           route,
-        });
+          senderName: req.user.name,
+          senderProfileImage: req.user.profile_image,
+          taskType: EVENT_TASK_TYPE.CREATED,
+        }).catch(() => undefined);
       }
 
       emitChatEvent(chatId, "members_updated", { chatId, members: newMembers });

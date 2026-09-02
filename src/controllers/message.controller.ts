@@ -4,7 +4,7 @@ import { ReE, ReS } from "@services/generalHelper.service";
 import { SUCCESS_CODE, SERVER_ERROR_CODE, BAD_REQUEST_CODE } from "@constants/serverCode";
 import { chatRepository, messageRepository, userRepository } from "@repositories";
 import { SocketService } from "@services/socket.service";
-import { EVENT_TASK_TYPE, SOCKET_EVENTS } from "@constants/socket.constants";
+import { EVENT_TASK_TYPE } from "@constants/socket.constants";
 import { UploadCategory } from "@constants/common.enum";
 import { uploadFiles } from "@utils/fileUpload.helper";
 import { UploadedFile } from "express-fileupload";
@@ -16,10 +16,12 @@ import {
   isUserMuted,
   loadReplyPreviews,
 } from "@services/chat.service";
-import notificationController from "@controllers/notification.controller";
-import { USER_NOTIFICATION_EVENT_TYPE } from "@constants/socket.constants";
-import { chatNotificationRoute } from "@services/notificationLifecycle.service";
+import { chatNotificationRoute, dispatchChatInAppNotification } from "@services/notificationLifecycle.service";
 import { buildLinkPreviews } from "@services/linkPreview.service";
+import {
+  lookupSentMessage,
+  rememberSentMessage,
+} from "@services/messageSendIdempotency.service";
 
 function detectKind(mime: string): "image" | "video" | "audio" | "document" {
   const m = String(mime || "").toLowerCase();
@@ -76,6 +78,64 @@ function uniqueMemberIds(members: number[] = []): number[] {
   return [...new Set(members.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0))];
 }
 
+async function notifyChatMembers(opts: {
+  chat: any;
+  chatId: number;
+  senderId: number;
+  senderName: string;
+  senderProfileImage?: string | null;
+  payload: ReturnType<typeof formatMessagePayload>;
+  notifyText: string;
+  validMentions: { userId: number; name: string }[];
+  replyTo: any;
+}) {
+  const members = uniqueMemberIds(opts.chat?.members || []);
+  const messageId = Number(opts.payload.id);
+
+  for (const m of members) {
+    const memberId = Number(m);
+    const senderId = Number(opts.senderId);
+    if (!Number.isFinite(memberId) || memberId <= 0) continue;
+
+    SocketService.emitToUser(memberId, `message_created_${opts.chatId}_${memberId}`, {
+      event: "created",
+      data: opts.payload,
+    });
+
+    if (memberId === senderId) continue;
+
+    const isMentioned = opts.validMentions.some((mn) => mn.userId === m);
+    const isReplyTarget = opts.replyTo && Number(opts.replyTo.senderId) === m;
+    const muted = isUserMuted(opts.chat, m);
+    if (muted && !isMentioned) continue;
+
+    const route = chatNotificationRoute(opts.chatId);
+    const notifyMessage = isMentioned
+      ? `${opts.senderName} mentioned you: ${opts.notifyText || "in a message"}`
+      : isReplyTarget
+        ? `${opts.senderName} replied to your message`
+        : `${opts.senderName}: ${opts.notifyText || "New message"}`;
+
+    await dispatchChatInAppNotification({
+      userId: memberId,
+      chatId: opts.chatId,
+      messageId,
+      senderId,
+      message: notifyMessage,
+      route,
+      senderName: opts.senderName,
+      senderProfileImage: opts.senderProfileImage,
+      taskType: isMentioned
+        ? EVENT_TASK_TYPE.MENTION
+        : isReplyTarget
+          ? EVENT_TASK_TYPE.REPLY
+          : EVENT_TASK_TYPE.CREATED,
+      mention: isMentioned,
+      reply: !!isReplyTarget,
+    }).catch(() => undefined);
+  }
+}
+
 class MessageController {
   async sendMessage(req: AuthenticatedRequest, res: Response) {
     try {
@@ -85,9 +145,35 @@ class MessageController {
       const content = stripHtml(String(req.body.content || "").trim());
       const replyToId = req.body.replyToId ? Number(req.body.replyToId) : null;
       const mentions = parseMentions(req.body.mentions);
+      const clientRequestId = String(req.body.clientRequestId || "").trim().slice(0, 64);
 
       if (!chatId || !senderId) {
         return ReE(res, BAD_REQUEST_CODE, "Missing chatId or senderId");
+      }
+
+      if (clientRequestId) {
+        const cachedId = lookupSentMessage(senderId, clientRequestId);
+        if (cachedId) {
+          const existing: any = await messageRepository.findById(cachedId, {
+            populate: { path: "sender", select: "id name email profile_image" },
+            lean: true,
+          });
+          if (existing && Number(existing.chatId) === chatId) {
+            let replyTo: any = null;
+            if (existing.replyToId) {
+              replyTo = await messageRepository.findById(existing.replyToId, {
+                populate: { path: "sender", select: "id name profile_image" },
+                lean: true,
+              });
+            }
+            return ReS(
+              res,
+              SUCCESS_CODE,
+              "Message sent successfully",
+              formatMessagePayload(existing, existing.sender, replyTo),
+            );
+          }
+        }
       }
 
       const { error, chat } = await assertChatMember(chatId, userId);
@@ -150,6 +236,32 @@ class MessageController {
         return ReE(res, BAD_REQUEST_CODE, "Message content or attachment required");
       }
 
+      const recentDuplicate: any = await messageRepository.findOne(
+        {
+          chatId,
+          senderId,
+          content,
+          created_at: { $gte: new Date(Date.now() - 4000) },
+        },
+        { sort: { id: -1 }, lean: true },
+      );
+      if (recentDuplicate && attachments.length === 0) {
+        const sender: any = await userRepository.findById(senderId, {
+          select: "id name email profile_image",
+          lean: true,
+        });
+        let replyTo: any = null;
+        if (recentDuplicate.replyToId) {
+          replyTo = await messageRepository.findById(recentDuplicate.replyToId, {
+            populate: { path: "sender", select: "id name profile_image" },
+            lean: true,
+          });
+        }
+        const payload = formatMessagePayload(recentDuplicate, sender, replyTo);
+        if (clientRequestId) rememberSentMessage(senderId, clientRequestId, Number(recentDuplicate.id));
+        return ReS(res, SUCCESS_CODE, "Message sent successfully", payload);
+      }
+
       const messageType = resolveMessageType(attachments, content);
       const message: any = await messageRepository.create({
         chatId,
@@ -182,56 +294,20 @@ class MessageController {
 
       await chatRepository.updateById(chatId, { $set: { updated_at: new Date() } }).catch(() => undefined);
 
-      members.forEach((m: number) => {
-        if (m === userId) return;
-        SocketService.emitToUser(m, `message_created_${chatId}_${m}`, {
-          event: "created",
-          data: payload,
-        });
+      if (clientRequestId && payload.id) {
+        rememberSentMessage(senderId, clientRequestId, Number(payload.id));
+      }
 
-        const isMentioned = validMentions.some((mn) => mn.userId === m);
-        const isReplyTarget = replyTo && Number(replyTo.senderId) === m;
-        const muted = isUserMuted(chat, m);
-        if (muted && !isMentioned) return;
-
-        const route = chatNotificationRoute(chatId);
-        const notifyMessage = isMentioned
-          ? `${req.user.name} mentioned you: ${notifyText || "in a message"}`
-          : isReplyTarget
-            ? `${req.user.name} replied to your message`
-            : `${req.user.name}: ${notifyText || "New message"}`;
-
-        void notificationController
-          .createNotification({
-            userId: m,
-            message: notifyMessage,
-            route,
-            meta: {
-              type: USER_NOTIFICATION_EVENT_TYPE.CHAT,
-              senderName: req.user.name,
-              chatId,
-              messageId: payload.id,
-              link: route,
-              mention: isMentioned,
-              reply: !!isReplyTarget,
-            },
-          })
-          .catch(() => undefined);
-
-        SocketService.emitToUser(m, SOCKET_EVENTS.USER_NOTIFICATION + `${m}`, {
-          type: USER_NOTIFICATION_EVENT_TYPE.CHAT,
-          name: req.user.name,
-          profile_image: req.user.profile_image,
-          task_type: isMentioned
-            ? EVENT_TASK_TYPE.MENTION
-            : isReplyTarget
-              ? EVENT_TASK_TYPE.REPLY
-              : EVENT_TASK_TYPE.CREATED,
-          message: notifyMessage,
-          chatId,
-          messageId: payload.id,
-          route,
-        });
+      await notifyChatMembers({
+        chat: chat!,
+        chatId,
+        senderId,
+        senderName: req.user.name,
+        senderProfileImage: req.user.profile_image,
+        payload,
+        notifyText,
+        validMentions,
+        replyTo,
       });
 
       emitChatEvent(chatId, "created_message", { chatId, message: payload });
@@ -549,45 +625,35 @@ class MessageController {
         await chatRepository.updateById(targetChatId, { $set: { updated_at: new Date() } }).catch(() => undefined);
 
         const members: number[] = uniqueMemberIds(targetChat.members || []);
-        members.forEach((m: number) => {
-          if (m === req.user.id) return;
-          SocketService.emitToUser(m, `message_created_${targetChatId}_${m}`, {
+        for (const m of members) {
+          const memberId = Number(m);
+          const senderId = Number(req.user.id);
+          if (!Number.isFinite(memberId) || memberId <= 0) continue;
+          if (memberId === senderId) continue;
+
+          SocketService.emitToUser(memberId, `message_created_${targetChatId}_${memberId}`, {
             event: "created",
             data: payload,
           });
 
-          const muted = isUserMuted(targetChat, m);
-          if (muted) return;
+          const muted = isUserMuted(targetChat, memberId);
+          if (muted) continue;
 
           const route = chatNotificationRoute(targetChatId);
           const notifyMessage = `${req.user.name} forwarded a message: ${notifyText || "New message"}`;
 
-          void notificationController
-            .createNotification({
-              userId: m,
-              message: notifyMessage,
-              route,
-              meta: {
-                type: USER_NOTIFICATION_EVENT_TYPE.CHAT,
-                senderName: req.user.name,
-                chatId: targetChatId,
-                messageId: payload.id,
-                link: route,
-              },
-            })
-            .catch(() => undefined);
-
-          SocketService.emitToUser(m, SOCKET_EVENTS.USER_NOTIFICATION + `${m}`, {
-            type: USER_NOTIFICATION_EVENT_TYPE.CHAT,
-            name: req.user.name,
-            profile_image: req.user.profile_image,
-            task_type: EVENT_TASK_TYPE.CREATED,
-            message: notifyMessage,
+          await dispatchChatInAppNotification({
+            userId: memberId,
             chatId: targetChatId,
-            messageId: payload.id,
+            messageId: Number(payload.id),
+            senderId,
+            message: notifyMessage,
             route,
-          });
-        });
+            senderName: req.user.name,
+            senderProfileImage: req.user.profile_image,
+            taskType: EVENT_TASK_TYPE.CREATED,
+          }).catch(() => undefined);
+        }
 
         emitChatEvent(targetChatId, "created_message", { chatId: targetChatId, message: payload });
         forwarded.push(payload);
