@@ -31,7 +31,7 @@ import {
 } from "@repositories";
 import * as hr from "@services/hrAttendance.service";
 import { displayEmployeeCode } from "@services/employeeId.service";
-import notificationController from "@controllers/notification.controller";
+import { dispatchNotification } from "@services/notificationHandler.service";
 
 function actor(req: AuthenticatedRequest) {
 	return { id: req.user.id, role: req.user.role, name: req.user.name };
@@ -243,8 +243,7 @@ class HrController {
 
 	async todayMine(req: AuthenticatedRequest, res: Response) {
 		try {
-			await hr.ensureEmployeeProfile(req.user.id);
-			const payload = await hr.buildTodayAttendancePayload(req.user.id);
+			const payload = await hr.getTodayAttendance(req.user.id);
 			return ReS(res, SUCCESS_CODE, "Today", payload);
 		} catch (e: any) {
 			return ReE(res, SERVER_ERROR_CODE, e.message);
@@ -513,8 +512,7 @@ class HrController {
 				status: "PENDING_TL",
 			});
 
-			await notificationController
-				.createNotification({
+			await dispatchNotification({
 					userId: req.user.id,
 					message: `Leave request submitted (${days} day(s))`,
 					route: "/#/hr/leave",
@@ -636,8 +634,7 @@ class HrController {
 				}
 			}
 
-			await notificationController
-				.createNotification({
+			await dispatchNotification({
 					userId: leave.user_id,
 					message: `Leave request ${nextStatus.replace(/_/g, " ").toLowerCase()}`,
 					route: "/#/hr/leave",
@@ -768,8 +765,7 @@ class HrController {
 				}
 			}
 
-			await notificationController
-				.createNotification({
+			await dispatchNotification({
 					userId: corr.user_id,
 					message: `Attendance correction ${nextStatus.replace(/_/g, " ").toLowerCase()}`,
 					route: "/#/hr/corrections",

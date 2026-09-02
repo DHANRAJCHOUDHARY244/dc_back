@@ -16,7 +16,7 @@ import {
 	taskTypeCatalogRepository,
 	userRepository,
 } from "@repositories";
-import notificationController from "@controllers/notification.controller";
+import { dispatchNotification } from "@services/notificationHandler.service";
 import { notifyMasterTaskBadgeChanged } from "@services/badgeNotify.service";
 import logger from "@utils/pino";
 
@@ -133,8 +133,7 @@ export async function createMasterTask(input: Record<string, any>, actorId: numb
 		escalation_history: [],
 	});
 
-	await notificationController
-		.createNotification({
+	await dispatchNotification({
 			userId: assigneeId,
 			message: `New task ${task_code}: ${title}`,
 			route: "master-tasks",
@@ -321,8 +320,7 @@ async function getRuleForType(taskType: string) {
 
 async function notifyUser(userId: number | null | undefined, message: string, meta: any) {
 	if (!userId) return;
-	await notificationController
-		.createNotification({
+	await dispatchNotification({
 			userId: Number(userId),
 			message,
 			route: "master-tasks",

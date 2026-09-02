@@ -1,5 +1,5 @@
 import { sendEmail } from "@utils/email";
-import notificationController from "@controllers/notification.controller";
+import { dispatchNotification } from "@services/notificationHandler.service";
 
 export const buildAssessmentLink = (assessmentId: number, token: string) => {
   return `${process.env.FRONT_URL}/#/assessment/${assessmentId}?token=${token}`;
@@ -68,7 +68,7 @@ export const notifyAssessmentCreated = async ({
   role?: string;
   assessmentLink: string;
 }) => {
-  await notificationController.createNotification({
+  await dispatchNotification({
     userId: senderId,
     message: `Assessment #${assessment.id} created.`,
     route: assessmentLink,
@@ -97,7 +97,7 @@ export const notifyAssessmentFollowUp = async ({
   role?: string;
   assessmentLink: string;
 }) => {
-  await notificationController.createNotification({
+  await dispatchNotification({
     userId: senderId,
     message: `Follow-up sent for Assessment #${assessment.id}.`,
     route: assessmentLink,
@@ -118,7 +118,7 @@ export const notifyAssessmentSubmitted = async ({
   senderId: number;
   assessment: any;
 }) => {
-  await notificationController.createNotification({
+  await dispatchNotification({
     userId: senderId,
     message: `Assessment #${assessment.id} submitted.`,
     route: `${process.env.FRONTEND_URL}/assessment/view/${assessment.id}`,

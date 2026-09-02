@@ -9,23 +9,35 @@ import { AuthenticatedRequest } from "@constants/common.interface";
 import { Response } from "express";
 import { notificationRepository } from "@repositories";
 import { Roles } from "src/data/dataInserter";
-import { notificationCutoffDate } from "@services/notificationLifecycle.service";
+import { notificationCutoffDate, purgeChatNotificationsForUser } from "@services/notificationLifecycle.service";
 
 function escapeRegex(value: string) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-class NotificationController {
-  async  createNotification ({userId,message,route,meta = {},}:
-     {userId: number;message: string;route: string;meta?: Record<string, any>;}) {
-  try {
-    const notification = await notificationRepository.create({ userId, message, route, meta_information: meta,});
-    return notification;
-  } catch (error) {
-    console.error("Error creating notification:", error);
-    throw error;
-  }
+function dedupeNotificationRows(rows: any[], userId?: number): any[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const meta = row?.meta_information || {};
+    if (
+      userId != null &&
+      String(meta.type || "").toUpperCase() === "CHAT" &&
+      Number(meta.senderId) === Number(userId)
+    ) {
+      return false;
+    }
+    const key =
+      meta.dedupKey ||
+      (meta.type === "CHAT" && meta.chatId != null && meta.messageId != null
+        ? `chat:${meta.chatId}:msg:${meta.messageId}:user:${row.userId}`
+        : `id:${row.id}`);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
+
+class NotificationController {
   async getUserNotifications(req: AuthenticatedRequest, res: Response) {
     try {
       const { limit = 10, page = 1, status = null, type = null } = req.body;
@@ -33,7 +45,15 @@ class NotificationController {
       const cutoff = notificationCutoffDate();
 
       const filter: any = { created_at: { $gte: cutoff } };
-      if (role !== Roles.SUPER_ADMIN) filter.userId = userId;
+      if (role !== Roles.SUPER_ADMIN) {
+        filter.userId = userId;
+        filter.$nor = [{ "meta_information.type": "CHAT", "meta_information.senderId": userId }];
+      }
+
+      // Chat alerts use the header chat icon — keep them out of the bell drawer.
+      if (!type) {
+        filter["meta_information.type"] = { $ne: "CHAT" };
+      }
 
       if (status === "read") filter.isRead = true;
       if (status === "unread") filter.isRead = false;
@@ -50,11 +70,21 @@ class NotificationController {
         sort: { created_at: -1 },
       });
 
-      if (!rows || rows.length === 0) {
+      const dedupedRows = dedupeNotificationRows(rows || [], role !== Roles.SUPER_ADMIN ? userId : undefined);
+
+      if (!dedupedRows.length) {
         return ReE(res, NO_CONTENT, "No notifications found");
       }
 
-      const userFilter = role !== Roles.SUPER_ADMIN ? { userId, created_at: { $gte: cutoff } } : { created_at: { $gte: cutoff } };
+      const userFilter =
+        role !== Roles.SUPER_ADMIN
+          ? {
+              userId,
+              created_at: { $gte: cutoff },
+              $nor: [{ "meta_information.type": "CHAT", "meta_information.senderId": userId }],
+              "meta_information.type": { $ne: "CHAT" },
+            }
+          : { created_at: { $gte: cutoff }, "meta_information.type": { $ne: "CHAT" } };
       const summaryRows: any[] = await notificationRepository.aggregateRaw([
         { $match: userFilter },
         {
@@ -84,7 +114,7 @@ class NotificationController {
           unreadCount,
           readCount,
         },
-        data: rows,
+        data: dedupedRows,
       });
     } catch (error) {
       console.error("Error fetching notifications:", error);
@@ -127,6 +157,17 @@ class NotificationController {
       return ReS(res, SUCCESS_CODE, "Notifications deleted successfully", { deletedIds: ids });
     } catch (error) {
       console.error("Error deleting notifications:", error);
+      return ReE(res, SERVER_ERROR_CODE, "Something went wrong");
+    }
+  }
+
+  async deleteChatNotifications(req: AuthenticatedRequest, res: Response) {
+    try {
+      const chatId = req.body?.chatId != null ? Number(req.body.chatId) : undefined;
+      const deletedCount = await purgeChatNotificationsForUser(req.user.id, chatId);
+      return ReS(res, SUCCESS_CODE, "Chat notifications cleared", { deletedCount });
+    } catch (error) {
+      console.error("Error deleting chat notifications:", error);
       return ReE(res, SERVER_ERROR_CODE, "Something went wrong");
     }
   }

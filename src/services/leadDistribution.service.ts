@@ -7,7 +7,7 @@ import {
 	userRepository,
 } from "@repositories";
 import { Roles } from "src/data/dataInserter";
-import notificationController from "@controllers/notification.controller";
+import { dispatchNotification } from "@services/notificationHandler.service";
 import { resolveAssigneeTeamLeaderId } from "@services/leadAssignment.service";
 import { pushAudit } from "@services/leadAudit.service";
 
@@ -220,8 +220,7 @@ export async function autoAssignLead(lead: any, actorId?: number | null) {
 			},
 		},
 	);
-	await notificationController
-		.createNotification({
+	await dispatchNotification({
 			userId: pick.user_id,
 			message: `New lead ${lead.public_id || `#${lead.id}`} (${lead.name}) assigned to you.`,
 			route: `${process.env.FRONT_URL}/#/leads`,

@@ -36,13 +36,35 @@ import { s3Service } from "@services/s3.service";
 import { sendEventEmail } from "@services/email.service";
 import { EVENT_TASK_TYPE } from "@constants/socket.constants";
 import { Roles } from "src/data/dataInserter";
-import notificationController from "./notification.controller";
+import { dispatchNotification } from "@services/notificationHandler.service";
 import { sendMasterQuoteEmail } from "@services/quoteMasterEmail.service";
 import { QuoteEmailType } from "@constants/quoteEmailconstants";
 import { advanceQuotePipeline } from "@services/quotePipeline.service";
 import { installationScheduledTemplate } from "@template/installationScheduled";
 import { installationRescheduledTemplate } from "@template/installationRescheduled";
 import { projectCancelledTemplate } from "@template/projectCancelled";
+
+function parseQuoteExtraSelections(raw: unknown): { extraId: number; quantity: number }[] {
+  if (!Array.isArray(raw)) return [];
+  const map = new Map<number, number>();
+  for (const item of raw) {
+    if (typeof item === "number") {
+      const id = Number(item);
+      if (Number.isFinite(id) && id > 0) map.set(id, (map.get(id) || 0) + 1);
+      continue;
+    }
+    if (item && typeof item === "object") {
+      const extraId = Number((item as any).extraId ?? (item as any).id);
+      const quantity = Math.max(1, Number((item as any).quantity) || 1);
+      if (Number.isFinite(extraId) && extraId > 0) map.set(extraId, quantity);
+    }
+  }
+  return Array.from(map.entries()).map(([extraId, quantity]) => ({ extraId, quantity }));
+}
+
+function extraSelectionsToFlatIds(selections: { extraId: number; quantity: number }[]): number[] {
+  return selections.flatMap((s) => Array(Math.max(1, s.quantity)).fill(s.extraId));
+}
 import { stockDeliveryScheduledTemplate } from "@template/stockDeliveryScheduled";
 import { getCompanyConfig } from "@services/crmSettings.service";
 import { sendEmail } from "@utils/email";
@@ -180,6 +202,8 @@ class QuotesController {
       extraWiringMeters,
       boardUpgrade,
       miniSubboardRequired,
+      selectedExtras,
+      extraSelections,
       vpp,
       vppProvider,
       postcode,
@@ -234,6 +258,16 @@ class QuotesController {
     if (extraWiringMeters !== undefined) payload.extraWiringMeters = extraWiringMeters;
     if (boardUpgrade !== undefined) payload.boardUpgrade = !!boardUpgrade;
     if (miniSubboardRequired !== undefined) payload.miniSubboardRequired = !!miniSubboardRequired;
+    if (extraSelections !== undefined) {
+      const parsed = parseQuoteExtraSelections(extraSelections);
+      payload.extraSelections = parsed;
+      payload.selectedExtras = extraSelectionsToFlatIds(parsed);
+    } else if (selectedExtras !== undefined) {
+      payload.selectedExtras = Array.isArray(selectedExtras)
+        ? selectedExtras.map(Number).filter((id) => Number.isFinite(id) && id > 0)
+        : [];
+      payload.extraSelections = parseQuoteExtraSelections(payload.selectedExtras);
+    }
     if (vpp !== undefined) payload.vpp = !!vpp;
     if (vppProvider !== undefined) payload.vppProvider = vppProvider;
     if (postcode !== undefined) payload.postcode = postcode;
@@ -346,7 +380,7 @@ class QuotesController {
       ReS(res, SUCCESS_CODE, "Quote processed successfully", quote);
       return (async () => {
         try {
-          await notificationController.createNotification({
+          await dispatchNotification({
             userId: adminData.id,
             message: isUpdate
               ? `Quotation #${quote.id} has been updated.`
@@ -617,7 +651,7 @@ class QuotesController {
 
       await stockOrderRepository.deleteMany({ quote_id: Number(id) });
 
-      await notificationController.createNotification({
+      await dispatchNotification({
         userId: req.user.id,
         message: `Quotation #${id} has been deleted.`,
         route: null,
@@ -1121,7 +1155,7 @@ class QuotesController {
       }
       ReS(res, SUCCESS_CODE, "Quote status updated successfully.");
       if (customer?.id) {
-        await notificationController.createNotification({
+        await dispatchNotification({
           userId: customer.id,
           message: `Quotation #${existing.id} status has been updated to ${status}.`,
           route: `${process.env.FRONT_URL}/#/quote/customer-view/${existing.id}/${existing.bypass_token}`,
@@ -1138,7 +1172,7 @@ class QuotesController {
         type: QuoteEmailType.STATUS_UPDATED,
       });
       if (created_invoice && customer?.id && invoiceEmailData) {
-        await notificationController.createNotification({
+        await dispatchNotification({
           userId: customer.id,
           message: `Invoice #${created_invoice.id} has been created for Quotation #${existing.id}.`,
           route: `${process.env.FRONT_URL}/#/invoice/customer-view/${created_invoice.id}/${created_invoice.bypass_token}`,
@@ -1354,6 +1388,8 @@ class QuotesController {
         extraWiringMeters,
         boardUpgrade,
         miniSubboardRequired,
+        selectedExtras,
+        extraSelections,
         vpp,
         vppProvider,
         postcode,
@@ -1399,6 +1435,16 @@ class QuotesController {
       if (extraWiringMeters !== undefined) pricingPatch.extraWiringMeters = extraWiringMeters;
       if (boardUpgrade !== undefined) pricingPatch.boardUpgrade = !!boardUpgrade;
       if (miniSubboardRequired !== undefined) pricingPatch.miniSubboardRequired = !!miniSubboardRequired;
+      if (extraSelections !== undefined) {
+        const parsed = parseQuoteExtraSelections(extraSelections);
+        pricingPatch.extraSelections = parsed;
+        pricingPatch.selectedExtras = extraSelectionsToFlatIds(parsed);
+      } else if (selectedExtras !== undefined) {
+        pricingPatch.selectedExtras = Array.isArray(selectedExtras)
+          ? selectedExtras.map(Number).filter((id) => Number.isFinite(id) && id > 0)
+          : [];
+        pricingPatch.extraSelections = parseQuoteExtraSelections(pricingPatch.selectedExtras);
+      }
       if (vpp !== undefined) pricingPatch.vpp = !!vpp;
       if (vppProvider !== undefined) pricingPatch.vppProvider = vppProvider;
       if (postcode !== undefined) pricingPatch.postcode = postcode;
@@ -2194,7 +2240,7 @@ class QuotesController {
         console.warn(`markStockOrdered: no customer email for quote #${id}`);
       }
 
-      await notificationController.createNotification({
+      await dispatchNotification({
         userId: req.user.id,
         message: `Stock ordered for Quote #${id} — delivery ${formatAuDate(parsedDeliveryDate)}.`,
         route: `${process.env.FRONT_URL}/#/quote/customer-view/${quote.id}/${quote.bypass_token}`,
@@ -2352,7 +2398,7 @@ class QuotesController {
         console.warn(`scheduleInstallation: no customer email for quote #${id}`);
       }
 
-      await notificationController.createNotification({
+      await dispatchNotification({
         userId: req.user.id,
         message: `Installation scheduled for Quote #${id} on ${formatAuDate(parsedDate)}.`,
         route: `${process.env.FRONT_URL}/#/quote/customer-view/${quote.id}/${quote.bypass_token}`,
@@ -2525,7 +2571,7 @@ class QuotesController {
         console.warn(`rescheduleInstallation: no customer email for quote #${id}`);
       }
 
-      await notificationController.createNotification({
+      await dispatchNotification({
         userId: req.user.id,
         message: `Installation rescheduled for Quote #${id} to ${formatAuDate(parsedDate)}.`,
         route: `${process.env.FRONT_URL}/#/quote/customer-view/${quote.id}/${quote.bypass_token}`,
@@ -2886,7 +2932,7 @@ class QuotesController {
         console.warn(`cancelProject: no customer email for quote #${id}`);
       }
 
-      await notificationController.createNotification({
+      await dispatchNotification({
         userId: req.user.id,
         message: `Quote #${id} cancelled — ${reasonLabel}`,
         route: `${process.env.FRONT_URL}/#/quote/customer-view/${quote.id}/${quote.bypass_token}`,

@@ -110,6 +110,18 @@ const QuoteSchema = new Schema(
     extraWiringMeters: { type: Number, default: 0 },
     boardUpgrade: { type: Boolean, default: false },
     miniSubboardRequired: { type: Boolean, default: false },
+    /** Calculator catalog extra ids selected on this quote (legacy) */
+    selectedExtras: { type: [Number], default: [] },
+    /** Calculator catalog extras with quantity */
+    extraSelections: {
+      type: [
+        {
+          extraId: { type: Number, required: true },
+          quantity: { type: Number, default: 1, min: 1 },
+        },
+      ],
+      default: [],
+    },
     /** Virtual Power Plant participation */
     vpp: { type: Boolean, default: false },
     vppProvider: { type: String, default: "" },

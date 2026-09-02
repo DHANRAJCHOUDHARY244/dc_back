@@ -8,7 +8,7 @@ import { deleteFileFromStorage, getRelativeFilePath, uploadFiles } from "@utils/
 import { sendEmail } from "@utils/email";
 import { eventTemplate } from "@template/eventTemplate";
 import { EVENT_TASK_TYPE } from "@constants/socket.constants";
-import notificationController from "./notification.controller";
+import { dispatchNotification } from "@services/notificationHandler.service";
 import { getCompanyConfig } from "@services/crmSettings.service";
 import { Roles } from "src/data/dataInserter";
 
@@ -143,7 +143,7 @@ const createAgreementNotification = async ({
   const bypassToken = await ensureAgreementBypassToken(agreement);
   const route = buildAgreementLink(agreement.id, bypassToken);
   const action = type === "FOLLOW_UP" ? "Follow-up sent for" : "New";
-  await notificationController.createNotification({
+  await dispatchNotification({
     userId,
     message: message || `${action} Installer Agreement #${agreement.id}.`,
     route,

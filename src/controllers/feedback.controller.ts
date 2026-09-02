@@ -14,7 +14,7 @@ import { getNextSequence } from "@db/counter.model";
 import { ReE, ReS } from "@services/generalHelper.service";
 import { uploadFiles } from "@utils/fileUpload.helper";
 import { Roles } from "src/data/dataInserter";
-import notificationController from "@controllers/notification.controller";
+import { dispatchNotification } from "@services/notificationHandler.service";
 import {
 	employeeProfileRepository,
 	feedbackAuditLogRepository,
@@ -169,7 +169,7 @@ async function notifyAdmins(settings: any, message: string, caseRef: string, met
 	const users: any[] = await userRepository.find({ role_id: { $in: roleIds }, deleted_at: null }, { lean: true });
 	for (const u of users) {
 		try {
-			await notificationController.createNotification({
+			await dispatchNotification({
 				userId: u.id,
 				message,
 				route: "feedback/admin/cases",
@@ -476,7 +476,7 @@ class FeedbackController {
 
 			if (patch.status && patch.status !== existing.status && !existing.is_anonymous) {
 				try {
-					await notificationController.createNotification({
+					await dispatchNotification({
 						userId: existing.submitter_user_id,
 						message: `Case ${existing.case_id} status: ${patch.status}`,
 						route: "feedback/my",
@@ -560,7 +560,7 @@ class FeedbackController {
 			const notifyUserId = admin ? existing.submitter_user_id : null;
 			if (notifyUserId && !existing.is_anonymous) {
 				try {
-					await notificationController.createNotification({
+					await dispatchNotification({
 						userId: notifyUserId,
 						message: `New message on case ${existing.case_id}`,
 						route: "feedback/my",

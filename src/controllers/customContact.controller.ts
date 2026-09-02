@@ -26,7 +26,7 @@ import {
 import { sendEmail } from "@utils/email";
 import { eventTemplate } from "@template/eventTemplate";
 import { EVENT_TASK_TYPE } from "@constants/socket.constants";
-import notificationController from "./notification.controller";
+import { dispatchNotification } from "@services/notificationHandler.service";
 import { getCompanyConfig } from "@services/crmSettings.service";
 
 type ContactEmailType = "CREATED" | "FOLLOW_UP" | "SIGNED";
@@ -163,7 +163,7 @@ const createContactNotification = async ({
   const bypassToken = await ensureContactBypassToken(agreement);
   const route = buildContactLink(agreement.id, bypassToken);
   const action = type === "FOLLOW_UP" ? "Follow-up sent for" : "New";
-  await notificationController.createNotification({
+  await dispatchNotification({
     userId,
     message: message || `${action} Contract #${agreement.id}.`,
     route,

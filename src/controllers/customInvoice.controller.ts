@@ -5,7 +5,7 @@ import { generate_Hash_Password, generateRandomString, generateUUID, ReE, ReS } 
 import { BAD_REQUEST_CODE, FORBIDDEN_CODE, SERVER_ERROR_CODE, SUCCESS_CODE, UNAUTHORIZED_CODE } from "@constants/serverCode";
 import { PaymentStatus } from "@constants/common.enum";
 import { EVENT_TASK_TYPE } from "@constants/socket.constants";
-import notificationController from "./notification.controller";
+import { dispatchNotification } from "@services/notificationHandler.service";
 import { sendEventEmail } from "@services/email.service";
 import {
     canMutateCustomInvoice,
@@ -177,7 +177,7 @@ class CustomInvoiceController {
                         link: `${process.env.FRONT_URL}/#/custom-invoice/customer-view/${customInvoice.id}/${customInvoice.bypass_token}`,
                         event: isUpdate ? EVENT_TASK_TYPE.UPDATED : EVENT_TASK_TYPE.CREATED,
                     };
-                    await notificationController.createNotification({
+                    await dispatchNotification({
                         userId: adminData.id,
                         message: isUpdate
                             ? `Invoice #${customInvoice.id} has been updated.`
@@ -253,7 +253,7 @@ class CustomInvoiceController {
             }
 
             await customInvoiceRepository.deleteById(id);
-            await notificationController.createNotification({
+            await dispatchNotification({
                 userId: req.user.id,
                 message: `CustomInvoice #${id} has been deleted.`,
                 route: null,

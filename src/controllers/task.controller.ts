@@ -4,7 +4,7 @@ import {
   taskRepository,
   userRepository,
 } from "@repositories";
-import notificationController from "@controllers/notification.controller";
+import { dispatchNotification } from "@services/notificationHandler.service";
 
 import {
   BAD_REQUEST_CODE,
@@ -64,7 +64,7 @@ class TaskController {
         ],
       });
 
-      await notificationController.createNotification({
+      await dispatchNotification({
         userId: user_id,
         message: "You have been assigned a new task",
         route: `/tasks/${task.id}`,
@@ -235,7 +235,7 @@ async updateTask(req: AuthenticatedRequest, res: Response) {
 
     const updated = await taskRepository.updateById(Number(taskId), { $set: updatePayload });
 
-    await notificationController.createNotification({
+    await dispatchNotification({
       userId: plain.user_id,
       message: "Task details updated",
       route: `/tasks/${plain.id}`,
@@ -308,7 +308,7 @@ async updateTask(req: AuthenticatedRequest, res: Response) {
             ? "Task marked as partially completed"
             : "Task status updated";
 
-      await notificationController.createNotification({
+      await dispatchNotification({
         userId: plain.user_id,
         message: notificationMessage,
         route: `/tasks/${plain.id}`,
@@ -340,7 +340,7 @@ async updateTask(req: AuthenticatedRequest, res: Response) {
 
       await taskRepository.deleteById(Number(req.params.id));
 
-      await notificationController.createNotification({
+      await dispatchNotification({
         userId: plain.user_id,
         message: "Task deleted",
         route: "/tasks",

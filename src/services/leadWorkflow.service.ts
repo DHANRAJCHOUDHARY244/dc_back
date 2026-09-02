@@ -14,7 +14,7 @@ import {
 import { getCompanyConfig } from "@services/crmSettings.service";
 import { leadRepository, roleRepository, userRepository } from "@repositories";
 import { Roles } from "src/data/dataInserter";
-import notificationController from "@controllers/notification.controller";
+import { dispatchNotification } from "@services/notificationHandler.service";
 import { applyLeadScope, getLeadAccess, isLeadAdminRole } from "@services/leadAccess.service";
 import { autoAssignLead, getDistributionSettings, pickBestAgent } from "@services/leadDistribution.service";
 import {
@@ -673,7 +673,7 @@ export async function assignLeadsRoundRobin(opts: {
   for (const sid of salespersonIds) {
     const count = assignments[sid]?.length || 0;
     if (!count) continue;
-    await notificationController.createNotification({
+    await dispatchNotification({
       userId: sid,
       message: `${count} new lead${count === 1 ? "" : "s"} assigned to you.`,
       route: `${process.env.FRONT_URL}/#/leads`,
@@ -726,8 +726,7 @@ export async function runLeadSupervisor(opts: { reassign?: boolean; hours?: numb
     const msg = `Lead ${lead.public_id || `#${lead.id}`} (${lead.name}) uncontacted for ${Math.round(assignedAgo)}h — Level ${level}.`;
 
     if (lead.owner_id) {
-      await notificationController
-        .createNotification({
+      await dispatchNotification({
           userId: lead.owner_id,
           message: `Follow-up L${level}: ${msg}`,
           route: `${process.env.FRONT_URL}/#/leads`,
@@ -736,8 +735,7 @@ export async function runLeadSupervisor(opts: { reassign?: boolean; hours?: numb
         .catch(() => undefined);
     }
     if (level >= 2 && lead.team_leader_id) {
-      await notificationController
-        .createNotification({
+      await dispatchNotification({
           userId: lead.team_leader_id,
           message: `Team Leader L${level}: ${msg}`,
           route: `${process.env.FRONT_URL}/#/leads`,
@@ -747,8 +745,7 @@ export async function runLeadSupervisor(opts: { reassign?: boolean; hours?: numb
     }
     if (level >= 3) {
       for (const m of managers) {
-        await notificationController
-          .createNotification({
+        await dispatchNotification({
             userId: m.id,
             message: `Admin L3: ${msg}`,
             route: `${process.env.FRONT_URL}/#/leads`,
@@ -1069,8 +1066,7 @@ export async function transferLead(
       },
     },
   );
-  await notificationController
-    .createNotification({
+  await dispatchNotification({
       userId: Number(data.to_user_id),
       message: `Lead ${lead.public_id || `#${lead.id}`} transferred to you.`,
       route: `${process.env.FRONT_URL}/#/leads`,

@@ -10,7 +10,7 @@ import { fileUpload } from "express-fileupload";
 import fs from "fs";
 import mongoose from "mongoose";
 import path from "path";
-import notificationController from "./notification.controller";
+import { dispatchNotification } from "@services/notificationHandler.service";
 
 const ALLOWED_MIME = [
 	"image/png",
@@ -348,7 +348,7 @@ class AllInOneJobController {
 			for (const uid of notifyIds) {
 				if (uid === req.user?.id) continue;
 				try {
-					await notificationController.createNotification({
+					await dispatchNotification({
 						userId: uid,
 						message: `Pre Approval + Grid Assessment job ${job_number} created`,
 						route: `/all-in-one/job/${(created as any).id}`,
@@ -422,7 +422,7 @@ class AllInOneJobController {
 
 			if (statusChanged && existing.created_by && existing.created_by !== req.user?.id) {
 				try {
-					await notificationController.createNotification({
+					await dispatchNotification({
 						userId: existing.created_by,
 						message: `Pre Approval + Grid Assessment job ${existing.job_number} status updated`,
 						route: `/all-in-one/job/${id}`,
