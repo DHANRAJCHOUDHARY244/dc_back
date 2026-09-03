@@ -14,6 +14,8 @@ const AttendancePunchSchema = new Schema(
 		check_in_location: jsonObject,
 		check_out_location: jsonObject,
 		live_location: jsonObject,
+		/** Capped live GPS trail while session is open (newest kept via $slice on push). */
+		location_trail: { type: [Schema.Types.Mixed], default: [] },
 		check_in_ip: { type: String, default: "" },
 		check_out_ip: { type: String, default: "" },
 		source: {

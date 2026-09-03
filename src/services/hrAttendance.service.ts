@@ -70,6 +70,70 @@ function hasCoords(location: unknown): location is AttendanceLocation {
 	);
 }
 
+const EARTH_RADIUS_M = 6_371_000;
+
+function haversineMeters(a: AttendanceLocation, b: AttendanceLocation): number {
+	const toRad = (d: number) => (d * Math.PI) / 180;
+	const dLat = toRad(b.lat - a.lat);
+	const dLng = toRad(b.lng - a.lng);
+	const lat1 = toRad(a.lat);
+	const lat2 = toRad(b.lat);
+	const h =
+		Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+	return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+const LIVE_TRAIL_MAX = 40;
+
+function trailPoints(punch: any): AttendanceLocation[] {
+	const raw = Array.isArray(punch.location_trail) ? punch.location_trail : [];
+	return raw.filter(hasCoords);
+}
+
+function punchDistanceMeters(punch: any): number | undefined {
+	if (!hasCoords(punch.check_in_location)) return undefined;
+	if (hasCoords(punch.check_out_location)) {
+		return Math.round(haversineMeters(punch.check_in_location, punch.check_out_location));
+	}
+	if (!punch.check_out_at && hasCoords(punch.live_location)) {
+		return Math.round(haversineMeters(punch.check_in_location, punch.live_location));
+	}
+	return undefined;
+}
+
+function buildSessionPaths(punches: any[]) {
+	return punches
+		.map((punch) => {
+			const points: AttendanceLocation[] = [];
+			if (hasCoords(punch.check_in_location)) points.push(punch.check_in_location);
+			for (const p of trailPoints(punch)) {
+				const last = points[points.length - 1];
+				if (last && last.lat === p.lat && last.lng === p.lng) continue;
+				points.push(p);
+			}
+			if (hasCoords(punch.check_out_location)) {
+				const last = points[points.length - 1];
+				if (!last || last.lat !== punch.check_out_location.lat || last.lng !== punch.check_out_location.lng) {
+					points.push(punch.check_out_location);
+				}
+			} else if (!punch.check_out_at && hasCoords(punch.live_location)) {
+				const last = points[points.length - 1];
+				if (!last || last.lat !== punch.live_location.lat || last.lng !== punch.live_location.lng) {
+					points.push(punch.live_location);
+				}
+			}
+			if (points.length < 2) return null;
+			return {
+				punch_id: punch.id,
+				user_id: punch.user_id,
+				open: !punch.check_out_at,
+				distance_m: punchDistanceMeters(punch),
+				points,
+			};
+		})
+		.filter(Boolean);
+}
+
 async function getOpenPunch(userId: number, dateKey?: string) {
 	const filter: Record<string, unknown> = { user_id: userId, check_out_at: null };
 	/** Optional date filter — omit so overnight sessions stay open (no auto checkout at midnight). */
@@ -192,18 +256,27 @@ export async function getAttendanceMapPunches(user: AnyUser, days = 10, targetUs
 		{ lean: true, sort: { check_in_at: -1 } },
 	);
 
-	const markers = buildPunchMarkers(punches);
+	const userMeta = await loadUserMeta([userId]);
+	const markers = buildPunchMarkers(punches, userMeta);
+	const session_paths = buildSessionPaths(punches);
 
 	const totalSpentMinutes = sumPunchMinutes(punches, true);
 	const openPunch = await getActiveOpenPunch(userId);
+	const enrichedPunches = punches.map((punch) => ({
+		...punch,
+		user_name: userMeta.get(punch.user_id)?.name || `User #${punch.user_id}`,
+		employee_code: userMeta.get(punch.user_id)?.employee_code || "",
+		distance_m: punchDistanceMeters(punch),
+	}));
 
 	return {
 		days,
 		user_id: userId,
 		since: since.toISOString(),
 		is_checked_in: !!openPunch,
-		punches,
+		punches: enrichedPunches,
 		markers,
+		session_paths,
 		total_spent_minutes: totalSpentMinutes,
 		total_spent_label: formatHoursMinutes(totalSpentMinutes),
 		live_location: openPunch?.live_location || null,
@@ -243,8 +316,10 @@ export async function getTeamAttendanceMapToday(user: AnyUser) {
 		...punch,
 		user_name: userMeta.get(punch.user_id)?.name || `User #${punch.user_id}`,
 		employee_code: userMeta.get(punch.user_id)?.employee_code || "",
+		distance_m: punchDistanceMeters(punch),
 	}));
 	const markers = buildPunchMarkers(punches, userMeta);
+	const session_paths = buildSessionPaths(punches);
 	const totalSpentMinutes = sumPunchMinutes(punches, true);
 	const activeEmployees = new Set(
 		punches.filter((p) => !p.check_out_at).map((p) => p.user_id),
@@ -258,6 +333,7 @@ export async function getTeamAttendanceMapToday(user: AnyUser) {
 		active_employee_count: activeEmployees,
 		punches: enrichedPunches,
 		markers,
+		session_paths,
 		total_spent_minutes: totalSpentMinutes,
 		total_spent_label: formatHoursMinutes(totalSpentMinutes),
 		is_checked_in: activeEmployees > 0,
@@ -273,6 +349,12 @@ export async function updateLiveAttendanceLocation(user: AnyUser, locationInput:
 
 	const updated = await attendancePunchRepository.updateById(openPunch.id, {
 		$set: { live_location: location },
+		$push: {
+			location_trail: {
+				$each: [location],
+				$slice: -LIVE_TRAIL_MAX,
+			},
+		},
 	});
 	return updated;
 }
@@ -282,10 +364,12 @@ function buildPunchMarkers(
 	userMeta?: Map<number, { name: string; employee_code?: string }>,
 ) {
 	return punches.flatMap((punch) => {
+		const distance_m = punchDistanceMeters(punch);
 		const meta = {
 			user_id: punch.user_id,
 			user_name: userMeta?.get(punch.user_id)?.name || `User #${punch.user_id}`,
 			employee_code: userMeta?.get(punch.user_id)?.employee_code || "",
+			distance_m,
 		};
 		const items: any[] = [];
 		if (hasCoords(punch.check_in_location)) {
@@ -499,13 +583,19 @@ export async function migrateEmployeeProfiles() {
 	if (customerRole?.id) filter.role_id = { $ne: customerRole.id };
 
 	const users: any[] = await userRepository.find(filter, { lean: true, select: "id role_id name" });
+	const userIds = users.map((u) => u.id);
+	const existingProfiles: any[] = userIds.length
+		? await employeeProfileRepository.find(
+				{ user_id: { $in: userIds } },
+				{ lean: true, select: "user_id" },
+			)
+		: [];
+	const existingIds = new Set(existingProfiles.map((p) => p.user_id));
 	let created = 0;
 	for (const u of users) {
-		const exists = await employeeProfileRepository.findOne({ user_id: u.id }, { lean: true });
-		if (!exists) {
-			await ensureEmployeeProfile(u.id);
-			created += 1;
-		}
+		if (existingIds.has(u.id)) continue;
+		await ensureEmployeeProfile(u.id);
+		created += 1;
 	}
 	const { syncAllEmployeeDisplayCodes } = await import("@services/employeeId.service");
 	const codes = await syncAllEmployeeDisplayCodes();
@@ -671,6 +761,7 @@ export async function checkIn(user: AnyUser, ip = "", locationInput?: unknown) {
 		duration_minutes: 0,
 		check_in_location: location || {},
 		live_location: location || {},
+		location_trail: location ? [location] : [],
 		check_in_ip: ip,
 		source: AttendanceSource.SELF_PUNCH,
 	});

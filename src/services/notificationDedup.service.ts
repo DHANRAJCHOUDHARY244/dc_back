@@ -35,8 +35,12 @@ export function buildNotificationDedupKey(
     }
   }
 
-  const leadId = meta.lead_id;
+  const leadId = meta.lead_id ?? meta.leadId;
   const level = meta.level;
+  if (type === "LEAD_FOLLOWUP" && leadId != null && level != null) {
+    const audience = String(meta.audience || "user");
+    return `lead_followup:${leadId}:L${level}:${audience}:user:${userId}`;
+  }
   if (leadId != null && level != null) {
     return `lead:${leadId}:L${level}:user:${userId}`;
   }

@@ -268,6 +268,10 @@ export type QuoteEstimateLine = {
   unit_price?: number;
   capacity?: string;
   model?: string;
+  /** Explicit solar system size (kW) from product variant */
+  size_kw?: number;
+  /** Explicit battery usable capacity (kWh) from product variant */
+  battery_kwh?: number;
 };
 
 export type EstimateInput = {
@@ -382,8 +386,16 @@ function parseBatteryKwhFromText(...parts: Array<string | null | undefined>): nu
   for (const part of parts) {
     const text = String(part || "").trim();
     if (!text) continue;
-    // Prefer explicit kWh match; also accept "kW" for batteries where catalogs misuse the unit.
-    const match = text.match(/(\d+(?:\.\d+)?)\s*k\s*w?h?/i) || text.match(/(\d+(?:\.\d+)?)/);
+    // Prefer explicit kWh (require h) so "6.6kW" solar labels are not treated as battery.
+    const kwhMatch = text.match(/(\d+(?:\.\d+)?)\s*k\s*w\s*h\b/i);
+    if (kwhMatch) {
+      const value = Number(kwhMatch[1]);
+      if (Number.isFinite(value) && value > 0) return value;
+      continue;
+    }
+    // Bare number only when unit is clearly energy (Wh) or unlabeled battery-style text without "kW"
+    if (/\bk\s*w\b/i.test(text) && !/\bh\b/i.test(text)) continue;
+    const match = text.match(/(\d+(?:\.\d+)?)/);
     if (!match) continue;
     const value = Number(match[1]);
     if (Number.isFinite(value) && value > 0) return value;
@@ -659,11 +671,21 @@ function resolveQuoteLineCosts(
     const sizeLabel = item.capacity || item.model || "";
     let lineKw = 0;
     if (looksLikeSolar && !looksLikeBattery) {
-      const unitKw = parseKwFromCapacityLabel(sizeLabel);
+      const explicitKw = Number(item.size_kw) || 0;
+      const unitKw =
+        explicitKw > 0
+          ? explicitKw >= 100
+            ? explicitKw / 1000
+            : explicitKw
+          : parseKwFromCapacityLabel(sizeLabel);
       lineKw = round(unitKw * qty);
       if (unitKw > 0) totalSolarKw += unitKw * qty;
     } else if (looksLikeBattery) {
-      const unitKwh = parseBatteryKwhFromText(item.capacity, item.model, item.name);
+      const explicitKwh = Number(item.battery_kwh) || 0;
+      const unitKwh =
+        explicitKwh > 0
+          ? explicitKwh
+          : parseBatteryKwhFromText(item.capacity, item.model, item.name);
       if (unitKwh > 0) totalBatteryKwh += unitKwh * qty;
     }
 

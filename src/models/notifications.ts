@@ -9,6 +9,8 @@ const NotificationSchema = new Schema(
     message: { type: String, required: true },
     isRead: { type: Boolean, default: false },
     meta_information: { type: Schema.Types.Mixed, default: () => ({ type: "", link: "" }) },
+    /** Top-level copy of meta_information.dedupKey for a reliable unique index. */
+    dedupKey: { type: String, index: true },
   },
   collectionOptions("notifications"),
 );
@@ -19,7 +21,7 @@ NotificationSchema.index({ userId: 1, created_at: -1 });
 NotificationSchema.index({ userId: 1, isRead: 1, created_at: -1 });
 NotificationSchema.index({ userId: 1, "meta_information.dedupKey": 1, created_at: -1 });
 NotificationSchema.index(
-  { userId: 1, "meta_information.dedupKey": 1 },
+  { userId: 1, dedupKey: 1 },
   { unique: true, sparse: true },
 );
 
