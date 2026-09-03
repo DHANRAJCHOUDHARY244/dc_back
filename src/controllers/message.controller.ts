@@ -737,15 +737,31 @@ class MessageController {
       const { error } = await assertChatMember(message.chatId, req.user.id);
       if (error) return ReE(res, SERVER_ERROR_CODE, error);
 
-      const readerIds = (message.readBy || []).filter((id: number) => id !== message.senderId);
-      const readers = readerIds.length
-        ? await userRepository.find({ id: { $in: readerIds } }, { select: "id name profile_image", lean: true })
+      const rawReadBy = Array.isArray(message.readBy) ? message.readBy : [];
+      const readerIds = rawReadBy
+        .map((id: unknown) => Number(id))
+        .filter(
+          (id: number): id is number =>
+            Number.isFinite(id) && id > 0 && id !== Number(message.senderId),
+        );
+      const uniqueReaderIds = Array.from(new Set(readerIds));
+      const readers = uniqueReaderIds.length
+        ? await userRepository.find(
+            { id: { $in: uniqueReaderIds } },
+            { select: "id name profile_image", lean: true },
+          )
         : [];
+
+      // Preserve reader order from readBy where possible
+      const byId = new Map<number, any>((readers as any[]).map((r) => [Number(r.id), r]));
+      const ordered = uniqueReaderIds
+        .map((id: number) => byId.get(id))
+        .filter((r): r is any => Boolean(r));
 
       return ReS(res, SUCCESS_CODE, "Message readers", {
         messageId,
-        readBy: readers,
-        readCount: readerIds.length,
+        readBy: ordered,
+        readCount: ordered.length,
       });
     } catch (error) {
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error}`);

@@ -542,9 +542,14 @@ class ChatController {
         });
       }
 
+      // Mark all prior peer messages as read (not only the latest watermark message).
       if (messageId) {
-        await messageRepository.updateOne(
-          { id: messageId, chatId },
+        await messageRepository.updateMany(
+          {
+            chatId,
+            id: { $lte: messageId },
+            senderId: { $ne: userId },
+          },
           { $addToSet: { readBy: userId } },
         );
       }

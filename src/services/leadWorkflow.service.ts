@@ -14,7 +14,7 @@ import {
 import { getCompanyConfig } from "@services/crmSettings.service";
 import { leadRepository, roleRepository, userRepository } from "@repositories";
 import { Roles } from "src/data/dataInserter";
-import { dispatchNotification } from "@services/notificationHandler.service";
+import { dispatchNotification, collapseDuplicateLeadFollowupNotifications } from "@services/notificationHandler.service";
 import { applyLeadScope, getLeadAccess, isLeadAdminRole } from "@services/leadAccess.service";
 import { autoAssignLead, getDistributionSettings, pickBestAgent } from "@services/leadDistribution.service";
 import {
@@ -512,6 +512,8 @@ export async function logLeadCall(
     last_contacted_at: now,
     score,
     score_tier: tier,
+    followup_notified_level: 0,
+    followup_notified_at: null,
   };
   if (data.next_follow_up_at) patch.next_follow_up_at = new Date(data.next_follow_up_at);
   const changes = [
@@ -696,6 +698,8 @@ export async function runLeadSupervisor(opts: { reassign?: boolean; hours?: numb
   const l1h = opts.hours ?? settings.follow_up_l1_hours ?? 2;
   const l2h = settings.follow_up_l2_hours ?? 6;
   const l3h = settings.follow_up_l3_hours ?? 24;
+  /** Same-level L3 rematch at most once per day — never every 5 minutes. */
+  const REMIND_MS = 24 * 3600 * 1000;
   const now = Date.now();
   const stale: any[] = await leadRepository.find(
     {
@@ -714,45 +718,67 @@ export async function runLeadSupervisor(opts: { reassign?: boolean; hours?: numb
     { select: "id", lean: true },
   );
   const roleIds = managerRoles.map((r) => r.id).filter(Boolean);
-  const managers: any[] =
+  const managersRaw: any[] =
     roleIds.length > 0
-      ? await userRepository.find({ role_id: { $in: roleIds } }, { select: "id", lean: true, limit: 20 })
+      ? await userRepository.find({ role_id: { $in: roleIds } }, { select: "id", lean: true, limit: 50 })
       : [];
+  const managersById = new Map<number, { id: number }>();
+  for (const m of managersRaw) {
+    const id = Number(m?.id);
+    if (Number.isFinite(id) && id > 0) managersById.set(id, { id });
+  }
+  const managers = [...managersById.values()];
 
   let reassigned = 0;
+  let notified = 0;
   for (const lead of stale) {
     const assignedAgo = lead.assigned_at ? (now - new Date(lead.assigned_at).getTime()) / 3600000 : 0;
     const level = assignedAgo >= l3h ? 3 : assignedAgo >= l2h ? 2 : 1;
     const msg = `Lead ${lead.public_id || `#${lead.id}`} (${lead.name}) uncontacted for ${Math.round(assignedAgo)}h — Level ${level}.`;
+    const lastLevel = Number(lead.followup_notified_level || 0);
+    const lastAt = lead.followup_notified_at ? new Date(lead.followup_notified_at).getTime() : 0;
+    const levelIncreased = level > lastLevel;
+    const l3ReminderDue = level >= 3 && level === lastLevel && now - lastAt >= REMIND_MS;
+    const shouldNotify = levelIncreased || l3ReminderDue;
 
-    if (lead.owner_id) {
-      await dispatchNotification({
+    if (shouldNotify) {
+      const route = `${process.env.FRONT_URL}/#/leads`;
+
+      if (lead.owner_id) {
+        await dispatchNotification({
           userId: lead.owner_id,
           message: `Follow-up L${level}: ${msg}`,
-          route: `${process.env.FRONT_URL}/#/leads`,
-          meta: { type: "LEAD_FOLLOWUP", lead_id: lead.id, level },
-        })
-        .catch(() => undefined);
-    }
-    if (level >= 2 && lead.team_leader_id) {
-      await dispatchNotification({
+          route,
+          meta: { type: "LEAD_FOLLOWUP", lead_id: lead.id, level, audience: "owner" },
+        }).catch(() => undefined);
+      }
+      if (level >= 2 && lead.team_leader_id) {
+        await dispatchNotification({
           userId: lead.team_leader_id,
           message: `Team Leader L${level}: ${msg}`,
-          route: `${process.env.FRONT_URL}/#/leads`,
-          meta: { type: "LEAD_FOLLOWUP", lead_id: lead.id, level },
-        })
-        .catch(() => undefined);
-    }
-    if (level >= 3) {
-      for (const m of managers) {
-        await dispatchNotification({
+          route,
+          meta: { type: "LEAD_FOLLOWUP", lead_id: lead.id, level, audience: "team_leader" },
+        }).catch(() => undefined);
+      }
+      if (level >= 3) {
+        for (const m of managers) {
+          if (Number(m.id) === Number(lead.owner_id) || Number(m.id) === Number(lead.team_leader_id)) continue;
+          await dispatchNotification({
             userId: m.id,
             message: `Admin L3: ${msg}`,
-            route: `${process.env.FRONT_URL}/#/leads`,
-            meta: { type: "LEAD_FOLLOWUP", lead_id: lead.id, level },
-          })
-          .catch(() => undefined);
+            route,
+            meta: { type: "LEAD_FOLLOWUP", lead_id: lead.id, level, audience: "admin" },
+          }).catch(() => undefined);
+        }
       }
+
+      await leadRepository
+        .updateMany(
+          { id: lead.id },
+          { $set: { followup_notified_level: level, followup_notified_at: new Date() } },
+        )
+        .catch(() => undefined);
+      notified += 1;
     }
 
     const doReassign = opts.reassign || (settings.auto_reassign && !settings.notify_only && level >= 3);
@@ -766,6 +792,8 @@ export async function runLeadSupervisor(opts: { reassign?: boolean; hours?: numb
               previous_owner_id: lead.owner_id,
               owner_id: pick.user_id,
               assigned_at: new Date(),
+              followup_notified_level: 0,
+              followup_notified_at: null,
               timeline: pushTimeline(lead.timeline, {
                 type: "reassign",
                 title: "Smart Reassignment",
@@ -779,21 +807,32 @@ export async function runLeadSupervisor(opts: { reassign?: boolean; hours?: numb
       }
     }
 
-    await leadRepository.updateMany(
-      { id: lead.id },
-      {
-        $set: {
-          timeline: pushTimeline(lead.timeline, {
-            type: "supervisor",
-            title: `AI Supervisor L${level}`,
-            detail: msg,
-          }),
+    if (shouldNotify) {
+      await leadRepository.updateMany(
+        { id: lead.id },
+        {
+          $set: {
+            timeline: pushTimeline(lead.timeline, {
+              type: "supervisor",
+              title: `AI Supervisor L${level}`,
+              detail: msg,
+            }),
+          },
         },
-      },
-    );
+      );
+    }
   }
 
-  return { stale_count: stale.length, lead_ids: stale.map((l) => l.id), reassigned, reassign: !!opts.reassign };
+  const collapsed = await collapseDuplicateLeadFollowupNotifications().catch(() => 0);
+
+  return {
+    stale_count: stale.length,
+    lead_ids: stale.map((l) => l.id),
+    reassigned,
+    notified,
+    duplicates_removed: collapsed,
+    reassign: !!opts.reassign,
+  };
 }
 
 export async function getLeadManagementDashboard(user: { id: number; role: string; role_id?: number }) {

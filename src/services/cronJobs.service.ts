@@ -25,6 +25,13 @@ export const loadCrons = () => {
 					logger.error(`Notification purge: ${e?.message || e}`),
 				);
 			},
+			() => {
+				void import("@services/notificationHandler.service").then((m) =>
+					m.collapseDuplicateLeadFollowupNotifications().catch((e: any) =>
+						logger.error(`Lead follow-up dedupe: ${e?.message || e}`),
+					),
+				);
+			},
 		],
 		enabled: true,
 	});

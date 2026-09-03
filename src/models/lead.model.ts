@@ -94,6 +94,10 @@ const LeadSchema = new Schema(
     received_at: { type: Date },
     response_seconds: { type: Number },
 
+    /** Last uncontacted follow-up escalation notified (stops 5‑min cron spam). */
+    followup_notified_level: { type: Number, default: 0 },
+    followup_notified_at: { type: Date },
+
     notes: jsonArray,
     transfers: jsonArray,
     audit_log: jsonArray,

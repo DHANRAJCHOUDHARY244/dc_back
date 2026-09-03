@@ -78,6 +78,27 @@ class ProductController {
     return value ?? fallback;
   }
 
+  /** Attach uploaded PDFs keyed as `variant_pdf_<variantId>` onto variant rows. */
+  private applyVariantPdfUploads(
+    variants: any[],
+    files: DocumentsAuthenticatedRequest["files"],
+    folder: string,
+    prefix: string,
+  ): any[] {
+    if (!Array.isArray(variants) || !files) return Array.isArray(variants) ? variants : [];
+
+    return variants.map((variant) => {
+      const id = String(variant?.id || "");
+      if (!id) return variant;
+      const raw = (files as any)[`variant_pdf_${id}`] as UploadedFile | UploadedFile[] | undefined;
+      const file = Array.isArray(raw) ? raw[0] : raw;
+      if (!file) return variant;
+      if (file.mimetype !== "application/pdf") return variant;
+      if (variant.pdf) this.deleteOldFile(variant.pdf);
+      return { ...variant, pdf: this.uploadFile(file, folder, prefix) };
+    });
+  }
+
   async createProduct(req: DocumentsAuthenticatedRequest, res: Response) {
     try {
       const {
@@ -126,6 +147,13 @@ class ProductController {
         if (warrantyPdfFile) warrantyPdfUrl = this.uploadFile(warrantyPdfFile, productFolder, prefix);
       }
 
+      const parsedVariants = this.applyVariantPdfUploads(
+        this.parseJson(variants, []),
+        req.files,
+        productFolder,
+        prefix,
+      );
+
       const product = await productRepository.create({
         name,
         slug,
@@ -138,7 +166,7 @@ class ProductController {
         warranty_pdf: warrantyPdfUrl,
         specifications: this.parseJson(specifications, []),
         tags: this.parseJson(tags, []),
-        variants: this.parseJson(variants, []),
+        variants: parsedVariants,
         status: status || "ACTIVE",
         created_by: createdBy,
       });
@@ -278,6 +306,13 @@ class ProductController {
         }
       }
 
+      const parsedVariants = this.applyVariantPdfUploads(
+        this.parseJson(updates.variants, product.variants),
+        req.files,
+        newFolder,
+        prefix,
+      );
+
       const updatedProduct = await productRepository.updateById(id, {
         $set: {
           name: updates.name || product.name,
@@ -297,7 +332,7 @@ class ProductController {
             product.specifications
           ),
           tags: this.parseJson(updates.tags, product.tags),
-          variants: this.parseJson(updates.variants, product.variants),
+          variants: parsedVariants,
           status: updates.status || product.status,
           updated_by: updaterId,
           updated_at: new Date(),
