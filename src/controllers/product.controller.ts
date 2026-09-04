@@ -18,6 +18,7 @@ import {
   BAD_REQUEST_CODE,
 } from "@constants/serverCode";
 import { DocumentsAuthenticatedRequest } from "@constants/common.interface";
+import { resolveBrandLogoUrl, resolveProductDisplayImage } from "@utils/brandLogoUrl";
 
 const productPopulate = [
   { path: "creator", select: "id name email" },
@@ -110,6 +111,8 @@ class ProductController {
         tags,
         variants,
         status,
+        logo_url: bodyLogoUrl,
+        img_url: bodyImgUrl,
       } = req.body;
       const createdBy = req.user?.id;
 
@@ -147,6 +150,17 @@ class ProductController {
         if (warrantyPdfFile) warrantyPdfUrl = this.uploadFile(warrantyPdfFile, productFolder, prefix);
       }
 
+      const parsedLogoUrl =
+        (typeof bodyLogoUrl === "string" && bodyLogoUrl.trim()) ||
+        resolveBrandLogoUrl(brand) ||
+        null;
+      const parsedImgUrl = typeof bodyImgUrl === "string" && bodyImgUrl.trim() ? bodyImgUrl.trim() : null;
+      const display = resolveProductDisplayImage({
+        img: imgUrl || parsedImgUrl,
+        logo_url: parsedLogoUrl,
+        brand,
+      });
+
       const parsedVariants = this.applyVariantPdfUploads(
         this.parseJson(variants, []),
         req.files,
@@ -160,7 +174,8 @@ class ProductController {
         category,
         brand: brand || null,
         description: description || null,
-        img: imgUrl,
+        img: display.img,
+        logo_url: display.logo_url,
         pdf: pdfUrl,
         compliance_pdf: compliancePdfUrl,
         warranty_pdf: warrantyPdfUrl,
@@ -273,6 +288,10 @@ class ProductController {
       }
 
       let imgUrl = product.img;
+      let logoUrl =
+        updates.logo_url !== undefined && updates.logo_url !== null
+          ? String(updates.logo_url).trim() || null
+          : product.logo_url;
       let pdfUrl = product.pdf;
       let compliancePdfUrl = product.compliance_pdf;
       let warrantyPdfUrl = product.warranty_pdf;
@@ -306,6 +325,20 @@ class ProductController {
         }
       }
 
+      const nextBrand = updates.brand !== undefined ? updates.brand : product.brand;
+      if (!logoUrl && nextBrand) {
+        logoUrl = resolveBrandLogoUrl(nextBrand);
+      }
+      const parsedImgUrl =
+        typeof updates.img_url === "string" && updates.img_url.trim() ? updates.img_url.trim() : null;
+      const display = resolveProductDisplayImage({
+        img: imgUrl || parsedImgUrl,
+        logo_url: logoUrl,
+        brand: nextBrand,
+      });
+      imgUrl = display.img;
+      logoUrl = display.logo_url;
+
       const parsedVariants = this.applyVariantPdfUploads(
         this.parseJson(updates.variants, product.variants),
         req.files,
@@ -324,6 +357,7 @@ class ProductController {
               ? updates.description
               : product.description,
           img: imgUrl,
+          logo_url: logoUrl,
           pdf: pdfUrl,
           compliance_pdf: compliancePdfUrl,
           warranty_pdf: warrantyPdfUrl,
@@ -388,6 +422,7 @@ class ProductController {
         brand: original.brand,
         description: original.description,
         img: original.img,
+        logo_url: original.logo_url,
         pdf: original.pdf,
         compliance_pdf: original.compliance_pdf,
         warranty_pdf: original.warranty_pdf,
@@ -629,6 +664,7 @@ class ProductController {
         brand: 1,
         description: 1,
         img: 1,
+        logo_url: 1,
         pdf: 1,
         compliance_pdf: 1,
         warranty_pdf: 1,

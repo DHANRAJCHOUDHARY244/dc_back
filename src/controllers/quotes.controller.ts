@@ -426,7 +426,7 @@ class QuotesController {
           name: body.custName,
           mobile_no: body.custMobNum,
         },
-        adminData.id,
+        adminData,
         {}
       );
       ReS(res, SUCCESS_CODE, "Quote updated successfully", quote);
