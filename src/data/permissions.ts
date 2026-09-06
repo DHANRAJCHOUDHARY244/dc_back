@@ -325,7 +325,7 @@ export default[
     },
     {
         "id": 196,
-        "name": "Solar Battery CRM",
+        "name": "Solar Battery Analytics",
         "label": "sys.menu.solarBatteryCrm",
         "icon": "solar:bolt-bold-duotone",
         "type": 1,

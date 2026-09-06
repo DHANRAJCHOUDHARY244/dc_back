@@ -25,6 +25,10 @@ const InvoiceSchema = new Schema(
       ],
     },
     partialAmount: { type: Number },
+    /** 10% deposit amount billed when quote is accepted */
+    depositAmount: { type: Number },
+    /** True when invoice was auto-created as a deposit invoice on quote acceptance */
+    is_deposit: { type: Boolean, default: false },
     dateOfDue: { type: Date, required: true },
     paid_date: { type: Date },
     status_updated_date: { type: Date },

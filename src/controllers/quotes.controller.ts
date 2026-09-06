@@ -1034,12 +1034,19 @@ class QuotesController {
     try {
       const files = req.files as fileUpload.FileArray | undefined;
       const { status, id, reason } = req.body;
+      const DEPOSIT_RATE = 0.1;
       let invoiceData: any = {
-        quote_id: id, pay_status: PaymentStatus.PENDING,
-        sender_id: null, bypass_token: null,
-        dateOfDue: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000), // due in 15 days address:null
-        name: null, mobile_no: null
-      }
+        quote_id: id,
+        pay_status: PaymentStatus.PENDING,
+        sender_id: null,
+        bypass_token: null,
+        dateOfDue: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000), // due in 15 days
+        name: null,
+        mobile_no: null,
+        is_deposit: true,
+        depositAmount: 0,
+        payment_notes: "Auto-generated 10% deposit invoice on quote acceptance",
+      };
       if (!status || !id) {
         return ReE(
           res,
@@ -1099,11 +1106,17 @@ class QuotesController {
         updateData.customerSignatureUrl = fileUrl;
         updateData.accepted_date = now;
         updateData.signed_date = now;
-        invoiceData.address = existing.address;
+
+        const quoteTotal = Number(existing.total) || 0;
+        const depositAmount = Math.round(quoteTotal * DEPOSIT_RATE * 100) / 100;
+        invoiceData.address = existing.address || existing.customer?.address || "";
         invoiceData.sender_id = existing.sender_id;
-        invoiceData.bypass_token = existing.bypass_token;
-        invoiceData.name = existing.name;
-        invoiceData.mobile_no = existing.mobile_no;
+        invoiceData.bypass_token = existing.bypass_token || generateRandomString();
+        invoiceData.name = existing.name || existing.customer?.name || `Quote #${id}`;
+        invoiceData.mobile_no = existing.mobile_no || null;
+        invoiceData.depositAmount = depositAmount;
+        invoiceData.is_deposit = true;
+        invoiceData.payment_notes = `Auto-generated 10% deposit invoice ($${depositAmount.toFixed(2)} of $${quoteTotal.toFixed(2)}) on quote acceptance`;
       }
 
       await quoteRepository.updateMany({ id }, { $set: updateData });
@@ -1147,10 +1160,18 @@ class QuotesController {
       if (status === QuoteCustomerStatus.ACCEPTED) {
         const existingInvoice = await invoiceRepository.findOne({ quote_id: id });
         if (!existingInvoice) {
-          created_invoice = await invoiceRepository.create(invoiceData);
-          const workFlowData = await quoteWorkflowRepository.findOne({ quote_id: id });
-          if (workFlowData) 
-            await quoteWorkflowRepository.updateMany({ quote_id: id }, { $set: { invoice_id: created_invoice.id } });
+          try {
+            created_invoice = await invoiceRepository.create(invoiceData);
+            const workFlowData = await quoteWorkflowRepository.findOne({ quote_id: id });
+            if (workFlowData) {
+              await quoteWorkflowRepository.updateMany(
+                { quote_id: id },
+                { $set: { invoice_id: created_invoice.id } },
+              );
+            }
+          } catch (invErr: any) {
+            console.error("Auto deposit invoice create failed:", invErr?.message || invErr);
+          }
         }
       }
       ReS(res, SUCCESS_CODE, "Quote status updated successfully.");
@@ -1407,7 +1428,10 @@ class QuotesController {
         existingSolar,
         batteryInstallType,
         property_type,
+        state,
         send_email,
+        cc = [],
+        bcc = [],
       } = body;
       let customerId = body?.customerId;
 
@@ -1468,6 +1492,7 @@ class QuotesController {
       if (existingSolar !== undefined) pricingPatch.existingSolar = !!existingSolar;
       if (batteryInstallType !== undefined) pricingPatch.batteryInstallType = batteryInstallType;
       if (property_type !== undefined) pricingPatch.property_type = property_type;
+      if (state !== undefined) pricingPatch.state = state;
 
       // ── Update path ──
       if (solarQuoteId) {
@@ -1495,6 +1520,8 @@ class QuotesController {
               await sendMasterQuoteEmail({
                 quote_id: String(solarQuoteId),
                 type: QuoteEmailType.UPDATED,
+                cc: Array.isArray(cc) ? cc : [],
+                bcc: Array.isArray(bcc) ? bcc : [],
               });
             } catch (err: any) {
               console.error("Solar quote email failed:", err?.message);
@@ -1579,6 +1606,8 @@ class QuotesController {
             await sendMasterQuoteEmail({
               quote_id: String(quote.id),
               type: QuoteEmailType.CREATED,
+              cc: Array.isArray(cc) ? cc : [],
+              bcc: Array.isArray(bcc) ? bcc : [],
             });
           } catch (err: any) {
             console.error("Solar quote email failed:", err?.message);
@@ -1622,6 +1651,13 @@ class QuotesController {
         return ReE(res, RESOURCE_NOT_FOUND, "Solar proposal not found");
       }
 
+      // Older solar quotes may lack a signing token — mint one so accept/reject works like normal quotes.
+      let bypassToken = quote.bypass_token;
+      if (!bypassToken) {
+        bypassToken = generateRandomString();
+        await quoteRepository.updateById(numericId, { $set: { bypass_token: bypassToken } });
+      }
+
       // Public payload — include what the share page needs, keep sender internals light.
       return ReS(res, SUCCESS_CODE, "Solar proposal fetched", {
         _id: String(quote._id),
@@ -1658,6 +1694,20 @@ class QuotesController {
             }
           : null,
         installationType: quote.installationType,
+        installationDate: quote.installationDate,
+        customer_type: quote.customer_type,
+        property_type: quote.property_type,
+        state: quote.state,
+        postcode: quote.postcode,
+        panelRemoval: quote.panelRemoval,
+        criticalInstallation: quote.criticalInstallation,
+        garageInstallation: quote.garageInstallation,
+        extraWiring: quote.extraWiring,
+        extraWiringMeters: quote.extraWiringMeters,
+        boardUpgrade: quote.boardUpgrade,
+        miniSubboardRequired: quote.miniSubboardRequired,
+        vpp: quote.vpp,
+        bypass_token: bypassToken,
         created_at: quote.created_at,
         updated_at: quote.updated_at,
       });

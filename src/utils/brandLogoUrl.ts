@@ -79,6 +79,54 @@ export function resolveBrandLogoUrl(brand?: string | null): string | null {
   return null;
 }
 
+/** Resolve known brand domain from product brand label. */
+export function resolveBrandDomain(brand?: string | null): string | null {
+  const raw = brand?.trim();
+  if (!raw) return null;
+  const q = raw.toLowerCase();
+
+  for (const entry of BRAND_LOGO_ENTRIES) {
+    for (const name of entry.names) {
+      const n = name.toLowerCase();
+      if (q === n || q.includes(n) || n.includes(q)) {
+        return entry.domain;
+      }
+    }
+  }
+  return null;
+}
+
+/** Stable brand id for Solar Sketch (e.g. "Jinko Solar" → "jinko"). */
+export function resolveBrandId(brand?: string | null): string {
+  const domain = resolveBrandDomain(brand);
+  if (domain) {
+    const base = domain.replace(/\.(com|com\.au|de|cn)$/i, "").split(".")[0];
+    if (base === "jinkosolar") return "jinko";
+    if (base === "canadiansolar") return "canadian";
+    if (base === "risenenergy") return "risen";
+    if (base === "trinasolar") return "trina";
+    if (base === "jasolar") return "ja";
+    if (base === "aikosolar") return "aiko";
+    if (base === "recgroup") return "rec";
+    if (base === "phonosolar") return "phono";
+    if (base === "tindosolar") return "tindo";
+    if (base === "das-solar") return "das";
+    if (base === "jolywood-tech") return "jolywood";
+    if (base === "vsun-solar") return "vsun";
+    if (base === "znshinesolar") return "znshine";
+    if (base === "hyundai-energy") return "hyundai";
+    if (base === "seraphim-energy") return "seraphim";
+    if (base === "suntech-power") return "suntech";
+    if (base === "egingpv") return "eging";
+    return base.replace(/[^a-z0-9]+/g, "");
+  }
+  return String(brand || "unknown")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .split("-")[0] || "unknown";
+}
+
 /** Pick display image: uploaded product image, else brand logo. */
 export function resolveProductDisplayImage(opts: {
   img?: string | null;

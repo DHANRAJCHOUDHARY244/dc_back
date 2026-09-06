@@ -33,7 +33,7 @@ SIDEBAR MENU ORDER (main modules):
 11 Master Tasks — follow-ups and task centre
 12 Rebates & Incentives — rebate tracking
 13 Calculator — solar system pricing with STC/rebates
-14 Solar Battery CRM — battery-specific CRM
+14 Solar Battery Analytics — solar & battery analysis toolkit
 15 Pre Approval + Grid Assessment — all-in-one jobs, grid paperwork
 16 Job SLA — SLA alerts and delayed jobs
 17 Customer — customer accounts
@@ -316,19 +316,20 @@ PROBLEMS:
   },
   {
     seed_key: "calculator-battery",
-    title: "Calculator & Solar Battery CRM",
+    title: "Calculator & Solar Battery Analytics",
     category: "quotes",
     content: `CALCULATOR (Sidebar > Calculator):
 - Price solar systems with STC calculator
 - Victoria, NSW, QLD rebate rules
 - Admin can manage calculator catalogue
 
-SOLAR BATTERY CRM (Sidebar > Solar Battery CRM):
-- Battery-specific sales workflow
-- Separate from standard solar quotes
+SOLAR BATTERY ANALYTICS (Sidebar > Solar Battery Analytics):
+- Solar & battery analysis reports
+- Personalized electricity / ROI / EV analysis
 
 PROBLEMS:
-- Calculator wrong STC → verify system size, postcode, and year
+- Wrong STC → check state and installation date
+- Battery CRM renamed → use Solar Battery Analytics menu
 - Catalogue item missing → admin: Calculator catalog settings`,
   },
   {

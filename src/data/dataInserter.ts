@@ -627,10 +627,18 @@ const EXTRA_LETTER_MENUS = [
 export const seedSolarBatteryCrmPermission = async () => {
   try {
     const existing = await permissionRepository.findOne({ route: "solar-battery-crm" });
-    if (existing) return;
+    if (existing) {
+      if ((existing as any).name !== "Solar Battery Analytics") {
+        await permissionRepository.updateById((existing as any).id, {
+          $set: { name: "Solar Battery Analytics" },
+        });
+        console.log("Renamed Solar Battery CRM permission → Solar Battery Analytics");
+      }
+      return;
+    }
 
     const permission = await permissionRepository.create({
-      name: "Solar Battery CRM",
+      name: "Solar Battery Analytics",
       label: "sys.menu.solarBatteryCrm",
       type: 1,
       route: "solar-battery-crm",
@@ -657,7 +665,7 @@ export const seedSolarBatteryCrmPermission = async () => {
         is_admin: isSuper,
       });
     }
-    console.log("Seeded Solar Battery CRM permission");
+    console.log("Seeded Solar Battery Analytics permission");
   } catch (err) {
     console.error("seedSolarBatteryCrmPermission failed", err);
   }
