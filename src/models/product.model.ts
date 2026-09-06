@@ -10,6 +10,8 @@ const ProductSchema = new Schema(
     brand: { type: String, index: true },
     description: { type: String },
     img: { type: String },
+    /** Brand / manufacturer logo URL (persisted; used when no product photo uploaded) */
+    logo_url: { type: String },
     pdf: { type: String },
     compliance_pdf: { type: String },
     warranty_pdf: { type: String },
