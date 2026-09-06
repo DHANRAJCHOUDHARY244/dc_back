@@ -46,6 +46,10 @@ export { AdvertisingRepository, advertisingRepository } from "./advertising.repo
 export { PopupFormRepository, popupFormRepository } from "./popupForm.repository";
 export { QuoteRepository, quoteRepository } from "./quote.repository";
 export { InvoiceRepository, invoiceRepository } from "./invoice.repository";
+export {
+	SolarBatteryBillRepository,
+	solarBatteryBillRepository,
+} from "./solarBatteryBill.repository";
 export { QuoteChatRepository, quoteChatRepository } from "./quoteChat.repository";
 export { QuoteWorkflowRepository, quoteWorkflowRepository } from "./quoteWorkflow.repository";
 export { PaymentHistoryRepository, paymentHistoryRepository } from "./paymentHistory.repository";

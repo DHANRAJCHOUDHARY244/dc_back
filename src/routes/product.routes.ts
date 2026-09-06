@@ -17,6 +17,9 @@ router.put("/selector/category-config/:category", productController.upsertCatego
 router.get("/selector/brands", productController.getBrandsWithCounts.bind(productController));
 router.get("/selector/products", productController.getProductsForSelector.bind(productController));
 
+/* Solar Sketch — brands + panel variants from Products DB */
+router.get("/solar-sketch/catalog", productController.getSolarSketchCatalog.bind(productController));
+
 router.get("/:id", productController.getProductById.bind(productController));
 router.put("/:id", productController.updateProduct.bind(productController));
 router.delete("/:id", productController.deleteProduct.bind(productController));

@@ -18,7 +18,12 @@ import {
   BAD_REQUEST_CODE,
 } from "@constants/serverCode";
 import { DocumentsAuthenticatedRequest } from "@constants/common.interface";
-import { resolveBrandLogoUrl, resolveProductDisplayImage } from "@utils/brandLogoUrl";
+import {
+  resolveBrandDomain,
+  resolveBrandId,
+  resolveBrandLogoUrl,
+  resolveProductDisplayImage,
+} from "@utils/brandLogoUrl";
 
 const productPopulate = [
   { path: "creator", select: "id name email" },
@@ -710,6 +715,133 @@ class ProductController {
       );
     } catch (error: any) {
       console.error("[getProductsForSelector] Error:", error);
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Solar Sketch panel catalogue from Products DB.
+   * One brand row per SOLAR_PANEL company product; each variant with dimensions becomes a model.
+   */
+  async getSolarSketchCatalog(_req: DocumentsAuthenticatedRequest, res: Response) {
+    try {
+      const products = await productRepository.find(
+        {
+          category: { $in: ["SOLAR_PANEL", "SOLAR", "PANEL"] },
+          status: { $ne: "INACTIVE" },
+        },
+        {
+          lean: true,
+          select: "id name brand logo_url img pdf compliance_pdf warranty_pdf variants category tags status",
+          sort: { name: 1 },
+        },
+      );
+
+      const brandMap = new Map<
+        string,
+        { id: string; name: string; domain?: string; logoUrl?: string }
+      >();
+      const models: Array<Record<string, unknown>> = [];
+
+      const parseDims = (v: any) => {
+        let widthMm = Number(v.width_mm) || 0;
+        let heightMm = Number(v.height_mm) || 0;
+        let thicknessMm = Number(v.thickness_mm) || 0;
+        if ((!widthMm || !heightMm) && typeof v.size === "string") {
+          const parts = v.size.split(/[*x×]/i).map((p: string) => Number(p.trim())).filter((n: number) => Number.isFinite(n) && n > 0);
+          if (parts.length >= 2) {
+            // stored as height * width * thickness (see import script)
+            heightMm = heightMm || parts[0];
+            widthMm = widthMm || parts[1];
+            thicknessMm = thicknessMm || parts[2] || 30;
+          }
+        }
+        return { widthMm, heightMm, thicknessMm: thicknessMm || 30 };
+      };
+
+      const parseWattage = (v: any) => {
+        const explicit = Number(v.module_wattage) || 0;
+        if (explicit > 0) return explicit;
+        const fromCap = String(v.capacity || v.size || v.model || "").match(/(\d{3,4})\s*w?/i);
+        if (fromCap) {
+          const n = Number(fromCap[1]);
+          if (n >= 250 && n <= 800) return n;
+        }
+        const kw = Number(v.size_kw) || 0;
+        if (kw > 0 && kw < 2) return Math.round(kw * 1000);
+        return 0;
+      };
+
+      for (const product of products as any[]) {
+        const brandName = (product.brand || product.name || "Unknown").trim();
+        const brandId = resolveBrandId(brandName);
+        const logoUrl = product.logo_url || resolveBrandLogoUrl(brandName) || undefined;
+        // Do not fall back to product.img — that is the parent product photo, not a brand logo.
+        const domain = resolveBrandDomain(brandName) || undefined;
+
+        if (!brandMap.has(brandId)) {
+          brandMap.set(brandId, {
+            id: brandId,
+            name: brandName.replace(/\s*\(.*\)\s*$/, "").trim() || brandName,
+            domain,
+            logoUrl,
+          });
+        } else if (logoUrl && !brandMap.get(brandId)!.logoUrl) {
+          brandMap.get(brandId)!.logoUrl = logoUrl;
+        }
+
+        const variants = Array.isArray(product.variants) ? product.variants : [];
+        for (const v of variants) {
+          const wattage = parseWattage(v);
+          const { widthMm, heightMm, thicknessMm } = parseDims(v);
+          if (!wattage || !widthMm || !heightMm) continue;
+
+          const modelId =
+            v.panel_library_id ||
+            v.id ||
+            `${brandId}-${wattage}-${heightMm}x${widthMm}`;
+
+          const attachments = [
+            product.img,
+            product.logo_url,
+            product.pdf,
+            product.compliance_pdf,
+            product.warranty_pdf,
+            v.pdf,
+          ].filter((u: unknown): u is string => typeof u === "string" && u.trim().length > 0);
+
+          models.push({
+            id: String(modelId),
+            brandId,
+            brand: brandMap.get(brandId)!.name,
+            model: v.model || v.capacity || `${wattage}W`,
+            wattage,
+            widthMm,
+            heightMm,
+            thicknessMm,
+            tech: v.additional?.tech || undefined,
+            productId: product.id,
+            productName: product.name,
+            logoUrl,
+            variantId: v.id ? String(v.id) : undefined,
+            attachments: [...new Set(attachments)],
+            categories: ["stocked"],
+          });
+        }
+      }
+
+      const brands = Array.from(brandMap.values()).filter((b) =>
+        models.some((m) => m.brandId === b.id),
+      );
+
+      return ReS(res, SUCCESS_CODE, "Solar Sketch catalog fetched successfully.", {
+        brands,
+        models,
+        source: "products-db",
+        count: { brands: brands.length, models: models.length },
+      });
+    } catch (error: any) {
+      console.error("[getSolarSketchCatalog] Error:", error);
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
     }
   }
