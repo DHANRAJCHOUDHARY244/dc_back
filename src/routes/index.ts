@@ -63,6 +63,32 @@ router.get('/',(req,res)=>{
 })
 router.get("/public/branding", crmSettingsController.getPublicBranding.bind(crmSettingsController));
 router.get("/public/company-branding", crmCompanyUnitController.getPublicBranding.bind(crmCompanyUnitController));
+/** Authoritative clock for clients (NTP-synced host). Avoids wrong PC clocks skewing Melbourne time in the header. */
+router.get("/public/time", (_req, res) => {
+	const now = new Date();
+	const melbourne = now.toLocaleString("en-AU", {
+		timeZone: "Australia/Melbourne",
+		weekday: "short",
+		year: "numeric",
+		month: "short",
+		day: "numeric",
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit",
+		hour12: false,
+	});
+	res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+	res.status(200).json({
+		status: 200,
+		message: "OK",
+		data: {
+			epochMs: now.getTime(),
+			utc: now.toISOString(),
+			timezone: "Australia/Melbourne",
+			melbourne,
+		},
+	});
+});
 router.use('/auth', authRoutes);
 router.use('/v1/permission',permissionRoutes);
 router.use('/v1/installer',installerRoutes);

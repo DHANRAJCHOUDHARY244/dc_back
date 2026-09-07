@@ -30,6 +30,8 @@ import {
   ALL_PIPELINE_STATUSES,
   normalizePipelineStatus,
   QuotePipelineStatus,
+  QUOTE_PIPELINE_LABELS,
+  QUOTE_PIPELINE_SHORT_LABELS,
 } from "@constants/quotePipeline.constants";
 import { fileUpload } from "express-fileupload";
 import { s3Service } from "@services/s3.service";
@@ -43,6 +45,7 @@ import { advanceQuotePipeline } from "@services/quotePipeline.service";
 import { installationScheduledTemplate } from "@template/installationScheduled";
 import { installationRescheduledTemplate } from "@template/installationRescheduled";
 import { projectCancelledTemplate } from "@template/projectCancelled";
+import { pipelineStatusUpdateTemplate } from "@template/pipelineStatusUpdate";
 
 function parseQuoteExtraSelections(raw: unknown): { extraId: number; quantity: number }[] {
   if (!Array.isArray(raw)) return [];
@@ -2085,7 +2088,15 @@ class QuotesController {
   }
   async updateInstallStatus(req: AuthenticatedRequest, res: Response){
      try {
-      const { id, status, notes, status_date, pipeline_status_date, stage_details } = req.body;
+      const {
+        id,
+        status,
+        notes,
+        status_date,
+        pipeline_status_date,
+        stage_details,
+        send_email = false,
+      } = req.body;
       if (!id || !status) return ReE(res, BAD_REQUEST_CODE, "Id and status Can't Be Null or undefined");
       const target = normalizePipelineStatus(status);
       if (!target) return ReE(res, BAD_REQUEST_CODE, "Invalid install/pipeline status");
@@ -2102,6 +2113,18 @@ class QuotesController {
       if (Number.isNaN(parsedDate.getTime())) {
         return ReE(res, BAD_REQUEST_CODE, "Invalid status date");
       }
+
+      const quoteBefore: any = await quoteRepository.findOne(
+        { id: Number(id) },
+        {
+          populate: { path: "customer", select: "id name email address mobile_no" },
+          lean: true,
+        },
+      );
+      if (!quoteBefore) return ReE(res, RESOURCE_NOT_FOUND, "Quote not found");
+
+      const fromStatus =
+        normalizePipelineStatus(quoteBefore.kanban_status) || QuotePipelineStatus.PENDING;
 
       const result = await advanceQuotePipeline(Number(id), target, {
         reason: "install_status_update",
@@ -2131,8 +2154,46 @@ class QuotesController {
         }
       }
 
-      if (result.updated) return ReS(res, SUCCESS_CODE, "Quote Updated SuccessFully", result.quote);
-      ReS(res, SUCCESS_CODE, "Quote not updated", result.quote);
+      const shouldEmail = send_email === true || send_email === "true";
+      let emailQueued = false;
+      if (shouldEmail) {
+        const customerEmail = quoteBefore.customer?.email || quoteBefore.custEmail;
+        const customerName =
+          quoteBefore.name || quoteBefore.customer?.name || quoteBefore.custName || "Customer";
+        if (customerEmail) {
+          const cfg = await getCompanyConfig();
+          const labelFor = (s: string) =>
+            QUOTE_PIPELINE_SHORT_LABELS[s as QuotePipelineStatus] ||
+            QUOTE_PIPELINE_LABELS[s as QuotePipelineStatus] ||
+            s;
+          const html = pipelineStatusUpdateTemplate(
+            {
+              customerName,
+              quoteNumber: quoteBefore.id,
+              fromStatus: labelFor(fromStatus),
+              toStatus: labelFor(target),
+              statusDate: formatAuDate(parsedDate),
+              notes: trimmedNotes,
+            },
+            cfg,
+          );
+          await sendEmail(
+            customerEmail,
+            `Your Project Status Has Been Updated – ${cfg.name}`,
+            html,
+          ).catch((e: any) => console.error("Pipeline status email failed:", e?.message));
+          emailQueued = true;
+        } else {
+          console.warn(`updateInstallStatus: no customer email for quote #${id}`);
+        }
+      }
+
+      const msg = result.updated
+        ? emailQueued
+          ? "Pipeline status updated and customer emailed"
+          : "Pipeline status updated"
+        : "Quote not updated";
+      return ReS(res, SUCCESS_CODE, msg, result.quote);
     } catch (error) {
       console.error("Error in updateInstallStatus:", error);
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
@@ -2157,7 +2218,7 @@ class QuotesController {
         vehicle_number,
         tracking_number,
         notes,
-        send_email = true,
+        send_email = false,
       } = req.body;
 
       if (!id) return ReE(res, BAD_REQUEST_CODE, "Quote id is required");
@@ -2345,6 +2406,7 @@ class QuotesController {
         battery,
         ev_charger,
         notes,
+        send_email = false,
       } = req.body;
 
       if (!id) return ReE(res, BAD_REQUEST_CODE, "Quote id is required");
@@ -2414,8 +2476,10 @@ class QuotesController {
 
       const customerEmail = quote.customer?.email;
       const customerName = quote.name || quote.customer?.name || "Customer";
+      const shouldEmail = send_email === true || send_email === "true";
+      let emailQueued = false;
 
-      if (customerEmail) {
+      if (shouldEmail && customerEmail) {
         const cfg = await getCompanyConfig();
         const html = installationScheduledTemplate(
           {
@@ -2444,7 +2508,8 @@ class QuotesController {
           `Your Solar Installation Has Been Scheduled – ${cfg.name}`,
           html,
         ).catch((e: any) => console.error("Installation schedule email failed:", e?.message));
-      } else {
+        emailQueued = true;
+      } else if (shouldEmail && !customerEmail) {
         console.warn(`scheduleInstallation: no customer email for quote #${id}`);
       }
 
@@ -2462,10 +2527,15 @@ class QuotesController {
       });
 
       const updatedQuote = await quoteRepository.findOne({ id: Number(id) }, { lean: true });
-      return ReS(res, SUCCESS_CODE, "Installation scheduled and customer emailed", {
-        quote: updatedQuote || result.quote,
-        installation_schedule: schedule,
-      });
+      return ReS(
+        res,
+        SUCCESS_CODE,
+        emailQueued ? "Installation scheduled and customer emailed" : "Installation scheduled (no customer email sent)",
+        {
+          quote: updatedQuote || result.quote,
+          installation_schedule: schedule,
+        },
+      );
     } catch (error: any) {
       console.error("Error in scheduleInstallation:", error);
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
@@ -2493,6 +2563,7 @@ class QuotesController {
         reason,
         reason_other,
         notes,
+        send_email = false,
       } = req.body;
 
       if (!id) return ReE(res, BAD_REQUEST_CODE, "Quote id is required");
@@ -2592,8 +2663,10 @@ class QuotesController {
 
       const customerEmail = quote.customer?.email;
       const customerName = quote.name || quote.customer?.name || "Customer";
+      const shouldEmail = send_email === true || send_email === "true";
+      let emailQueued = false;
 
-      if (customerEmail) {
+      if (shouldEmail && customerEmail) {
         const cfg = await getCompanyConfig();
         const html = installationRescheduledTemplate(
           {
@@ -2617,7 +2690,8 @@ class QuotesController {
           `Your Installation Schedule Has Been Updated – ${cfg.name}`,
           html,
         ).catch((e: any) => console.error("Installation reschedule email failed:", e?.message));
-      } else {
+        emailQueued = true;
+      } else if (shouldEmail && !customerEmail) {
         console.warn(`rescheduleInstallation: no customer email for quote #${id}`);
       }
 
@@ -2635,7 +2709,13 @@ class QuotesController {
       });
 
       const updatedQuote = await quoteRepository.findOne({ id: Number(id) }, { lean: true });
-      return ReS(res, SUCCESS_CODE, "Installation rescheduled and customer emailed", {
+      return ReS(
+        res,
+        SUCCESS_CODE,
+        emailQueued
+          ? "Installation rescheduled and customer emailed"
+          : "Installation rescheduled (no customer email sent)",
+        {
         quote: updatedQuote || result.quote,
         installation_schedule: schedule,
       });
@@ -2887,6 +2967,7 @@ class QuotesController {
         refund_status,
         refund_date,
         notes,
+        send_email = false,
       } = req.body;
 
       if (!id) return ReE(res, BAD_REQUEST_CODE, "Quote id is required");
@@ -2957,8 +3038,10 @@ class QuotesController {
 
       const customerEmail = quote.customer?.email;
       const customerName = quote.name || quote.customer?.name || "Customer";
+      const shouldEmail = send_email === true || send_email === "true";
+      let emailQueued = false;
 
-      if (customerEmail) {
+      if (shouldEmail && customerEmail) {
         const cfg = await getCompanyConfig();
         const html = projectCancelledTemplate(
           {
@@ -2978,7 +3061,8 @@ class QuotesController {
           `Your Solar Project Has Been Cancelled – ${cfg.name}`,
           html,
         ).catch((e: any) => console.error("Project cancellation email failed:", e?.message));
-      } else {
+        emailQueued = true;
+      } else if (shouldEmail && !customerEmail) {
         console.warn(`cancelProject: no customer email for quote #${id}`);
       }
 
@@ -2996,7 +3080,11 @@ class QuotesController {
       });
 
       const updatedQuote = await quoteRepository.findOne({ id: Number(id) }, { lean: true });
-      return ReS(res, SUCCESS_CODE, "Project cancelled and customer emailed", {
+      return ReS(
+        res,
+        SUCCESS_CODE,
+        emailQueued ? "Project cancelled and customer emailed" : "Project cancelled (no customer email sent)",
+        {
         quote: updatedQuote || result.quote,
         cancellation_details: details,
       });
