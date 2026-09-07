@@ -4,6 +4,73 @@ const DEFAULT_ICON = "solar:box-bold-duotone";
 const DEFAULT_COLOR = "#64748b";
 const DEFAULT_GRADIENT = "from-slate-500 to-slate-600";
 
+/** Known Som's Energy product master categories (PDF + CRM). */
+const KNOWN_CATEGORY_META: Record<string, { label: string; icon: string; color: string; gradient: string; sort_order: number }> = {
+  BATTERY: {
+    label: "Battery",
+    icon: "solar:battery-charge-bold-duotone",
+    color: "#8b5cf6",
+    gradient: "from-violet-500 to-purple-600",
+    sort_order: 10,
+  },
+  SOLAR_PANEL: {
+    label: "Solar Panel",
+    icon: "solar:sun-bold-duotone",
+    color: "#f59e0b",
+    gradient: "from-amber-500 to-orange-500",
+    sort_order: 20,
+  },
+  AIRCON: {
+    label: "Air Conditioner",
+    icon: "solar:wind-bold-duotone",
+    color: "#3b82f6",
+    gradient: "from-blue-500 to-sky-500",
+    sort_order: 30,
+  },
+  HEAT_PUMP: {
+    label: "Heat Pump",
+    icon: "solar:fire-bold-duotone",
+    color: "#ef4444",
+    gradient: "from-red-500 to-orange-500",
+    sort_order: 40,
+  },
+  EV_CHARGER: {
+    label: "EV Charger",
+    icon: "solar:electric-refueling-bold-duotone",
+    color: "#10b981",
+    gradient: "from-emerald-500 to-teal-500",
+    sort_order: 50,
+  },
+  WATER_FILTRATION: {
+    label: "Water Filtration",
+    icon: "solar:waterdrop-bold-duotone",
+    color: "#06b6d4",
+    gradient: "from-cyan-500 to-sky-500",
+    sort_order: 60,
+  },
+  INVERTER: {
+    label: "Inverter",
+    icon: "solar:bolt-bold-duotone",
+    color: "#0ea5e9",
+    gradient: "from-sky-500 to-blue-500",
+    sort_order: 70,
+  },
+  EXTRAS: {
+    label: "Extras",
+    icon: "solar:settings-bold-duotone",
+    color: "#6b7280",
+    gradient: "from-slate-500 to-gray-600",
+    sort_order: 80,
+  },
+  OTHERS: {
+    label: "Others",
+    icon: "solar:box-bold-duotone",
+    color: "#64748b",
+    gradient: "from-slate-500 to-slate-600",
+    sort_order: 90,
+  },
+};
+
 export function formatCategoryLabel(category: string): string {
   return String(category || "")
     .replace(/_/g, " ")
@@ -26,13 +93,14 @@ export async function ensureCategoryConfigs(categories: string[]) {
 
   for (const category of unique) {
     if (have.has(category)) continue;
+    const known = KNOWN_CATEGORY_META[category];
     await productCategoryConfigRepository.create({
       category,
-      label: formatCategoryLabel(category),
-      icon: DEFAULT_ICON,
-      color: DEFAULT_COLOR,
-      gradient: DEFAULT_GRADIENT,
-      sort_order: 0,
+      label: known?.label ?? formatCategoryLabel(category),
+      icon: known?.icon ?? DEFAULT_ICON,
+      color: known?.color ?? DEFAULT_COLOR,
+      gradient: known?.gradient ?? DEFAULT_GRADIENT,
+      sort_order: known?.sort_order ?? 0,
       is_active: true,
     });
   }
