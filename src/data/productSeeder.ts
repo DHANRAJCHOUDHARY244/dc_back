@@ -566,6 +566,171 @@ const extraProducts: SeedProduct[] = [
 ];
 
 /* ================================================================
+   WATER FILTRATION (Som's Energy product master categories)
+   ================================================================ */
+const waterFiltrationProducts: SeedProduct[] = [
+	{
+		name: "Puretec Whole House Filtration",
+		category: "WATER_FILTRATION",
+		brand: "Puretec",
+		description: "Supply and install — Puretec whole-house water filtration system.",
+		img: "",
+		pdf: "",
+		specifications: [
+			{ key: "Warranty", value: "Product warranty as per manufacturer" },
+			{ key: "Workmanship", value: "5 year workmanship warranty" },
+		],
+		tags: ["water", "filtration", "whole-house", "puretec"],
+		variants: [
+			{
+				id: "puretec-wh-1",
+				capacity: "Whole-house",
+				phase: "",
+				rebate: 0,
+				price: 1890,
+				additional: {
+					stack: "",
+					inverter: "",
+					system_type: "Whole-house",
+					filtration_stages: "3",
+					flow_rate_lpm: "40",
+				} as any,
+			},
+			{
+				id: "puretec-wh-2",
+				capacity: "Whole-house + UV",
+				phase: "",
+				rebate: 0,
+				price: 2490,
+				additional: {
+					stack: "",
+					inverter: "",
+					system_type: "Whole-house",
+					filtration_stages: "4",
+					uv_unit: "Included",
+				} as any,
+			},
+		],
+	},
+	{
+		name: "Puretec Under-Sink RO System",
+		category: "WATER_FILTRATION",
+		brand: "Puretec",
+		description: "Supply and install — Puretec under-sink reverse osmosis drinking water system.",
+		img: "",
+		pdf: "",
+		specifications: [
+			{ key: "Warranty", value: "Product warranty as per manufacturer" },
+			{ key: "Workmanship", value: "5 year workmanship warranty" },
+		],
+		tags: ["water", "filtration", "ro", "under-sink", "puretec"],
+		variants: [
+			{
+				id: "puretec-ro-1",
+				capacity: "Under-sink RO",
+				phase: "",
+				rebate: 0,
+				price: 1290,
+				additional: {
+					stack: "",
+					inverter: "",
+					system_type: "RO",
+					filtration_stages: "5",
+					tank_capacity_l: "12",
+				} as any,
+			},
+		],
+	},
+	{
+		name: "Aquasana Whole House Filter",
+		category: "WATER_FILTRATION",
+		brand: "Aquasana",
+		description: "Supply and install — Aquasana whole-house water filter.",
+		img: "",
+		pdf: "",
+		specifications: [
+			{ key: "Warranty", value: "Product warranty as per manufacturer" },
+			{ key: "Workmanship", value: "5 year workmanship warranty" },
+		],
+		tags: ["water", "filtration", "whole-house", "aquasana"],
+		variants: [
+			{
+				id: "aquasana-wh-1",
+				capacity: "Whole-house",
+				phase: "",
+				rebate: 0,
+				price: 2190,
+				additional: {
+					stack: "",
+					inverter: "",
+					system_type: "Whole-house",
+					filtration_stages: "2",
+					replacement_schedule: "6 months / media",
+				} as any,
+			},
+		],
+	},
+	{
+		name: "BWT Under-Sink Filtration",
+		category: "WATER_FILTRATION",
+		brand: "BWT",
+		description: "Supply and install — BWT under-sink drinking water filtration.",
+		img: "",
+		pdf: "",
+		specifications: [
+			{ key: "Warranty", value: "Product warranty as per manufacturer" },
+			{ key: "Workmanship", value: "5 year workmanship warranty" },
+		],
+		tags: ["water", "filtration", "under-sink", "bwt"],
+		variants: [
+			{
+				id: "bwt-us-1",
+				capacity: "Under-sink",
+				phase: "",
+				rebate: 0,
+				price: 980,
+				additional: {
+					stack: "",
+					inverter: "",
+					system_type: "Under-sink",
+					filtration_stages: "3",
+					flow_rate_lpm: "8",
+				} as any,
+			},
+		],
+	},
+	{
+		name: "Stefani UV Water Treatment",
+		category: "WATER_FILTRATION",
+		brand: "Stefani",
+		description: "Supply and install — Stefani UV water treatment unit.",
+		img: "",
+		pdf: "",
+		specifications: [
+			{ key: "Warranty", value: "Product warranty as per manufacturer" },
+			{ key: "Workmanship", value: "5 year workmanship warranty" },
+		],
+		tags: ["water", "filtration", "uv", "stefani"],
+		variants: [
+			{
+				id: "stefani-uv-1",
+				capacity: "UV",
+				phase: "",
+				rebate: 0,
+				price: 1450,
+				additional: {
+					stack: "",
+					inverter: "",
+					system_type: "UV",
+					uv_unit: "Included",
+					flow_rate_lpm: "20",
+				} as any,
+			},
+		],
+	},
+];
+
+/* ================================================================
    INVERTER PRODUCTS
    ================================================================ */
 const inverterProducts: SeedProduct[] = [
@@ -580,6 +745,7 @@ const allProducts: SeedProduct[] = [
 	...batteryProducts,
 	...solarProducts,
 	...heatPumpProducts,
+	...waterFiltrationProducts,
 	...inverterProducts,
 	...extraProducts,
 ];
