@@ -159,12 +159,16 @@ function resolveRoleGrants(perm: FlatCatalogItem) {
       Roles.GRAPHIC_DESIGNER,
       Roles.BUSINESS_DEVELOPMENT_EXECUTIVE,
     ]);
+    const onboardingAdmin = new Set([
+      Roles.SUPER_ADMIN,
+      Roles.CEO,
+      Roles.ADMIN,
+      Roles.HR_EXECUTIVE,
+    ]);
     const onboardingOnly = perm.route === "onboarding" || perm.route === "hr/onboarding";
     return {
-      enableRoles: onboardingOnly
-        ? new Set([Roles.SUPER_ADMIN, Roles.HR_EXECUTIVE])
-        : hrSelf,
-      fullCrudRoles: hrFull,
+      enableRoles: onboardingOnly ? onboardingAdmin : hrSelf,
+      fullCrudRoles: onboardingOnly ? onboardingAdmin : hrFull,
     };
   }
 
@@ -179,14 +183,33 @@ async function ensureUserPermissions(permissionId: number, perm: FlatCatalogItem
   let created = 0;
   for (const role of roles) {
     if (role.name === Roles.CUSTOMER) continue;
-    const exists = await userPermissionRepository.findOne({
+    const exists: any = await userPermissionRepository.findOne({
       role_id: role.id,
       permission_id: permissionId,
     });
-    if (exists) continue;
 
     const enabled = grants.enableRoles.has(role.name);
     const full = grants.fullCrudRoles.has(role.name);
+
+    if (exists) {
+      // Flip stale disabled grants for roles that should see this menu (e.g. Onboarding for HR/Admin)
+      const needsEnable = enabled && (!exists.enable || exists.deleted_at);
+      const needsCrud =
+        full &&
+        (exists.create !== true || exists.can_update !== true || exists.deleted_at);
+      if (needsEnable || needsCrud) {
+        await userPermissionRepository.updateById(exists.id, {
+          $set: {
+            enable: enabled || Boolean(exists.enable),
+            create: full || Boolean(exists.create),
+            can_update: full || Boolean(exists.can_update),
+            deleted_at: null,
+          },
+        });
+      }
+      continue;
+    }
+
     await userPermissionRepository.create({
       role_id: role.id,
       permission_id: permissionId,
@@ -245,25 +268,36 @@ async function findExistingPermission(
   const lookupKey = item.catalogKey;
   let existing = byKey.get(lookupKey);
 
-  if (!existing && item.id) {
-    existing = byId.get(item.id);
-  }
-
+  // Prefer component match under the same parent — never overwrite an unrelated id collision
   if (!existing && item.component) {
-    existing = [...byKey.values()].find((p) => p.component === item.component);
+    existing = [...byKey.values()].find(
+      (p) =>
+        p.component === item.component &&
+        (parentDbId == null || Number(p.parentId) === Number(parentDbId)),
+    );
   }
 
   if (!existing && parentDbId) {
     existing = [...byKey.values()].find(
       (p) =>
-        p.route === item.route &&
-        p.component === item.component &&
+        (p.route === item.route ||
+          p.route === String(item.route || "").replace(/^hr\//, "") ||
+          `hr/${p.route}` === item.route) &&
+        String(p.component || "") === String(item.component || "") &&
         Number(p.parentId) === Number(parentDbId),
     );
   }
 
   if (!existing && item.id) {
-    existing = [...byKey.values()].find((p) => Number(p.id) === Number(item.id));
+    const byIdHit = byId.get(item.id);
+    // Only reuse fixed catalog ids when route+component already match (avoid id collisions)
+    if (
+      byIdHit &&
+      byIdHit.route === item.route &&
+      String(byIdHit.component || "") === String(item.component || "")
+    ) {
+      existing = byIdHit;
+    }
   }
 
   return existing;
@@ -282,7 +316,11 @@ async function createCatalogPermission(
   payload: Record<string, unknown>,
 ): Promise<any> {
   const data: Record<string, unknown> = { ...payload };
-  if (item.id != null) data.id = item.id;
+  // Prefer catalog id only when free; otherwise let counter allocate to avoid collisions
+  if (item.id != null) {
+    const taken: any = await permissionRepository.findOne({ id: item.id }, { lean: true });
+    if (!taken) data.id = item.id;
+  }
 
   try {
     return await permissionRepository.create(data);
@@ -290,18 +328,6 @@ async function createCatalogPermission(
     if (err?.code !== 11000) throw err;
 
     await syncCounters();
-
-    if (item.id != null) {
-      const restored = await restoreAndUpdatePermission(item.id, payload);
-      if (restored) return restored;
-    }
-
-    const conflictId = Number(err?.keyValue?.id);
-    if (Number.isFinite(conflictId)) {
-      const restored = await restoreAndUpdatePermission(conflictId, payload);
-      if (restored) return restored;
-    }
-
     delete data.id;
     return permissionRepository.create(data);
   }

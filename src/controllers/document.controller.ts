@@ -9,6 +9,16 @@ import { DocumentsAuthenticatedRequest } from "@constants/common.interface";
 import { UploadedFile } from "express-fileupload";
 import { Roles } from "src/data/dataInserter";
 
+async function findDocumentById(rawId: string) {
+  const id = String(rawId || "").trim();
+  if (!id) return null;
+  let doc: any = await documentRepository.findOne({ id }, { lean: true });
+  if (!doc && /^\d+$/.test(id)) {
+    doc = await documentRepository.findOne({ id: Number(id) }, { lean: true });
+  }
+  return doc;
+}
+
 class DocumentController {
   private readonly baseUploadDir: string;
   private readonly prefixUploadUrl: string = "/uploads/documents";
@@ -59,8 +69,9 @@ class DocumentController {
       await file.mv(filePath);
 
       const document:any = await documentRepository.create({
-        user_id,
-        uploader_id: userId,
+        id: crypto.randomUUID(),
+        user_id: Number(user_id),
+        uploader_id: Number(userId),
         title,
         description: description ? JSON.parse(description) : [],
         original_name: file.name,
@@ -185,15 +196,20 @@ class DocumentController {
 
   async getDocument(req: DocumentsAuthenticatedRequest, res: Response) {
     try {
-      const id = Number(req.params.id);
+      const rawId = String(req.params.id || "").trim();
       const user = req.user;
-      if (!id) return ReE(res, SERVER_ERROR_CODE, "Document id is required");
+      if (!rawId) return ReE(res, SERVER_ERROR_CODE, "Document id is required");
 
-      const doc: any = await documentRepository.findOne({ id });
+      const doc: any = await findDocumentById(rawId);
       if (!doc) return ReE(res, SERVER_ERROR_CODE, "Document not found");
 
-      // Owner, super admin, or any authenticated CRM user (same openness as list-by-user_id for profiles).
       if (!user?.id) {
+        return ReE(res, SERVER_ERROR_CODE, "Unauthorized access");
+      }
+
+      // Owner or HR/admin can open; block other users from arbitrary file access.
+      const hrRoles = [Roles.SUPER_ADMIN, Roles.ADMIN, Roles.CEO, Roles.HR_EXECUTIVE];
+      if (Number(doc.user_id) !== Number(user.id) && !hrRoles.includes(user.role as any)) {
         return ReE(res, SERVER_ERROR_CODE, "Unauthorized access");
       }
 
@@ -205,10 +221,14 @@ class DocumentController {
       const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
       const fileUrl = `${BASE_URL}${doc.file_path}`;
 
-      return ReS(res, SUCCESS_CODE, "Document URL generated successfully", {
+      return ReS(res, SUCCESS_CODE, "Document ready", {
         id: doc.id,
         title: doc.title,
+        original_name: doc.original_name,
+        mime_type: doc.mime_type,
+        size_bytes: doc.size_bytes,
         url: fileUrl,
+        download: true,
       });
     } catch (error: any) {
       console.error("Get Document Error:", error);
@@ -216,23 +236,62 @@ class DocumentController {
     }
   }
 
+  /** Force-download the file (no inline PDF preview) */
+  async downloadDocument(req: DocumentsAuthenticatedRequest, res: Response) {
+    try {
+      const rawId = String(req.params.id || "").trim();
+      const user = req.user;
+      if (!rawId) return ReE(res, SERVER_ERROR_CODE, "Document id is required");
+      if (!user?.id) return ReE(res, SERVER_ERROR_CODE, "Unauthorized access");
+
+      const doc: any = await findDocumentById(rawId);
+      if (!doc) return ReE(res, SERVER_ERROR_CODE, "Document not found");
+
+      const hrRoles = [Roles.SUPER_ADMIN, Roles.ADMIN, Roles.CEO, Roles.HR_EXECUTIVE];
+      if (Number(doc.user_id) !== Number(user.id) && !hrRoles.includes(user.role as any)) {
+        return ReE(res, SERVER_ERROR_CODE, "Unauthorized access");
+      }
+
+      const absolutePath = path.isAbsolute(doc.file_path)
+        ? doc.file_path
+        : path.join(process.cwd(), String(doc.file_path).replace(/^\//, ""));
+
+      if (!fs.existsSync(absolutePath)) {
+        return ReE(res, SERVER_ERROR_CODE, "File missing on server");
+      }
+
+      await documentRepository.updateOne(
+        { id: doc.id },
+        { $set: { downloads: (doc.downloads || 0) + 1 } },
+      );
+
+      const filename = String(doc.original_name || doc.title || "document.pdf").replace(/[/\\?%*:|"<>]/g, "-");
+      res.setHeader("Content-Type", doc.mime_type || "application/octet-stream");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      return res.sendFile(absolutePath);
+    } catch (error: any) {
+      console.error("Download Document Error:", error);
+      return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
+    }
+  }
+
   async deleteDocument(req: DocumentsAuthenticatedRequest, res: Response) {
     try {
-      const id = req.params.id;
+      const rawId = String(req.params.id || "").trim();
       const userRole = req.user?.role;
 
-      const doc: any = await documentRepository.findOne({ id });
+      const doc: any = await findDocumentById(rawId);
       if (!doc) return ReE(res, SERVER_ERROR_CODE, "Document not found");
 
       if (userRole !== Roles.SUPER_ADMIN)
         return ReE(res, SERVER_ERROR_CODE, "Unauthorized to delete this document");
-      const path_ = path.join(process.cwd(), doc.file_path);
+      const path_ = path.join(process.cwd(), String(doc.file_path).replace(/^\//, ""));
       if (fs.existsSync(path_)) {
         fs.unlinkSync(path_);
       }
 
-      await documentRepository.deleteOne({ id });
-      return ReS(res, SUCCESS_CODE, "Document deleted successfully", { id });
+      await documentRepository.deleteOne({ id: doc.id });
+      return ReS(res, SUCCESS_CODE, "Document deleted successfully", { id: doc.id });
     } catch (error: any) {
       console.error("Delete Error:", error);
       return ReE(res, SERVER_ERROR_CODE, `Server Error: ${error.message}`);
@@ -247,7 +306,15 @@ async getAllDocuments(req: DocumentsAuthenticatedRequest, res: Response) {
       return ReE(res, SERVER_ERROR_CODE, "Unauthorized access — user ID missing.");
     }
 
-    const user = await userRepository.findById(Number(userId), {
+    const requestedId = Number(userId);
+    const actorId = Number(req.user?.id);
+    const actorRole = req.user?.role;
+    const hrRoles = [Roles.SUPER_ADMIN, Roles.ADMIN, Roles.CEO, Roles.HR_EXECUTIVE];
+    if (requestedId !== actorId && !hrRoles.includes(actorRole as any)) {
+      return ReE(res, SERVER_ERROR_CODE, "Unauthorized access");
+    }
+
+    const user = await userRepository.findById(requestedId, {
       select: "id name email mobile_no address",
       lean: true,
     });
@@ -257,10 +324,10 @@ async getAllDocuments(req: DocumentsAuthenticatedRequest, res: Response) {
     }
 
     const documents = await documentRepository.find(
-      { user_id: Number(userId) },
+      { user_id: requestedId },
       {
         sort: { created_at: -1 },
-        select: "id title original_name mime_type size_bytes created_at",
+        select: "id title original_name mime_type size_bytes created_at description",
         lean: true,
       },
     );
@@ -272,6 +339,7 @@ async getAllDocuments(req: DocumentsAuthenticatedRequest, res: Response) {
       mime_type: doc.mime_type,
       size_bytes: doc.size_bytes,
       created_at: doc.created_at,
+      description: doc.description || [],
     }));
 
     const responsePayload = {

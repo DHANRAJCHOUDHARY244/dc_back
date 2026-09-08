@@ -9,6 +9,7 @@ router.put("/settings", hrController.updateSettings.bind(hrController));
 
 router.post("/employees", hrController.listEmployees.bind(hrController));
 router.get("/employees/me", hrController.getMyProfile.bind(hrController));
+router.get("/employees/:userId/history-summary", hrController.employeeHistorySummary.bind(hrController));
 router.put("/employees/:userId", hrController.updateEmployee.bind(hrController));
 
 router.post("/check-in", hrController.checkIn.bind(hrController));
@@ -18,10 +19,13 @@ router.get("/today", hrController.todayMine.bind(hrController));
 router.get("/attendance/map", hrController.attendanceMap.bind(hrController));
 router.post("/attendance/map", hrController.attendanceMap.bind(hrController));
 router.get("/attendance/map/team-today", hrController.teamAttendanceMapToday.bind(hrController));
+router.get("/attendance/map/team-month", hrController.teamAttendanceMapMonth.bind(hrController));
+router.post("/attendance/map/team-month", hrController.teamAttendanceMapMonth.bind(hrController));
 router.post("/mark", hrController.hrMark.bind(hrController));
 router.post("/attendance/list", hrController.listAttendance.bind(hrController));
 router.get("/dashboard", hrController.dashboard.bind(hrController));
 router.post("/reports/monthly", hrController.monthlyReport.bind(hrController));
+router.post("/reports/yearly", hrController.yearlyReport.bind(hrController));
 router.post("/reports/export-csv", hrController.exportCsv.bind(hrController));
 router.get("/attendance-summary", hrController.attendanceSummary.bind(hrController));
 router.post("/attendance-summary", hrController.attendanceSummary.bind(hrController));
