@@ -8,6 +8,8 @@ const LeaveTypeSchema = new Schema(
 		name: { type: String, required: true },
 		is_paid: { type: Boolean, default: true },
 		default_days: { type: Number, default: 0 },
+		/** Days credited automatically at month start (configurable per type) */
+		monthly_credit: { type: Number, default: 0 },
 		is_active: { type: Boolean, default: true },
 	},
 	collectionOptions("leave_types"),

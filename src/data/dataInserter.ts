@@ -291,10 +291,11 @@ export const bootstrapOnStartup = async () => {
     console.error("syncInstallerJobsFromSiteInfo failed", err);
   }
   try {
-    const { ensureInstallerRoleRoutes, ensureHrRoleRoutes, ensureCustomerRoleRoutes } = await import("@services/permissionCatalogSync.service");
+    const { ensureInstallerRoleRoutes, ensureHrRoleRoutes, ensureCustomerRoleRoutes, ensureDocumentLetterRoleRoutes } = await import("@services/permissionCatalogSync.service");
     const result = await ensureInstallerRoleRoutes();
     const hrResult = await ensureHrRoleRoutes();
     const customerResult = await ensureCustomerRoleRoutes();
+    const letterResult = await ensureDocumentLetterRoleRoutes();
     if (result.updated || result.created) {
       console.log(`Installer route permissions synced: updated=${result.updated} created=${result.created}`);
     }
@@ -303,6 +304,9 @@ export const bootstrapOnStartup = async () => {
     }
     if (customerResult.updated || customerResult.created) {
       console.log(`Customer route permissions synced: updated=${customerResult.updated} created=${customerResult.created}`);
+    }
+    if (letterResult.updated || letterResult.created) {
+      console.log(`Document letter permissions synced: updated=${letterResult.updated} created=${letterResult.created}`);
     }
   } catch (err) {
     console.error("ensureInstallerRoleRoutes failed", err);
@@ -676,6 +680,7 @@ export const seedDocumentLetterPermissions = async () => {
     const parent = await permissionRepository.findOne({ route: "document-center", parentId: null });
     if (!parent) return;
 
+    const staff = new Set([Roles.SUPER_ADMIN, Roles.ADMIN, Roles.CEO, Roles.HR_EXECUTIVE]);
     const roles = await roleRepository.find();
     for (const menu of EXTRA_LETTER_MENUS) {
       let permission: any = await permissionRepository.findOne({ route: menu.route, parentId: (parent as any).id });
@@ -690,24 +695,36 @@ export const seedDocumentLetterPermissions = async () => {
         });
       }
       for (const role of roles as any[]) {
-        const exists = await userPermissionRepository.findOne({
+        const allowed = staff.has(role.name);
+        const exists: any = await userPermissionRepository.findOne({
           role_id: role.id,
           permission_id: permission.id,
         });
-        if (exists) continue;
-        const isSuper = role.name === Roles.SUPER_ADMIN;
+        const payload = {
+          enable: allowed,
+          create: allowed,
+          can_update: allowed,
+          delete: role.name === Roles.SUPER_ADMIN || role.name === Roles.ADMIN,
+          is_user_specific: false,
+          is_admin: role.name === Roles.SUPER_ADMIN,
+          deleted_at: null,
+        };
+        if (exists) {
+          if (allowed && (!exists.enable || !exists.can_update || exists.deleted_at)) {
+            await userPermissionRepository.updateById(exists.id, { $set: payload });
+          }
+          continue;
+        }
         await userPermissionRepository.create({
           role_id: role.id,
           permission_id: permission.id,
-          enable: isSuper,
-          create: isSuper,
-          can_update: isSuper,
-          delete: isSuper,
-          is_user_specific: false,
-          is_admin: isSuper,
+          ...payload,
         });
       }
     }
+
+    const { ensureDocumentLetterRoleRoutes } = await import("@services/permissionCatalogSync.service");
+    await ensureDocumentLetterRoleRoutes();
     console.log("Seeded extra Document Center letter permissions");
   } catch (err) {
     console.error("seedDocumentLetterPermissions failed", err);

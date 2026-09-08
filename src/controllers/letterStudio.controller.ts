@@ -53,6 +53,8 @@ async function fileLetterPdf(opts: {
   pdf: { buffer: Buffer; filename: string };
   letterTitle: string;
   letterType: string;
+  replaceDocumentId?: string | null;
+  studioSnapshot?: string | null;
 }) {
   const employeeUserId = Number(opts.employeeUserId);
   const uploaderId = Number(opts.uploaderId);
@@ -69,21 +71,78 @@ async function fileLetterPdf(opts: {
   const filePath = path.join(userFolder, storedName);
   fs.writeFileSync(filePath, opts.pdf.buffer);
 
+  const buildDescription = (existingDesc?: any[]) => {
+    const description: Array<{ key: string; value: string }> = [
+      { key: "source", value: "letter_studio" },
+      { key: "letter_type", value: opts.letterType || "official" },
+    ];
+    let snap = String(opts.studioSnapshot || "").trim();
+    if (!snap && Array.isArray(existingDesc)) {
+      const prev = existingDesc.find((d) => d?.key === "studio_snapshot")?.value;
+      if (prev) snap = String(prev);
+    }
+    if (snap) {
+      // Cap stored snapshot size (~500KB) to avoid oversized documents
+      description.push({ key: "studio_snapshot", value: snap.slice(0, 500_000) });
+    }
+    return description;
+  };
+
+  const relativePath = `/uploads/documents/user_${employeeUserId}/` + storedName;
+
+  const replaceId = String(opts.replaceDocumentId || "").trim();
+  if (replaceId) {
+    let existing: any = await documentRepository.findOne({ id: replaceId }, { lean: true });
+    if (!existing && /^\d+$/.test(replaceId)) {
+      existing = await documentRepository.findOne({ id: Number(replaceId) }, { lean: true });
+    }
+    if (!existing) throw new Error("Letter to update was not found");
+    if (Number(existing.user_id) !== employeeUserId) {
+      throw new Error("Letter does not belong to this employee");
+    }
+
+    const oldPath = path.isAbsolute(existing.file_path)
+      ? existing.file_path
+      : path.join(process.cwd(), String(existing.file_path || "").replace(/^\//, ""));
+    if (oldPath && fs.existsSync(oldPath)) {
+      try {
+        fs.unlinkSync(oldPath);
+      } catch {
+        /* ignore stale file */
+      }
+    }
+
+    await documentRepository.updateOne(
+      { id: existing.id },
+      {
+        $set: {
+          uploader_id: uploaderId,
+          title: opts.letterTitle,
+          description: buildDescription(existing.description),
+          original_name: opts.pdf.filename,
+          stored_name: storedName,
+          mime_type: "application/pdf",
+          size_bytes: opts.pdf.buffer.length,
+          file_path: relativePath,
+          updated_at: new Date(),
+        },
+      },
+    );
+    return existing.id;
+  }
+
   const verificationHash = crypto.randomBytes(3).toString("hex").toUpperCase();
   const doc: any = await documentRepository.create({
     id: crypto.randomUUID(),
     user_id: employeeUserId,
     uploader_id: uploaderId,
     title: opts.letterTitle,
-    description: [
-      { key: "source", value: "letter_studio" },
-      { key: "letter_type", value: opts.letterType || "official" },
-    ],
+    description: buildDescription(),
     original_name: opts.pdf.filename,
     stored_name: storedName,
     mime_type: "application/pdf",
     size_bytes: opts.pdf.buffer.length,
-    file_path: `/uploads/documents/user_${employeeUserId}/` + storedName,
+    file_path: relativePath,
     verification_hash: verificationHash,
   });
   return doc?.id ?? null;
@@ -136,6 +195,8 @@ class LetterStudioController {
             pdf,
             letterTitle,
             letterType: String((req.body || {}).letter_type || "official"),
+            replaceDocumentId: String((req.body || {}).replace_document_id || "").trim() || null,
+            studioSnapshot: String((req.body || {}).studio_snapshot || "").trim() || null,
           });
         } catch (fileErr) {
           console.error("Letter filed to employee documents failed:", fileErr);
@@ -173,18 +234,22 @@ class LetterStudioController {
 
       const letterTitle =
         String((req.body || {}).letter_title || "Company letter").trim() || "Company letter";
+      const replaceId = String((req.body || {}).replace_document_id || "").trim() || null;
       const document_id = await fileLetterPdf({
         employeeUserId,
         uploaderId: req.user.id,
         pdf,
         letterTitle,
         letterType: String((req.body || {}).letter_type || "official"),
+        replaceDocumentId: replaceId,
+        studioSnapshot: String((req.body || {}).studio_snapshot || "").trim() || null,
       });
 
-      return ReS(res, SUCCESS_CODE, "Letter saved to employee profile", {
+      return ReS(res, SUCCESS_CODE, replaceId ? "Letter updated on employee profile" : "Letter saved to employee profile", {
         document_id,
         filed_to_user_id: employeeUserId,
         filename: pdf.filename,
+        replaced: Boolean(replaceId),
       });
     } catch (error) {
       console.error(error);

@@ -106,7 +106,8 @@ class DocumentController {
         order_direction = "DESC",
       } = req.body;
 
-      if (user?.role !== Roles.SUPER_ADMIN)
+      const listRoles = [Roles.SUPER_ADMIN, Roles.ADMIN, Roles.CEO, Roles.HR_EXECUTIVE];
+      if (!listRoles.includes(user?.role as any))
         return ReE(res, SERVER_ERROR_CODE, "Unauthorized access");
 
       const parsedLimit = parseInt(limit as string, 10);
