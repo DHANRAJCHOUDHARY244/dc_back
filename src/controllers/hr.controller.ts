@@ -21,11 +21,13 @@ import {
 	attendanceMonthLockRepository,
 	attendanceRecordRepository,
 	attendanceSettingsRepository,
+	documentRepository,
 	employeeProfileRepository,
 	holidayRepository,
 	leaveBalanceRepository,
 	leaveRequestRepository,
 	leaveTypeRepository,
+	salaryRepository,
 	shiftRepository,
 	userRepository,
 } from "@repositories";
@@ -90,6 +92,33 @@ class HrController {
 			if (team) filter.team = team;
 			if (employment_status) filter.employment_status = employment_status;
 
+			const q = String(search || "").trim();
+			if (q) {
+				const codeMatch = q.match(/^(?:SE-)?0*(\d+)$/i);
+				const orUser: any[] = [
+					{ name: { $regex: q, $options: "i" } },
+					{ email: { $regex: q, $options: "i" } },
+					{ username: { $regex: q, $options: "i" } },
+				];
+				if (codeMatch) {
+					orUser.push({ id: Number(codeMatch[1]) });
+				}
+				const matchedUsers: any[] = await userRepository.find(
+					{ $or: orUser, deleted_at: null },
+					{ lean: true, select: "id", limit: 500 },
+				);
+				const matchedIds = matchedUsers.map((u) => u.id);
+				const profileOr: any[] = [{ employee_code: { $regex: q, $options: "i" } }];
+				if (matchedIds.length) profileOr.push({ user_id: { $in: matchedIds } });
+				if (codeMatch) profileOr.push({ user_id: Number(codeMatch[1]) });
+
+				filter.$and = [...(filter.$and || []), { $or: profileOr }];
+				if (scope) {
+					filter.$and.push({ user_id: { $in: scope } });
+					delete filter.user_id;
+				}
+			}
+
 			const { rows, count } = await employeeProfileRepository.findPaginated(filter, {
 				page: Number(page),
 				limit: Number(limit),
@@ -103,21 +132,9 @@ class HrController {
 				sort: { id: -1 },
 			});
 
-			let data = rows;
-			if (search) {
-				const q = String(search).toLowerCase();
-				data = rows.filter((r: any) => {
-					const u = r.user || {};
-					return (
-						String(u.name || "").toLowerCase().includes(q) ||
-						String(u.email || "").toLowerCase().includes(q) ||
-						String(r.employee_code || "").toLowerCase().includes(q)
-					);
-				});
-			}
 			return ReS(res, SUCCESS_CODE, "Employees", {
-				data,
-				total: search ? data.length : count,
+				data: rows,
+				total: count,
 				page: Number(page),
 				limit: Number(limit),
 			});
@@ -142,6 +159,63 @@ class HrController {
 				},
 			);
 			return ReS(res, SUCCESS_CODE, "My profile", full || profile);
+		} catch (e: any) {
+			return ReE(res, SERVER_ERROR_CODE, e.message);
+		}
+	}
+
+	async employeeHistorySummary(req: AuthenticatedRequest, res: Response) {
+		try {
+			const userId = Number(req.params.userId);
+			if (!userId) return ReE(res, BAD_REQUEST_CODE, "user_id required");
+			const scope = await hr.teamUserIdsFor(actor(req));
+			if (scope && !scope.includes(userId) && userId !== req.user.id) {
+				return ReE(res, FORBIDDEN_CODE, "Unauthorized");
+			}
+			await hr.ensureEmployeeProfile(userId);
+			const profile: any = await employeeProfileRepository.findOne(
+				{ user_id: userId },
+				{
+					lean: true,
+					populate: [
+						{ path: "user", select: "id name email username profile_image mobile_no address role_id is_active created_at" },
+						{ path: "manager", select: "id name email" },
+						{ path: "team_leader", select: "id name email" },
+						{ path: "shift" },
+					],
+				},
+			);
+			const joinRaw = profile?.joining_date || profile?.user?.created_at || new Date();
+			const joining = new Date(joinRaw);
+			const joinYear = joining.getFullYear();
+			const currentYear = new Date().getFullYear();
+			const years: number[] = [];
+			for (let y = currentYear; y >= joinYear; y -= 1) years.push(y);
+
+			const start = startOfDay(joining);
+			const end = endOfDay(new Date());
+			const [attendance_count, leave_count, correction_count, salary_count, documents_count] =
+				await Promise.all([
+					attendanceRecordRepository.count({ user_id: userId, date: { $gte: start, $lte: end } }),
+					leaveRequestRepository.count({ user_id: userId }),
+					attendanceCorrectionRepository.count({ user_id: userId }),
+					salaryRepository.count({ user_id: userId }),
+					documentRepository.count({ user_id: userId }),
+				]);
+
+			return ReS(res, SUCCESS_CODE, "Employee history summary", {
+				profile,
+				joining_date: joining.toISOString(),
+				years,
+				counts: {
+					attendance: attendance_count,
+					leave: leave_count,
+					corrections: correction_count,
+					salaries: salary_count,
+					documents: documents_count,
+					onboarding_status: profile?.onboarding_status || "NOT_STARTED",
+				},
+			});
 		} catch (e: any) {
 			return ReE(res, SERVER_ERROR_CODE, e.message);
 		}
@@ -221,10 +295,13 @@ class HrController {
 		try {
 			const days = Number(req.query.days || req.body?.days || 10);
 			const userId = req.query.user_id ? Number(req.query.user_id) : req.body?.user_id;
+			const year = Number(req.query.year || req.body?.year || 0) || undefined;
+			const month = Number(req.query.month || req.body?.month || 0) || undefined;
 			const payload = await hr.getAttendanceMapPunches(
 				actor(req),
 				days,
 				userId ? Number(userId) : undefined,
+				year && month ? { year, month } : undefined,
 			);
 			return ReS(res, SUCCESS_CODE, "Attendance map data", payload);
 		} catch (e: any) {
@@ -236,6 +313,23 @@ class HrController {
 		try {
 			const payload = await hr.getTeamAttendanceMapToday(actor(req));
 			return ReS(res, SUCCESS_CODE, "Team attendance map", payload);
+		} catch (e: any) {
+			return ReE(res, BAD_REQUEST_CODE, e.message);
+		}
+	}
+
+	async teamAttendanceMapMonth(req: AuthenticatedRequest, res: Response) {
+		try {
+			const year = Number(req.query.year || req.body?.year || new Date().getFullYear());
+			const month = Number(req.query.month || req.body?.month || new Date().getMonth() + 1);
+			const userId = req.query.user_id ? Number(req.query.user_id) : req.body?.user_id;
+			const payload = await hr.getTeamAttendanceMapMonth(
+				actor(req),
+				year,
+				month,
+				userId ? Number(userId) : undefined,
+			);
+			return ReS(res, SUCCESS_CODE, "Team monthly attendance map", payload);
 		} catch (e: any) {
 			return ReE(res, BAD_REQUEST_CODE, e.message);
 		}
@@ -339,6 +433,67 @@ class HrController {
 			);
 			const profile = await employeeProfileRepository.findOne({ user_id: userId }, { lean: true });
 			return ReS(res, SUCCESS_CODE, "Monthly report", { user, profile, year, month, summary });
+		} catch (e: any) {
+			return ReE(res, SERVER_ERROR_CODE, e.message);
+		}
+	}
+
+	async yearlyReport(req: AuthenticatedRequest, res: Response) {
+		try {
+			const userId = Number(req.body.user_id || req.user.id);
+			const year = Number(req.body.year || new Date().getFullYear());
+			const page = Math.max(1, Number(req.body.page || 1));
+			const limit = Math.min(100, Math.max(1, Number(req.body.limit || 50)));
+			const status = req.body.status ? String(req.body.status) : undefined;
+			const scope = await hr.teamUserIdsFor(actor(req));
+			if (scope && !scope.includes(userId) && userId !== req.user.id) {
+				return ReE(res, FORBIDDEN_CODE, "Unauthorized");
+			}
+
+			const yearStart = startOfDay(new Date(year, 0, 1));
+			const yearEnd = endOfDay(new Date(year, 11, 31));
+			const filter: any = { user_id: userId, date: { $gte: yearStart, $lte: yearEnd } };
+			if (status) filter.status = status;
+
+			const monthly = [];
+			for (let month = 1; month <= 12; month += 1) {
+				const summary = await hr.computeAttendanceSummary(userId, year, month);
+				monthly.push({
+					month,
+					present: summary.present_days ?? summary.present ?? 0,
+					absent: summary.absent_days ?? summary.absent ?? 0,
+					late: summary.late_days ?? summary.late ?? 0,
+					leave: summary.leave_days ?? summary.leave ?? 0,
+					wfh: summary.wfh_days ?? summary.wfh ?? 0,
+					working_days: summary.working_days ?? 0,
+					salary_deduction: summary.salary_deduction ?? 0,
+				});
+			}
+
+			const { rows, count } = await attendanceRecordRepository.findPaginated(filter, {
+				page,
+				limit,
+				lean: true,
+				sort: { date: -1 },
+				populate: { path: "user", select: "id name email profile_image" },
+			});
+
+			const user = await userRepository.findOne(
+				{ id: userId },
+				{ lean: true, select: "id name email profile_image" },
+			);
+			const profile = await employeeProfileRepository.findOne({ user_id: userId }, { lean: true });
+
+			return ReS(res, SUCCESS_CODE, "Yearly report", {
+				user,
+				profile,
+				year,
+				monthly,
+				rows,
+				total: count,
+				page,
+				limit,
+			});
 		} catch (e: any) {
 			return ReE(res, SERVER_ERROR_CODE, e.message);
 		}
@@ -996,17 +1151,115 @@ class HrController {
 	async auditLogs(req: AuthenticatedRequest, res: Response) {
 		try {
 			if (!hr.isHrAdmin(req.user.role)) return ReE(res, FORBIDDEN_CODE, "Unauthorized");
-			const { page = 1, limit = 50, target_user_id, action } = req.body || {};
+			const {
+				page = 1,
+				limit = 50,
+				target_user_id,
+				actor_id,
+				action,
+				entity,
+				search,
+				start_date,
+				end_date,
+			} = req.body || {};
 			const filter: any = {};
 			if (target_user_id) filter.target_user_id = Number(target_user_id);
-			if (action) filter.action = action;
+			if (actor_id) filter.actor_id = Number(actor_id);
+			if (action) filter.action = String(action);
+			if (entity) filter.entity = String(entity);
+			if (start_date || end_date) {
+				filter.created_at = {};
+				if (start_date) filter.created_at.$gte = startOfDay(start_date);
+				if (end_date) filter.created_at.$lte = endOfDay(end_date);
+			}
+
+			const q = String(search || "").trim();
+			if (q) {
+				const users: any[] = await userRepository.find(
+					{
+						deleted_at: null,
+						$or: [
+							{ name: { $regex: q, $options: "i" } },
+							{ email: { $regex: q, $options: "i" } },
+							{ username: { $regex: q, $options: "i" } },
+						],
+					},
+					{ lean: true, select: "id", limit: 200 },
+				);
+				const ids = users.map((u) => u.id);
+				const or: any[] = [{ action: { $regex: q, $options: "i" } }, { reason: { $regex: q, $options: "i" } }];
+				if (ids.length) {
+					or.push({ actor_id: { $in: ids } }, { target_user_id: { $in: ids } });
+				}
+				filter.$or = or;
+			}
+
 			const { rows, count } = await attendanceAuditLogRepository.findPaginated(filter, {
 				page: Number(page),
-				limit: Number(limit),
+				limit: Math.min(100, Number(limit) || 50),
 				lean: true,
 				sort: { id: -1 },
 			});
-			return ReS(res, SUCCESS_CODE, "Audit logs", { data: rows, total: count });
+
+			const userIds = [
+				...new Set(
+					rows
+						.flatMap((r: any) => [r.actor_id, r.target_user_id])
+						.filter((id: any) => id != null && Number(id) > 0)
+						.map(Number),
+				),
+			];
+			const users: any[] = userIds.length
+				? await userRepository.find(
+						{ id: { $in: userIds } },
+						{ lean: true, select: "id name email profile_image" },
+					)
+				: [];
+			const profiles: any[] = userIds.length
+				? await employeeProfileRepository.find(
+						{ user_id: { $in: userIds } },
+						{ lean: true, select: "user_id employee_code department designation" },
+					)
+				: [];
+			const userMap = new Map(users.map((u) => [u.id, u]));
+			const profileMap = new Map(profiles.map((p) => [p.user_id, p]));
+
+			const enrich = (id?: number | null) => {
+				if (!id) return null;
+				const u = userMap.get(Number(id));
+				const p = profileMap.get(Number(id));
+				if (!u && !p) return { id: Number(id), name: `User #${id}`, email: "", profile_image: null, employee_code: "" };
+				return {
+					id: Number(id),
+					name: u?.name || `User #${id}`,
+					email: u?.email || "",
+					profile_image: u?.profile_image || null,
+					employee_code: p?.employee_code || `SE-${String(id).padStart(4, "0")}`,
+					department: p?.department || "",
+					designation: p?.designation || "",
+				};
+			};
+
+			const data = rows.map((r: any) => ({
+				...r,
+				actor: enrich(r.actor_id),
+				target_user: enrich(r.target_user_id),
+			}));
+
+			const distinctActions: any[] = await attendanceAuditLogRepository.aggregateRaw([
+				{ $match: { deleted_at: null } },
+				{ $group: { _id: "$action", count: { $sum: 1 } } },
+				{ $sort: { count: -1 } },
+				{ $limit: 40 },
+			]);
+
+			return ReS(res, SUCCESS_CODE, "Audit logs", {
+				data,
+				total: count,
+				page: Number(page),
+				limit: Number(limit),
+				actions: distinctActions.map((a) => ({ action: a._id, count: a.count })),
+			});
 		} catch (e: any) {
 			return ReE(res, SERVER_ERROR_CODE, e.message);
 		}

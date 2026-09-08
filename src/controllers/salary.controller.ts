@@ -178,15 +178,19 @@ class SalaryController {
 
   async getAllSalaries(req: AuthenticatedRequest, res: Response) {
     try {
-      if (![Roles.ADMIN, Roles.SUPER_ADMIN].includes(req.user.role)) {
+      if (![Roles.ADMIN, Roles.SUPER_ADMIN, Roles.HR_EXECUTIVE].includes(req.user.role)) {
         return ReE(res, SERVER_ERROR_CODE, "Unauthorized Access");
       }
 
-      const { page = 1, limit = 10, user_id, month } = req.body;
+      const { page = 1, limit = 10, user_id, month, year } = req.body;
 
       const filter: Record<string, unknown> = {};
-      if (user_id) filter.user_id = user_id;
+      if (user_id) filter.user_id = Number(user_id);
       if (month) filter.salary_month = month;
+      else if (year) {
+        const y = String(year);
+        filter.salary_month = { $regex: `^${y}-` };
+      }
 
       const { rows, count } = await salaryRepository.findPaginated(filter, {
         populate: [
@@ -230,7 +234,7 @@ class SalaryController {
       }
 
       if (
-        ![Roles.ADMIN, Roles.SUPER_ADMIN].includes(req.user.role) &&
+        ![Roles.ADMIN, Roles.SUPER_ADMIN, Roles.HR_EXECUTIVE].includes(req.user.role) &&
         salary.user_id !== req.user.id
       ) {
         return ReE(res, SERVER_ERROR_CODE, "Unauthorized Access");
@@ -245,20 +249,23 @@ class SalaryController {
 
   async getMySalaries(req: AuthenticatedRequest, res: Response) {
     try {
-      const { page = 1, limit = 10 } = req.body;
+      const q = { ...(req.query || {}), ...(req.body || {}) } as Record<string, unknown>;
+      const page = Number(q.page || 1);
+      const limit = Math.min(100, Math.max(1, Number(q.limit || 12)));
+      const year = q.year ? String(q.year) : undefined;
 
-      const { rows, count } = await salaryRepository.findPaginated(
-        { user_id: req.user.id },
-        { sort: { date: -1 }, page: Number(page), limit: Number(limit) },
-      );
+      const filter: Record<string, unknown> = { user_id: req.user.id };
+      if (year) filter.salary_month = { $regex: `^${year}-` };
 
-      if (!rows.length) {
-        return ReE(res, NO_CONTENT, "No salary records found");
-      }
+      const { rows, count } = await salaryRepository.findPaginated(filter, {
+        sort: { date: -1 },
+        page,
+        limit,
+      });
 
       return ReS(res, SUCCESS_CODE, "My salaries fetched successfully", {
         totalItems: count,
-        totalPages: Math.ceil(count / Number(limit)),
+        totalPages: Math.max(1, Math.ceil(count / limit)),
         currentPage: page,
         data: rows,
       });

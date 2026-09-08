@@ -234,7 +234,12 @@ export async function getTodayAttendance(userId: number) {
 	return buildTodayAttendancePayload(userId);
 }
 
-export async function getAttendanceMapPunches(user: AnyUser, days = 10, targetUserId?: number) {
+export async function getAttendanceMapPunches(
+	user: AnyUser,
+	days = 10,
+	targetUserId?: number,
+	range?: { year?: number; month?: number },
+) {
 	const scope = await teamUserIdsFor(user);
 	const userId = targetUserId ?? user.id;
 	if (scope && !scope.includes(userId) && userId !== user.id) {
@@ -244,17 +249,28 @@ export async function getAttendanceMapPunches(user: AnyUser, days = 10, targetUs
 		throw new Error("Unauthorized");
 	}
 
-	const since = new Date();
-	since.setDate(since.getDate() - Math.max(1, Math.min(days, 30)));
-	since.setHours(0, 0, 0, 0);
+	let since: Date;
+	let until: Date | null = null;
+	const year = Number(range?.year || 0);
+	const month = Number(range?.month || 0);
+	if (year >= 2000 && month >= 1 && month <= 12) {
+		since = startOfDay(new Date(year, month - 1, 1));
+		until = endOfDay(new Date(year, month, 0));
+	} else {
+		since = new Date();
+		since.setDate(since.getDate() - Math.max(1, Math.min(Number(days) || 10, 62)));
+		since.setHours(0, 0, 0, 0);
+	}
 
-	const punches: any[] = await attendancePunchRepository.find(
-		{
-			user_id: userId,
-			check_in_at: { $gte: since },
-		},
-		{ lean: true, sort: { check_in_at: -1 } },
-	);
+	const punchFilter: Record<string, unknown> = {
+		user_id: userId,
+		check_in_at: until ? { $gte: since, $lte: until } : { $gte: since },
+	};
+
+	const punches: any[] = await attendancePunchRepository.find(punchFilter, {
+		lean: true,
+		sort: { check_in_at: -1 },
+	});
 
 	const userMeta = await loadUserMeta([userId]);
 	const markers = buildPunchMarkers(punches, userMeta);
@@ -270,9 +286,13 @@ export async function getAttendanceMapPunches(user: AnyUser, days = 10, targetUs
 	}));
 
 	return {
-		days,
+		mode: year && month ? "month" : "days",
+		days: year && month ? undefined : Math.max(1, Math.min(Number(days) || 10, 62)),
+		year: year || undefined,
+		month: month || undefined,
 		user_id: userId,
 		since: since.toISOString(),
+		until: until ? until.toISOString() : null,
 		is_checked_in: !!openPunch,
 		punches: enrichedPunches,
 		markers,
@@ -280,6 +300,75 @@ export async function getAttendanceMapPunches(user: AnyUser, days = 10, targetUs
 		total_spent_minutes: totalSpentMinutes,
 		total_spent_label: formatHoursMinutes(totalSpentMinutes),
 		live_location: openPunch?.live_location || null,
+		check_in_count: markers.filter((m) => m.type === "check_in").length,
+		check_out_count: markers.filter((m) => m.type === "check_out").length,
+	};
+}
+
+/** HR / Super Admin / managers — team (or all) check-in/out map for a calendar month. */
+export async function getTeamAttendanceMapMonth(
+	user: AnyUser,
+	year: number,
+	month: number,
+	targetUserId?: number,
+) {
+	if (!canViewTeamAttendanceMap(user.role)) {
+		throw new Error("Unauthorized");
+	}
+	const y = Number(year);
+	const m = Number(month);
+	if (!(y >= 2000 && m >= 1 && m <= 12)) {
+		throw new Error("Valid year and month are required");
+	}
+
+	const scope = await teamUserIdsFor(user);
+	if (targetUserId) {
+		if (scope && !scope.includes(targetUserId)) throw new Error("Unauthorized");
+		return getAttendanceMapPunches(user, 31, targetUserId, { year: y, month: m });
+	}
+
+	const since = startOfDay(new Date(y, m - 1, 1));
+	const until = endOfDay(new Date(y, m, 0));
+	const punchFilter: Record<string, unknown> = {
+		check_in_at: { $gte: since, $lte: until },
+	};
+	if (scope) punchFilter.user_id = { $in: scope };
+
+	const punches: any[] = await attendancePunchRepository.find(punchFilter, {
+		lean: true,
+		sort: { check_in_at: -1 },
+		limit: 5000,
+	});
+
+	const userIds = [...new Set(punches.map((p) => p.user_id))];
+	const userMeta = await loadUserMeta(userIds);
+	const markers = buildPunchMarkers(punches, userMeta);
+	const session_paths = buildSessionPaths(punches);
+	const totalSpentMinutes = sumPunchMinutes(punches, true);
+	const enrichedPunches = punches.map((punch) => ({
+		...punch,
+		user_name: userMeta.get(punch.user_id)?.name || `User #${punch.user_id}`,
+		employee_code: userMeta.get(punch.user_id)?.employee_code || "",
+		distance_m: punchDistanceMeters(punch),
+	}));
+
+	return {
+		mode: "team_month",
+		year: y,
+		month: m,
+		since: since.toISOString(),
+		until: until.toISOString(),
+		scope: scope ? "team" : "all",
+		employee_count: userIds.length,
+		active_employee_count: new Set(punches.filter((p) => !p.check_out_at).map((p) => p.user_id)).size,
+		punches: enrichedPunches,
+		markers,
+		session_paths,
+		total_spent_minutes: totalSpentMinutes,
+		total_spent_label: formatHoursMinutes(totalSpentMinutes),
+		is_checked_in: punches.some((p) => !p.check_out_at),
+		check_in_count: markers.filter((m) => m.type === "check_in").length,
+		check_out_count: markers.filter((m) => m.type === "check_out").length,
 	};
 }
 

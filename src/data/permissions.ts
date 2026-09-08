@@ -1086,6 +1086,16 @@ export default[
         "order": 31,
         "children": [
             {
+                "id": 215,
+                "name": "Onboarding",
+                "parentId": 128,
+                "label": "sys.menu.hr.onboarding",
+                "type": 1,
+                "route": "hr/onboarding",
+                "component": "/hr/onboarding/OnboardingPage.tsx",
+                "order": 0,
+            },
+            {
                 "id": 129,
                 "name": "Employees",
                 "parentId": 128,

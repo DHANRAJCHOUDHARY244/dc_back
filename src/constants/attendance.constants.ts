@@ -89,8 +89,8 @@ export const HR_LEAVE_APPROVER_ROLES = ["SUPER_ADMIN", "HR_EXECUTIVE"];
 /** Team-lead first approval (managers only — not CEO/Admin). */
 export const HR_TEAM_LEAD_ROLES = ["MANAGER", "OPERATIONS_MANAGER"];
 
-/** Onboarding & employee setup — HR Executive + Super Admin. */
-export const HR_ONBOARDING_ROLES = ["SUPER_ADMIN", "HR_EXECUTIVE"];
+/** Onboarding & employee setup — same as HR admin (Super Admin / Admin / HR / CEO). */
+export const HR_ONBOARDING_ROLES = [...HR_ADMIN_ROLES];
 
 export const ONBOARDING_STATUSES = ["NOT_STARTED", "IN_PROGRESS", "COMPLETED"] as const;
 
