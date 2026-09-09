@@ -34,9 +34,10 @@ const CRM_SETTINGS_TTL = 10 * 60;
 
 let cachedSettings: any = null;
 
-export function clearCrmSettingsCache() {
+export async function clearCrmSettingsCache() {
   cachedSettings = null;
-  void cacheDel(CRM_SETTINGS_KEY);
+  // Await Redis delete so the next read cannot race and rehydrate stale data.
+  await cacheDel(CRM_SETTINGS_KEY);
 }
 
 export function mapSettingsToCompanyConfig(settings: any): CompanyConfigSnapshot {
@@ -69,21 +70,29 @@ export function mapSettingsToCompanyConfig(settings: any): CompanyConfigSnapshot
 }
 
 export async function getOrCreateSettings() {
-  if (cachedSettings) return cachedSettings;
-
+  // Redis is the shared source of truth across workers/instances.
+  // Never return process memory if Redis was flushed — that caused stale CRM branding after settings update.
   const fromRedis = await cacheGetJson<any>(CRM_SETTINGS_KEY);
   if (fromRedis) {
     cachedSettings = fromRedis;
     return fromRedis;
   }
 
+  // Redis miss (or Redis down): drop local memory and reload from DB.
+  cachedSettings = null;
+
   let settings = await crmSettingsRepository.findOne({}, { sort: { id: 1 } });
   if (!settings) {
     settings = await crmSettingsRepository.create(getDefaultCrmSettings());
   }
-  cachedSettings = settings;
-  await cacheSetJson(CRM_SETTINGS_KEY, settings, CRM_SETTINGS_TTL);
-  return settings;
+  // Persist a plain object so Redis JSON round-trips cleanly.
+  const plain =
+    settings && typeof (settings as any).toObject === "function"
+      ? (settings as any).toObject()
+      : settings;
+  cachedSettings = plain;
+  await cacheSetJson(CRM_SETTINGS_KEY, plain, CRM_SETTINGS_TTL);
+  return plain;
 }
 
 export async function getCompanyConfig(): Promise<CompanyConfigSnapshot> {
