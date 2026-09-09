@@ -43,10 +43,17 @@ export async function ensureMasterTaskSeeds() {
 					});
 				}
 			}
-		})().catch((e) => {
-			seedPromise = null;
-			throw e;
-		});
+		})()
+			.catch((e) => {
+				seedPromise = null;
+				throw e;
+			})
+			.finally(() => {
+				// Allow re-seed later so newly shipped DEFAULT_TASK_TYPES appear after deploy without full restart lock-out forever
+				setTimeout(() => {
+					seedPromise = null;
+				}, 60_000);
+			});
 	}
 	await seedPromise;
 }
@@ -77,22 +84,66 @@ async function enrichAssignee(userId: number) {
 	};
 }
 
+async function resolveTaskType(input: Record<string, any>) {
+	const raw = String(input.type || input.custom_type || "OTHER").trim();
+	if (!raw) return { type: "OTHER", category: "General", label: "Other" };
+
+	const codeGuess = raw
+		.toUpperCase()
+		.replace(/[^A-Z0-9]+/g, "_")
+		.replace(/^_|_$/g, "") || "OTHER";
+
+	let catalog: any = await taskTypeCatalogRepository.findOne({ code: codeGuess }, { lean: true });
+	if (!catalog) {
+		catalog = await taskTypeCatalogRepository.findOne(
+			{ label: { $regex: `^${raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" } },
+			{ lean: true },
+		);
+	}
+	if (catalog) {
+		return { type: catalog.code, category: catalog.category || "General", label: catalog.label };
+	}
+
+	// Persist custom type so it becomes searchable next time
+	try {
+		await taskTypeCatalogRepository.create({
+			code: codeGuess,
+			label: raw,
+			category: input.category || "Custom",
+			active: true,
+		});
+	} catch {
+		/* race / duplicate ok */
+	}
+	return { type: codeGuess, category: input.category || "Custom", label: raw };
+}
+
 export async function createMasterTask(input: Record<string, any>, actorId: number) {
 	await ensureMasterTaskSeeds();
-	const type = String(input.type || "OTHER").toUpperCase();
-	const catalog: any = await taskTypeCatalogRepository.findOne({ code: type }, { lean: true });
+	const { type, category } = await resolveTaskType(input);
 	const assigneeId = Number(input.user_id);
-	if (!assigneeId) throw new Error("user_id (assignee) is required");
+	if (!assigneeId) throw new Error("Assign to (team member) is required");
 
 	const enrich = await enrichAssignee(assigneeId);
 	const title = String(input.title || input.name || "Untitled task").trim();
 	const description = String(input.description || input.instruction || "").trim();
 	const task_code = await nextTaskCode();
+	const additional = Array.isArray(input.additional_assignees)
+		? input.additional_assignees.map(Number).filter((id: number) => id && id !== assigneeId)
+		: [];
+
+	const initialStatus = input.status
+		? String(input.status).toUpperCase()
+		: MasterTaskStatus.NEW;
+	const status =
+		initialStatus === MasterTaskStatus.NEW && assigneeId
+			? MasterTaskStatus.ASSIGNED
+			: initialStatus;
 
 	const task = await taskRepository.create({
 		task_code,
 		type,
-		category: catalog?.category || input.category || "General",
+		category,
 		priority: input.priority || TaskPriority.NORMAL,
 		user_id: assigneeId,
 		owner_id: input.owner_id != null ? Number(input.owner_id) : assigneeId,
@@ -100,9 +151,18 @@ export async function createMasterTask(input: Record<string, any>, actorId: numb
 		manager_id: input.manager_id != null ? Number(input.manager_id) : enrich.team_leader_id,
 		created_by: actorId,
 		lead_id: input.lead_id != null ? Number(input.lead_id) : null,
-		quote_id: input.quote_id != null ? Number(input.quote_id) : null,
+		quote_id: input.no_quote || input.quote_id == null || input.quote_id === "" ? null : Number(input.quote_id),
+		job_id: input.no_job || input.job_id == null || input.job_id === "" ? null : Number(input.job_id),
+		invoice_id:
+			input.no_invoice || input.invoice_id == null || input.invoice_id === ""
+				? null
+				: Number(input.invoice_id),
 		customer_id: input.customer_id != null ? Number(input.customer_id) : null,
 		customer_name: input.customer_name || "",
+		customer_phone: input.customer_phone || "",
+		customer_email: input.customer_email || "",
+		customer_address: input.customer_address || "",
+		additional_assignees: additional,
 		employee_code: enrich.employee_code,
 		department: input.department || enrich.department,
 		team: input.team || enrich.team,
@@ -110,8 +170,9 @@ export async function createMasterTask(input: Record<string, any>, actorId: numb
 		title,
 		instruction: description,
 		description,
-		status: input.status || MasterTaskStatus.PENDING,
+		status,
 		due_date: input.due_date ? new Date(input.due_date) : null,
+		follow_up_at: input.follow_up_at ? new Date(input.follow_up_at) : null,
 		start_date: input.start_date ? new Date(input.start_date) : new Date(),
 		due_time: input.due_time || "",
 		start_time: input.start_time || "",
@@ -129,6 +190,12 @@ export async function createMasterTask(input: Record<string, any>, actorId: numb
 				updated_by: actorId,
 				updated_at: new Date(),
 			},
+			{
+				type: "ASSIGNED",
+				message: `Assigned to user #${assigneeId}`,
+				updated_by: actorId,
+				updated_at: new Date(),
+			},
 		],
 		escalation_history: [],
 	});
@@ -140,6 +207,15 @@ export async function createMasterTask(input: Record<string, any>, actorId: numb
 			meta: { type: "TASK", taskId: (task as any).id, task_code, priority: input.priority },
 		})
 		.catch(() => undefined);
+
+	for (const uid of additional) {
+		await dispatchNotification({
+			userId: uid,
+			message: `You were added to task ${task_code}: ${title}`,
+			route: "master-tasks",
+			meta: { type: "TASK", taskId: (task as any).id, task_code },
+		}).catch(() => undefined);
+	}
 
 	notifyMasterTaskBadgeChanged();
 	return task;
@@ -163,32 +239,79 @@ export async function listMasterTasks(filters: Record<string, any>, viewer: { id
 	if (filters.priority) filter.priority = String(filters.priority).toUpperCase();
 	if (filters.category) filter.category = filters.category;
 	if (filters.quote_id) filter.quote_id = Number(filters.quote_id);
+	if (filters.job_id) filter.job_id = Number(filters.job_id);
+	if (filters.invoice_id) filter.invoice_id = Number(filters.invoice_id);
 	if (filters.lead_id) filter.lead_id = Number(filters.lead_id);
 	if (filters.customer_id) filter.customer_id = Number(filters.customer_id);
+	if (filters.user_id) filter.user_id = Number(filters.user_id);
+	if (filters.created_by) filter.created_by = Number(filters.created_by);
+	if (filters.department) filter.department = { $regex: String(filters.department), $options: "i" };
 	if (filters.is_follow_up === true || filters.is_follow_up === "true") filter.is_follow_up = true;
 	if (filters.escalated === true || filters.escalated === "true") {
 		filter.escalation_level = { $gte: 1 };
 	}
 	if (filters.q) {
 		const q = String(filters.q).trim();
-		filter.$or = [
+		const numeric = Number(q.replace(/\D/g, ""));
+		const textOr: any[] = [
 			{ title: { $regex: q, $options: "i" } },
 			{ name: { $regex: q, $options: "i" } },
 			{ task_code: { $regex: q, $options: "i" } },
 			{ customer_name: { $regex: q, $options: "i" } },
+			{ customer_phone: { $regex: q, $options: "i" } },
+			{ customer_email: { $regex: q, $options: "i" } },
+			{ customer_address: { $regex: q, $options: "i" } },
+			{ description: { $regex: q, $options: "i" } },
+			{ type: { $regex: q, $options: "i" } },
+			{ department: { $regex: q, $options: "i" } },
+			...(Number.isFinite(numeric) && numeric > 0
+				? [{ quote_id: numeric }, { job_id: numeric }, { invoice_id: numeric }, { id: numeric }]
+				: []),
 		];
+		filter.$and = [...(filter.$and || []), { $or: textOr }];
 	}
+
+	const statusViewMap: Record<string, string> = {
+		new: MasterTaskStatus.NEW,
+		assigned: MasterTaskStatus.ASSIGNED,
+		pending: MasterTaskStatus.PENDING,
+		in_progress: MasterTaskStatus.IN_PROGRESS,
+		waiting_customer: MasterTaskStatus.WAITING_CUSTOMER,
+		waiting_installer: MasterTaskStatus.WAITING_INSTALLER,
+		waiting_supplier: MasterTaskStatus.WAITING_SUPPLIER,
+		waiting_finance: MasterTaskStatus.WAITING_FINANCE,
+		waiting_grid: MasterTaskStatus.WAITING_DNSP,
+		waiting_dnsp: MasterTaskStatus.WAITING_DNSP,
+		waiting_documents: MasterTaskStatus.WAITING_DOCUMENTS,
+		follow_up: MasterTaskStatus.FOLLOW_UP_REQUIRED,
+		follow_up_required: MasterTaskStatus.FOLLOW_UP_REQUIRED,
+		on_hold: MasterTaskStatus.ON_HOLD,
+		escalated_status: MasterTaskStatus.ESCALATED,
+		cancelled: MasterTaskStatus.CANCELLED,
+	};
 
 	if (view === "my") {
 		filter.user_id = viewer.id;
+	} else if (view === "created_by_me") {
+		filter.created_by = viewer.id;
 	} else if (view === "assigned_by_me") {
 		filter.assigned_by = viewer.id;
 	} else if (view === "team" || view === "all") {
 		if (!isMgr) {
-			filter.$or = [{ user_id: viewer.id }, { created_by: viewer.id }, { assigned_by: viewer.id }];
+			filter.$and = [
+				...(filter.$and || []),
+				{
+					$or: [
+						{ user_id: viewer.id },
+						{ created_by: viewer.id },
+						{ assigned_by: viewer.id },
+						{ additional_assignees: viewer.id },
+					],
+				},
+			];
 		}
 	} else if (view === "overdue") {
-		filter.status = { $in: TASK_OPEN_STATUSES };
+		filter.status = { $in: TASK_OPEN_STATUSES.filter((s) => s !== MasterTaskStatus.OVERDUE) };
 		filter.due_date = { $lt: new Date() };
 		if (!isMgr) filter.user_id = viewer.id;
 	} else if (view === "high_priority") {
@@ -196,7 +319,10 @@ export async function listMasterTasks(filters: Record<string, any>, viewer: { id
 		filter.status = { $in: TASK_OPEN_STATUSES };
 		if (!isMgr) filter.user_id = viewer.id;
 	} else if (view === "escalated") {
-		filter.escalation_level = { $gte: 1 };
+		filter.$and = [
+			...(filter.$and || []),
+			{ $or: [{ escalation_level: { $gte: 1 } }, { status: MasterTaskStatus.ESCALATED }] },
+		];
 		if (!isMgr) filter.user_id = viewer.id;
 	} else if (view === "recurring") {
 		filter.recurrence = { $ne: "NONE" };
@@ -204,14 +330,11 @@ export async function listMasterTasks(filters: Record<string, any>, viewer: { id
 	} else if (view === "follow_ups") {
 		filter.is_follow_up = true;
 		if (!isMgr) filter.user_id = viewer.id;
-	} else if (view === "pending") {
-		filter.status = MasterTaskStatus.PENDING;
-		if (!isMgr) filter.user_id = viewer.id;
-	} else if (view === "in_progress") {
-		filter.status = MasterTaskStatus.IN_PROGRESS;
-		if (!isMgr) filter.user_id = viewer.id;
 	} else if (view === "completed") {
 		filter.status = { $in: TASK_DONE_STATUSES };
+		if (!isMgr) filter.user_id = viewer.id;
+	} else if (statusViewMap[view]) {
+		filter.status = statusViewMap[view];
 		if (!isMgr) filter.user_id = viewer.id;
 	}
 
@@ -266,31 +389,74 @@ export async function getTaskSummary(viewer: { id: number; role?: string }) {
 	const endTomorrow = new Date(endToday);
 	endTomorrow.setDate(endTomorrow.getDate() + 1);
 
-	const [total, pending, inProgress, completed, overdue, escalated, dueToday, dueTomorrow] =
-		await Promise.all([
-			taskRepository.count({ ...base, status: { $in: TASK_OPEN_STATUSES } }),
-			taskRepository.count({ ...base, status: MasterTaskStatus.PENDING }),
-			taskRepository.count({ ...base, status: MasterTaskStatus.IN_PROGRESS }),
-			taskRepository.count({ ...base, status: { $in: TASK_DONE_STATUSES } }),
-			taskRepository.count({
-				...base,
-				status: { $in: TASK_OPEN_STATUSES },
-				due_date: { $lt: now },
-			}),
-			taskRepository.count({ ...base, escalation_level: { $gte: 1 } }),
-			taskRepository.count({
-				...base,
-				status: { $in: TASK_OPEN_STATUSES },
-				due_date: { $gte: startToday, $lte: endToday },
-			}),
-			taskRepository.count({
-				...base,
-				status: { $in: TASK_OPEN_STATUSES },
-				due_date: { $gt: endToday, $lte: endTomorrow },
-			}),
-		]);
+	const openFilter = { ...base, status: { $in: TASK_OPEN_STATUSES } };
+	const countStatus = (status: string) => taskRepository.count({ ...base, status });
+
+	const [
+		total,
+		all,
+		pending,
+		inProgress,
+		completed,
+		overdue,
+		escalated,
+		dueToday,
+		dueTomorrow,
+		neu,
+		assigned,
+		waitingCustomer,
+		waitingInstaller,
+		waitingSupplier,
+		waitingFinance,
+		waitingGrid,
+		followUp,
+		onHold,
+		cancelled,
+		followUpToday,
+	] = await Promise.all([
+		taskRepository.count(openFilter),
+		taskRepository.count(base),
+		countStatus(MasterTaskStatus.PENDING),
+		countStatus(MasterTaskStatus.IN_PROGRESS),
+		taskRepository.count({ ...base, status: { $in: TASK_DONE_STATUSES } }),
+		taskRepository.count({
+			...base,
+			status: { $in: TASK_OPEN_STATUSES },
+			due_date: { $lt: now },
+		}),
+		taskRepository.count({
+			...base,
+			$or: [{ escalation_level: { $gte: 1 } }, { status: MasterTaskStatus.ESCALATED }],
+		}),
+		taskRepository.count({
+			...base,
+			status: { $in: TASK_OPEN_STATUSES },
+			due_date: { $gte: startToday, $lte: endToday },
+		}),
+		taskRepository.count({
+			...base,
+			status: { $in: TASK_OPEN_STATUSES },
+			due_date: { $gt: endToday, $lte: endTomorrow },
+		}),
+		countStatus(MasterTaskStatus.NEW),
+		countStatus(MasterTaskStatus.ASSIGNED),
+		countStatus(MasterTaskStatus.WAITING_CUSTOMER),
+		countStatus(MasterTaskStatus.WAITING_INSTALLER),
+		countStatus(MasterTaskStatus.WAITING_SUPPLIER),
+		countStatus(MasterTaskStatus.WAITING_FINANCE),
+		countStatus(MasterTaskStatus.WAITING_DNSP),
+		countStatus(MasterTaskStatus.FOLLOW_UP_REQUIRED),
+		countStatus(MasterTaskStatus.ON_HOLD),
+		countStatus(MasterTaskStatus.CANCELLED),
+		taskRepository.count({
+			...base,
+			status: { $in: TASK_OPEN_STATUSES },
+			follow_up_at: { $gte: startToday, $lte: endToday },
+		}),
+	]);
 
 	return {
+		total_all: all,
 		total_open: total,
 		pending,
 		in_progress: inProgress,
@@ -299,6 +465,17 @@ export async function getTaskSummary(viewer: { id: number; role?: string }) {
 		escalated,
 		due_today: dueToday,
 		due_tomorrow: dueTomorrow,
+		new: neu,
+		assigned,
+		waiting_customer: waitingCustomer,
+		waiting_installer: waitingInstaller,
+		waiting_supplier: waitingSupplier,
+		waiting_finance: waitingFinance,
+		waiting_grid: waitingGrid,
+		follow_up_required: followUp,
+		on_hold: onHold,
+		cancelled,
+		follow_up_today: followUpToday,
 	};
 }
 
@@ -351,9 +528,7 @@ export async function evaluateTaskEscalations() {
 		const history = [...(task.escalation_history || [])];
 		const patch: Record<string, unknown> = {};
 
-		if (task.status !== MasterTaskStatus.OVERDUE && task.status !== MasterTaskStatus.ESCALATED) {
-			patch.status = MasterTaskStatus.OVERDUE;
-		}
+		// Overdue is a filter flag (due_date + open status) — do not overwrite workflow status.
 
 		const tryEscalate = async (level: number, threshold: number, label: string) => {
 			if (hours < threshold || nextLevel >= level) return;

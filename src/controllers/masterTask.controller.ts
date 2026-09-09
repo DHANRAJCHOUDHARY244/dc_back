@@ -103,38 +103,86 @@ class MasterTaskController {
 	async updateStatus(req: AuthenticatedRequest, res: Response) {
 		try {
 			const id = Number(req.params.id);
-			const status = String(req.body?.status || "").toUpperCase();
 			const task: any = await taskRepository.findOne({ id }, { lean: true });
 			if (!task) return ReE(res, RESOURCE_NOT_FOUND, "Task not found");
 
-			const $set: any = {
-				status,
-				progress: [
-					...(task.progress || []),
-					{
-						type: "STATUS",
-						message: `Status → ${status}`,
-						updated_by: req.user.id,
-						updated_at: new Date(),
-					},
-				],
-			};
+			const statusRaw = req.body?.status != null ? String(req.body.status).toUpperCase() : "";
+			const progress = [...(task.progress || [])];
+			const $set: any = {};
+
+			if (statusRaw && statusRaw !== "REOPEN" && statusRaw !== "REOPENED") {
+				$set.status = statusRaw;
+				progress.push({
+					type: "STATUS",
+					message: `Status → ${statusRaw}`,
+					updated_by: req.user.id,
+					updated_at: new Date(),
+				});
+			}
 			if (
-				status === MasterTaskStatus.COMPLETED ||
-				status === MasterTaskStatus.DONE ||
-				status === "DONE"
+				statusRaw === MasterTaskStatus.COMPLETED ||
+				statusRaw === MasterTaskStatus.DONE ||
+				statusRaw === "DONE"
 			) {
 				$set.status = MasterTaskStatus.COMPLETED;
 				$set.closing_date = new Date();
 				$set.closing_message = req.body?.closing_message || "";
+				$set.completed_by = req.user.id;
+			}
+			if (statusRaw === "REOPEN" || statusRaw === "REOPENED") {
+				$set.status = MasterTaskStatus.IN_PROGRESS;
+				$set.closing_date = null;
+				progress.push({
+					type: "REOPEN",
+					message: "Task reopened",
+					updated_by: req.user.id,
+					updated_at: new Date(),
+				});
+			}
+			if (req.body?.user_id != null) {
+				const newAssignee = Number(req.body.user_id);
+				if (newAssignee && newAssignee !== task.user_id) {
+					$set.user_id = newAssignee;
+					$set.assigned_by = req.user.id;
+					progress.push({
+						type: "ASSIGNED",
+						message: `Assignee changed → user #${newAssignee}`,
+						updated_by: req.user.id,
+						updated_at: new Date(),
+					});
+				}
+			}
+			if (req.body?.priority) {
+				const nextPriority = String(req.body.priority).toUpperCase();
+				$set.priority = nextPriority;
+				progress.push({
+					type: "PRIORITY",
+					message: `Priority ${task.priority || "NORMAL"} → ${nextPriority}`,
+					updated_by: req.user.id,
+					updated_at: new Date(),
+				});
 			}
 			if (req.body?.delay_party) $set.delay_party = req.body.delay_party;
+			if (progress.length !== (task.progress || []).length) $set.progress = progress;
+
+			if (!Object.keys($set).length) {
+				return ReE(res, BAD_REQUEST_CODE, "Nothing to update");
+			}
 
 			await taskRepository.updateMany({ id }, { $set });
 			const updated = await taskRepository.findOne(
 				{ id },
 				{ lean: true, populate: [{ path: "user", select: "id name" }] },
 			);
+			if (req.body?.user_id != null && Number(req.body.user_id) !== task.user_id) {
+				const { dispatchNotification } = await import("@services/notificationHandler.service");
+				await dispatchNotification({
+					userId: Number(req.body.user_id),
+					message: `Task assigned: ${task.task_code || task.id} — ${task.title || task.name}`,
+					route: "master-tasks",
+					meta: { type: "TASK", taskId: id },
+				}).catch(() => undefined);
+			}
 			notifyMasterTaskBadgeChanged();
 			return ReS(res, SUCCESS_CODE, "Updated", updated);
 		} catch (e: any) {

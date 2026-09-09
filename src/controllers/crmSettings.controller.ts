@@ -107,7 +107,7 @@ class CrmSettingsController {
       const updated = await crmSettingsRepository.updateById(settings.id, {
         $set: { [field]: uploaded.url },
       });
-      clearCrmSettingsCache();
+      await clearCrmSettingsCache();
 
       return ReS(res, SUCCESS_CODE, `${assetType} uploaded.`, {
         type: assetType,
@@ -163,7 +163,7 @@ class CrmSettingsController {
       }
 
       const updated = await crmSettingsRepository.updateById(settings.id, { $set: updates });
-      clearCrmSettingsCache();
+      await clearCrmSettingsCache();
       return ReS(res, SUCCESS_CODE, "CRM settings updated.", updated);
     } catch (error: any) {
       console.error("[updateSettings]", error);
@@ -197,7 +197,7 @@ class CrmSettingsController {
       const updated = await crmSettingsRepository.updateById(settings.id, {
         $set: { metadata_fields: reordered },
       });
-      clearCrmSettingsCache();
+      await clearCrmSettingsCache();
       return ReS(res, SUCCESS_CODE, "Metadata fields reordered.", updated);
     } catch (error: any) {
       console.error("[reorderMetadataFields]", error);
