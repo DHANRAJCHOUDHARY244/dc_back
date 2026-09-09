@@ -611,13 +611,140 @@ export async function ensureDefaultShift() {
 
 export async function ensureLeaveTypes() {
 	const existing = await leaveTypeRepository.find({}, { lean: true });
-	const codes = new Set((existing || []).map((t: any) => t.code));
+	const byCode = new Map((existing || []).map((t: any) => [t.code, t]));
 	for (const t of DEFAULT_LEAVE_TYPES) {
-		if (!codes.has(t.code)) {
+		const found: any = byCode.get(t.code);
+		if (!found) {
 			await leaveTypeRepository.create(t);
+		} else if (found.monthly_credit == null) {
+			await leaveTypeRepository.updateById(found.id, {
+				$set: { monthly_credit: Number((t as any).monthly_credit) || 0 },
+			});
 		}
 	}
-	return leaveTypeRepository.find({ is_active: true }, { lean: true });
+	return leaveTypeRepository.find({ is_active: true }, { lean: true, sort: { id: 1 } });
+}
+
+export async function getOrCreateLeaveBalance(
+	userId: number,
+	leaveTypeId: number,
+	year: number,
+	defaultDays = 0,
+) {
+	let balance: any = await leaveBalanceRepository.findOne(
+		{ user_id: userId, leave_type_id: leaveTypeId, year },
+		{ lean: true },
+	);
+	if (!balance) {
+		const created: any = await leaveBalanceRepository.create({
+			user_id: userId,
+			leave_type_id: leaveTypeId,
+			year,
+			allocated: Math.max(0, Number(defaultDays) || 0),
+			used: 0,
+			pending: 0,
+		});
+		balance = created?.toObject?.() || created;
+	}
+	return balance;
+}
+
+export async function ensureUserLeaveBalances(userId: number, year = new Date().getFullYear()) {
+	const types: any[] = await ensureLeaveTypes();
+	const rows = [];
+	for (const t of types) {
+		const b = await getOrCreateLeaveBalance(userId, t.id, year, t.default_days);
+		const allocated = Number(b.allocated ?? t.default_days ?? 0);
+		const used = Number(b.used ?? 0);
+		const pending = Number(b.pending ?? 0);
+		rows.push({
+			id: b.id,
+			user_id: userId,
+			year,
+			leave_type: t,
+			allocated,
+			used,
+			pending,
+			remaining: allocated - used - pending,
+		});
+	}
+	return rows;
+}
+
+export async function adjustLeaveBalance(opts: {
+	userId: number;
+	leaveTypeId: number;
+	year: number;
+	defaultDays?: number;
+	pendingDelta?: number;
+	usedDelta?: number;
+	allocatedDelta?: number;
+	allocated?: number;
+}) {
+	const balance = await getOrCreateLeaveBalance(
+		opts.userId,
+		opts.leaveTypeId,
+		opts.year,
+		opts.defaultDays ?? 0,
+	);
+	const patch: Record<string, number> = {};
+	if (typeof opts.allocated === "number" && Number.isFinite(opts.allocated)) {
+		patch.allocated = Math.max(0, opts.allocated);
+	} else if (opts.allocatedDelta) {
+		patch.allocated = Math.max(0, Number(balance.allocated || 0) + opts.allocatedDelta);
+	}
+	if (opts.pendingDelta) {
+		patch.pending = Math.max(0, Number(balance.pending || 0) + opts.pendingDelta);
+	}
+	if (opts.usedDelta) {
+		patch.used = Math.max(0, Number(balance.used || 0) + opts.usedDelta);
+	}
+	if (!Object.keys(patch).length) return balance;
+	const updated: any = await leaveBalanceRepository.updateById(balance.id, { $set: patch });
+	return updated?.toObject?.() || updated;
+}
+
+/** Credit monthly_credit days onto allocated for all (or selected) employees. */
+export async function applyMonthlyLeaveCredit(opts: {
+	year?: number;
+	userIds?: number[] | null;
+	leaveTypeId?: number | null;
+}) {
+	const year = opts.year || new Date().getFullYear();
+	const types: any[] = await ensureLeaveTypes();
+	const creditTypes = types.filter((t) => {
+		if (opts.leaveTypeId && Number(t.id) !== Number(opts.leaveTypeId)) return false;
+		return Number(t.monthly_credit) > 0;
+	});
+	if (!creditTypes.length) return { updated: 0, types: [] };
+
+	let userIds = opts.userIds?.filter(Boolean) || null;
+	if (!userIds) {
+		const profiles: any[] = await employeeProfileRepository.find(
+			{ employment_status: { $ne: EmploymentStatus.TERMINATED } },
+			{ lean: true, select: "user_id" },
+		);
+		userIds = profiles.map((p) => Number(p.user_id)).filter(Boolean);
+	}
+
+	let updated = 0;
+	for (const uid of userIds) {
+		for (const t of creditTypes) {
+			await adjustLeaveBalance({
+				userId: uid,
+				leaveTypeId: t.id,
+				year,
+				defaultDays: t.default_days,
+				allocatedDelta: Number(t.monthly_credit) || 0,
+			});
+			updated += 1;
+		}
+	}
+	return {
+		updated,
+		employees: userIds.length,
+		types: creditTypes.map((t) => ({ id: t.id, code: t.code, credit: t.monthly_credit })),
+	};
 }
 
 export async function ensureEmployeeProfile(userId: number) {

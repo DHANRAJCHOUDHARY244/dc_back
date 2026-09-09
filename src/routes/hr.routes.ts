@@ -38,7 +38,11 @@ router.post("/holidays", hrController.saveHoliday.bind(hrController));
 router.delete("/holidays/:id", hrController.deleteHoliday.bind(hrController));
 
 router.get("/leave-types", hrController.listLeaveTypes.bind(hrController));
+router.post("/leave-types", hrController.upsertLeaveType.bind(hrController));
 router.get("/leave-balances", hrController.myLeaveBalances.bind(hrController));
+router.post("/leave-balances/employee", hrController.employeeLeaveBalances.bind(hrController));
+router.post("/leave-balances/set", hrController.setLeaveBalance.bind(hrController));
+router.post("/leave-balances/monthly-credit", hrController.applyMonthlyLeaveCredit.bind(hrController));
 router.post("/leave", hrController.submitLeave.bind(hrController));
 router.post("/leave/list", hrController.listLeaves.bind(hrController));
 router.post("/leave/:id/action", hrController.actionLeave.bind(hrController));

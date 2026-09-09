@@ -24,7 +24,6 @@ import {
 	documentRepository,
 	employeeProfileRepository,
 	holidayRepository,
-	leaveBalanceRepository,
 	leaveRequestRepository,
 	leaveTypeRepository,
 	salaryRepository,
@@ -610,10 +609,45 @@ class HrController {
 	}
 
 	/* ---------- leave ---------- */
-	async listLeaveTypes(_req: AuthenticatedRequest, res: Response) {
+	async listLeaveTypes(req: AuthenticatedRequest, res: Response) {
 		try {
-			const rows = await hr.ensureLeaveTypes();
+			await hr.ensureLeaveTypes();
+			const filter = hr.isHrAdmin(req.user?.role) ? {} : { is_active: true };
+			const rows = await leaveTypeRepository.find(filter, { lean: true, sort: { id: 1 } });
 			return ReS(res, SUCCESS_CODE, "Leave types", rows);
+		} catch (e: any) {
+			return ReE(res, SERVER_ERROR_CODE, e.message);
+		}
+	}
+
+	async upsertLeaveType(req: AuthenticatedRequest, res: Response) {
+		try {
+			if (!hr.isHrAdmin(req.user.role)) return ReE(res, FORBIDDEN_CODE, "Unauthorized");
+			const { id, code, name, default_days, monthly_credit, is_paid, is_active } = req.body || {};
+			if (!code || !name) return ReE(res, BAD_REQUEST_CODE, "code and name are required");
+
+			const payload = {
+				code: String(code).trim().toUpperCase(),
+				name: String(name).trim(),
+				default_days: Math.max(0, Number(default_days) || 0),
+				monthly_credit: Math.max(0, Number(monthly_credit) || 0),
+				is_paid: is_paid !== false && is_paid !== "false",
+				is_active: is_active !== false && is_active !== "false",
+			};
+
+			let row: any;
+			if (id) {
+				const existing: any = await leaveTypeRepository.findOne({ id: Number(id) }, { lean: true });
+				if (!existing) return ReE(res, BAD_REQUEST_CODE, "Leave type not found");
+				row = await leaveTypeRepository.updateById(existing.id, { $set: payload });
+				row = row?.toObject?.() || { ...existing, ...payload, id: existing.id };
+			} else {
+				const clash: any = await leaveTypeRepository.findOne({ code: payload.code }, { lean: true });
+				if (clash) return ReE(res, BAD_REQUEST_CODE, "Leave type code already exists");
+				row = await leaveTypeRepository.create(payload);
+				row = row?.toObject?.() || row;
+			}
+			return ReS(res, SUCCESS_CODE, "Leave type saved", row);
 		} catch (e: any) {
 			return ReE(res, SERVER_ERROR_CODE, e.message);
 		}
@@ -622,23 +656,76 @@ class HrController {
 	async myLeaveBalances(req: AuthenticatedRequest, res: Response) {
 		try {
 			const year = Number(req.query.year || new Date().getFullYear());
-			const types: any[] = await hr.ensureLeaveTypes();
-			const balances: any[] = await leaveBalanceRepository.find(
-				{ user_id: req.user.id, year },
+			const data = await hr.ensureUserLeaveBalances(req.user.id, year);
+			return ReS(res, SUCCESS_CODE, "Leave balances", data);
+		} catch (e: any) {
+			return ReE(res, SERVER_ERROR_CODE, e.message);
+		}
+	}
+
+	/** HR: list / edit leave quotas for any employee */
+	async employeeLeaveBalances(req: AuthenticatedRequest, res: Response) {
+		try {
+			if (!hr.isHrAdmin(req.user.role) && !hr.isHrLeaveApprover(req.user.role)) {
+				return ReE(res, FORBIDDEN_CODE, "Unauthorized");
+			}
+			const userId = Number(req.body?.user_id || req.query?.user_id || 0);
+			if (!userId) return ReE(res, BAD_REQUEST_CODE, "user_id required");
+			const year = Number(req.body?.year || req.query?.year || new Date().getFullYear());
+			const data = await hr.ensureUserLeaveBalances(userId, year);
+			return ReS(res, SUCCESS_CODE, "Employee leave balances", { user_id: userId, year, data });
+		} catch (e: any) {
+			return ReE(res, SERVER_ERROR_CODE, e.message);
+		}
+	}
+
+	async setLeaveBalance(req: AuthenticatedRequest, res: Response) {
+		try {
+			if (!hr.isHrAdmin(req.user.role)) return ReE(res, FORBIDDEN_CODE, "Unauthorized");
+			const { user_id, leave_type_id, year, allocated, allocated_delta } = req.body || {};
+			if (!user_id || !leave_type_id) {
+				return ReE(res, BAD_REQUEST_CODE, "user_id and leave_type_id required");
+			}
+			const leaveType: any = await leaveTypeRepository.findOne(
+				{ id: Number(leave_type_id) },
 				{ lean: true },
 			);
-			const byType = new Map(balances.map((b) => [b.leave_type_id, b]));
-			const data = types.map((t: any) => {
-				const b = byType.get(t.id);
-				return {
-					leave_type: t,
-					allocated: b?.allocated ?? t.default_days,
-					used: b?.used ?? 0,
-					pending: b?.pending ?? 0,
-					remaining: (b?.allocated ?? t.default_days) - (b?.used ?? 0) - (b?.pending ?? 0),
-				};
+			if (!leaveType) return ReE(res, BAD_REQUEST_CODE, "Invalid leave type");
+			const y = Number(year || new Date().getFullYear());
+			const patch: any = {
+				userId: Number(user_id),
+				leaveTypeId: Number(leave_type_id),
+				year: y,
+				defaultDays: leaveType.default_days,
+			};
+			if (allocated != null && allocated !== "") {
+				patch.allocated = Math.max(0, Number(allocated) || 0);
+			} else if (allocated_delta != null && allocated_delta !== "") {
+				patch.allocatedDelta = Number(allocated_delta) || 0;
+			} else {
+				return ReE(res, BAD_REQUEST_CODE, "allocated or allocated_delta required");
+			}
+			const updated = await hr.adjustLeaveBalance(patch);
+			const rows = await hr.ensureUserLeaveBalances(Number(user_id), y);
+			return ReS(res, SUCCESS_CODE, "Leave quota updated", {
+				balance: updated,
+				data: rows,
 			});
-			return ReS(res, SUCCESS_CODE, "Leave balances", data);
+		} catch (e: any) {
+			return ReE(res, SERVER_ERROR_CODE, e.message);
+		}
+	}
+
+	async applyMonthlyLeaveCredit(req: AuthenticatedRequest, res: Response) {
+		try {
+			if (!hr.isHrAdmin(req.user.role)) return ReE(res, FORBIDDEN_CODE, "Unauthorized");
+			const { year, user_ids, leave_type_id } = req.body || {};
+			const result = await hr.applyMonthlyLeaveCredit({
+				year: year ? Number(year) : undefined,
+				userIds: Array.isArray(user_ids) ? user_ids.map(Number).filter(Boolean) : null,
+				leaveTypeId: leave_type_id ? Number(leave_type_id) : null,
+			});
+			return ReS(res, SUCCESS_CODE, "Monthly leave credit applied", result);
 		} catch (e: any) {
 			return ReE(res, SERVER_ERROR_CODE, e.message);
 		}
@@ -654,7 +741,21 @@ class HrController {
 			const end = startOfDay(end_date);
 			const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
 			const leaveType: any = await leaveTypeRepository.findOne({ id: Number(leave_type_id) }, { lean: true });
-			if (!leaveType) return ReE(res, BAD_REQUEST_CODE, "Invalid leave type");
+			if (!leaveType || leaveType.is_active === false) {
+				return ReE(res, BAD_REQUEST_CODE, "Invalid leave type");
+			}
+
+			const year = start.getFullYear();
+			const balances = await hr.ensureUserLeaveBalances(req.user.id, year);
+			const bal = balances.find((b: any) => Number(b.leave_type?.id) === Number(leave_type_id));
+			const remaining = Number(bal?.remaining ?? 0);
+			if ((bal?.allocated ?? 0) > 0 && remaining < days) {
+				return ReE(
+					res,
+					BAD_REQUEST_CODE,
+					`Insufficient ${leaveType.name} balance. Remaining ${remaining} day(s), requested ${days}.`,
+				);
+			}
 
 			const created = await leaveRequestRepository.create({
 				user_id: req.user.id,
@@ -665,6 +766,14 @@ class HrController {
 				reason: reason || "",
 				attachment: attachment || {},
 				status: "PENDING_TL",
+			});
+
+			await hr.adjustLeaveBalance({
+				userId: req.user.id,
+				leaveTypeId: Number(leave_type_id),
+				year,
+				defaultDays: leaveType.default_days,
+				pendingDelta: days,
 			});
 
 			await dispatchNotification({
@@ -719,11 +828,19 @@ class HrController {
 
 			if (action === "reject") {
 				if (leave.status === "PENDING_TL") {
-					if (!isTeamLead) return ReE(res, FORBIDDEN_CODE, "Only team lead can reject at this stage");
+					if (!isTeamLead && !isHrApprover) {
+						return ReE(res, FORBIDDEN_CODE, "Only team lead or HR can reject at this stage");
+					}
 					nextStatus = "REJECTED";
-					patch.tl_approver_id = req.user.id;
-					patch.tl_action_at = new Date();
-					patch.tl_note = note || "";
+					if (isHrApprover) {
+						patch.hr_approver_id = req.user.id;
+						patch.hr_action_at = new Date();
+						patch.hr_note = note || "";
+					} else {
+						patch.tl_approver_id = req.user.id;
+						patch.tl_action_at = new Date();
+						patch.tl_note = note || "";
+					}
 				} else if (leave.status === "PENDING_HR") {
 					if (!isHrApprover) return ReE(res, FORBIDDEN_CODE, "Only HR can reject at this stage");
 					nextStatus = "REJECTED";
@@ -735,13 +852,23 @@ class HrController {
 				}
 			} else if (action === "approve") {
 				if (leave.status === "PENDING_TL") {
-					if (!isTeamLead) {
-						return ReE(res, FORBIDDEN_CODE, "Only team lead can approve at this stage");
+					if (isHrApprover) {
+						// HR / Admin can final-approve without waiting for team lead
+						nextStatus = "APPROVED";
+						patch.hr_approver_id = req.user.id;
+						patch.hr_action_at = new Date();
+						patch.hr_note = note || "Approved by HR";
+						if (!leave.tl_approver_id) {
+							patch.tl_note = "Skipped — approved directly by HR";
+						}
+					} else if (isTeamLead) {
+						nextStatus = "PENDING_HR";
+						patch.tl_approver_id = req.user.id;
+						patch.tl_action_at = new Date();
+						patch.tl_note = note || "";
+					} else {
+						return ReE(res, FORBIDDEN_CODE, "Only team lead or HR can approve at this stage");
 					}
-					nextStatus = "PENDING_HR";
-					patch.tl_approver_id = req.user.id;
-					patch.tl_action_at = new Date();
-					patch.tl_note = note || "";
 				} else if (leave.status === "PENDING_HR") {
 					if (!isHrApprover) {
 						return ReE(res, FORBIDDEN_CODE, "Only HR can give final approval");
@@ -759,6 +886,29 @@ class HrController {
 
 			patch.status = nextStatus;
 			const updated = await leaveRequestRepository.updateById(id, { $set: patch });
+
+			const leaveYear = new Date(leave.start_date).getFullYear();
+			if (nextStatus === "APPROVED" || nextStatus === "REJECTED") {
+				const leaveType: any = await leaveTypeRepository.findOne(
+					{ id: leave.leave_type_id },
+					{ lean: true },
+				);
+				const bal = await hr.getOrCreateLeaveBalance(
+					leave.user_id,
+					leave.leave_type_id,
+					leaveYear,
+					leaveType?.default_days || 0,
+				);
+				const pendingDec = Math.min(Number(bal.pending || 0), Number(leave.days) || 0);
+				await hr.adjustLeaveBalance({
+					userId: leave.user_id,
+					leaveTypeId: leave.leave_type_id,
+					year: leaveYear,
+					defaultDays: leaveType?.default_days || 0,
+					pendingDelta: -pendingDec,
+					usedDelta: nextStatus === "APPROVED" ? Number(leave.days) || 0 : 0,
+				});
+			}
 
 			if (nextStatus === "APPROVED") {
 				const leaveType: any = await leaveTypeRepository.findOne(

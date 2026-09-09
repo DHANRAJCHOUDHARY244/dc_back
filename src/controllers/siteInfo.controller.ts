@@ -119,7 +119,7 @@ class SiteInfo {
 
       const [quoteData, siteInfos] = await Promise.all([
         quoteRepository.findOne(quoteFilter, {
-          select: "id name address mobile_no items manual_attachments",
+          select: "id name address mobile_no items manual_attachments green_sketch is_solar_sketch",
           populate: quotePopulate,
           lean: true,
         }),

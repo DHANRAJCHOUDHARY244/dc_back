@@ -441,6 +441,7 @@ export async function syncPermissionCatalogFromFile(): Promise<PermissionCatalog
   }
 
   await ensureHrRoleRoutes().catch((err) => console.error("ensureHrRoleRoutes failed", err));
+  await ensureDocumentLetterRoleRoutes().catch((err) => console.error("ensureDocumentLetterRoleRoutes failed", err));
   await ensureInstallerRoleRoutes().catch((err) => console.error("ensureInstallerRoleRoutes failed", err));
   await ensureCustomerRoleRoutes().catch((err) => console.error("ensureCustomerRoleRoutes failed", err));
 
@@ -513,6 +514,72 @@ export async function ensureHrRoleRoutes(): Promise<{ updated: number; created: 
         delete: role.name === Roles.SUPER_ADMIN,
         is_user_specific: false,
         is_admin: role.name === Roles.SUPER_ADMIN,
+      });
+      created += 1;
+    }
+    invalidatePermissionCache(role.id);
+  }
+  return { updated, created };
+}
+
+/** Ensure Super Admin / Admin / CEO / HR can open letter menus and browse all user documents. */
+export async function ensureDocumentLetterRoleRoutes(): Promise<{ updated: number; created: number }> {
+  const roles: any[] = await roleRepository.find(
+    { name: { $in: [Roles.SUPER_ADMIN, Roles.ADMIN, Roles.CEO, Roles.HR_EXECUTIVE] } },
+    { lean: true },
+  );
+  if (!roles.length) return { updated: 0, created: 0 };
+
+  const letterRoutes = [
+    "document-center",
+    "letter-paid",
+    "joining-letter",
+    "offer-letter",
+    "appointment-letter",
+    "price-agreement",
+    "user-doc-list",
+    "user-doc-list/:userId",
+  ];
+  const perms: any[] = await permissionRepository.find(
+    {
+      deleted_at: null,
+      $or: [
+        { route: { $in: letterRoutes } },
+        { component: { $regex: "/documents/(offerLetter|JoiningLetter|appointmentLetter|letterPaid|userDocuments|priceAgreement)/" } },
+      ],
+    },
+    { lean: true },
+  );
+
+  let updated = 0;
+  let created = 0;
+  for (const role of roles) {
+    for (const perm of perms) {
+      const existing: any = await userPermissionRepository.findOne({
+        role_id: role.id,
+        permission_id: perm.id,
+      });
+      const isSuper = role.name === Roles.SUPER_ADMIN;
+      const payload = {
+        enable: true,
+        create: true,
+        can_update: true,
+        delete: isSuper || role.name === Roles.ADMIN,
+        deleted_at: null,
+        is_user_specific: false,
+        is_admin: isSuper,
+      };
+      if (existing) {
+        if (!existing.enable || existing.deleted_at || !existing.can_update) {
+          await userPermissionRepository.updateById(existing.id, { $set: payload });
+          updated += 1;
+        }
+        continue;
+      }
+      await userPermissionRepository.create({
+        role_id: role.id,
+        permission_id: perm.id,
+        ...payload,
       });
       created += 1;
     }

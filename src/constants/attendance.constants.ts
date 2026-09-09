@@ -72,19 +72,19 @@ export const DEFAULT_DEDUCTIBLE_STATUSES = [
 ];
 
 export const DEFAULT_LEAVE_TYPES = [
-	{ code: "CL", name: "Casual Leave", is_paid: true, default_days: 12 },
-	{ code: "SL", name: "Sick Leave", is_paid: true, default_days: 12 },
-	{ code: "PL", name: "Paid Leave", is_paid: true, default_days: 0 },
-	{ code: "UL", name: "Unpaid Leave", is_paid: false, default_days: 0 },
-	{ code: "EL", name: "Emergency Leave", is_paid: true, default_days: 3 },
-	{ code: "OT", name: "Other", is_paid: false, default_days: 0 },
+	{ code: "CL", name: "Casual Leave", is_paid: true, default_days: 12, monthly_credit: 1 },
+	{ code: "SL", name: "Sick Leave", is_paid: true, default_days: 12, monthly_credit: 0 },
+	{ code: "PL", name: "Paid Leave", is_paid: true, default_days: 0, monthly_credit: 0 },
+	{ code: "UL", name: "Unpaid Leave", is_paid: false, default_days: 0, monthly_credit: 0 },
+	{ code: "EL", name: "Emergency Leave", is_paid: true, default_days: 3, monthly_credit: 0 },
+	{ code: "OT", name: "Other", is_paid: false, default_days: 0, monthly_credit: 0 },
 ];
 
 export const HR_ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "HR_EXECUTIVE", "CEO"];
 export const HR_MANAGER_ROLES = [...HR_ADMIN_ROLES, "MANAGER", "OPERATIONS_MANAGER"];
 
-/** Final HR approval (leave, corrections) — HR Executive + Super Admin only. */
-export const HR_LEAVE_APPROVER_ROLES = ["SUPER_ADMIN", "HR_EXECUTIVE"];
+/** Final leave / correction approval — Super Admin, Admin, HR, CEO. */
+export const HR_LEAVE_APPROVER_ROLES = ["SUPER_ADMIN", "ADMIN", "HR_EXECUTIVE", "CEO"];
 
 /** Team-lead first approval (managers only — not CEO/Admin). */
 export const HR_TEAM_LEAD_ROLES = ["MANAGER", "OPERATIONS_MANAGER"];
