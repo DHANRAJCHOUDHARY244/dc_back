@@ -14,6 +14,7 @@ export type InstallationRescheduledEmailData = {
 	installerPhone: string;
 	saaNumber: string;
 	electricalLicence: string;
+	quoteViewUrl?: string;
 };
 
 export function installationRescheduledTemplate(
@@ -93,6 +94,15 @@ export function installationRescheduledTemplate(
                 Thank you for your patience and understanding.<br/>
                 We appreciate your continued trust in <strong>${companyName}</strong> and look forward to completing your installation.
               </p>
+              ${
+								data.quoteViewUrl
+									? `<div style="text-align:center;margin:24px 0 0;">
+                <a href="${data.quoteViewUrl}" target="_blank" style="display:inline-block;background:#1d4ed8;color:#ffffff;font-size:15px;font-weight:700;padding:12px 24px;border-radius:8px;text-decoration:none;">
+                  View your quote &amp; updated schedule
+                </a>
+              </div>`
+									: ""
+							}
               <p style="margin:20px 0 0;font-size:15px;">
                 Kind Regards,<br/>
                 <strong>${companyName} Team</strong>

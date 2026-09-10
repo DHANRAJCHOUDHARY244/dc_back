@@ -24,6 +24,8 @@ export type CompanyConfigSnapshot = {
   invoiceLogoUrl: string;
   companySignatureUrl: string;
   emailLogoUrl: string;
+  directorName: string;
+  directorTitle: string;
   referFriendEarnBonusPageUrl: string;
   contactUsPageUrl: string;
   googleMapsApiKey: string;
@@ -63,6 +65,8 @@ export function mapSettingsToCompanyConfig(settings: any): CompanyConfigSnapshot
     invoiceLogoUrl: settings?.invoice_logo_url || "",
     companySignatureUrl: settings?.company_signature_url || "",
     emailLogoUrl: settings?.email_logo_url || "",
+    directorName: settings?.director_name || "",
+    directorTitle: settings?.director_title || "Director",
     referFriendEarnBonusPageUrl: settings?.refer_friend_url || "",
     contactUsPageUrl: settings?.contact_us_url || "",
     googleMapsApiKey: settings?.google_maps_api_key || "",
@@ -141,6 +145,10 @@ export function pickPublicCompanyConfig(settings: any) {
     invoice_logo_url: cfg.invoiceLogoUrl,
     company_signature_url: cfg.companySignatureUrl,
     email_logo_url: cfg.emailLogoUrl,
+    director_name: cfg.directorName,
+    director_title: cfg.directorTitle,
+    directorName: cfg.directorName,
+    directorTitle: cfg.directorTitle,
     website: cfg.website,
     website_display: cfg.websiteDisplay,
     refer_friend_url: cfg.referFriendEarnBonusPageUrl,

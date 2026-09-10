@@ -13,6 +13,8 @@ export type StockDeliveryEmailData = {
 	driverPhone: string;
 	vehicleNumber: string;
 	trackingNumber: string;
+	/** Customer quote / form link so details stay attached to their document. */
+	quoteViewUrl?: string;
 };
 
 /**
@@ -116,6 +118,15 @@ export function stockDeliveryScheduledTemplate(
               <p style="margin:24px 0 8px;font-size:14px;line-height:1.6;color:#334155;">
                 If you have any questions regarding your delivery, please contact us.
               </p>
+              ${
+								data.quoteViewUrl
+									? `<div style="text-align:center;margin:24px 0;">
+                <a href="${data.quoteViewUrl}" target="_blank" style="display:inline-block;background:#0f766e;color:#ffffff;font-size:15px;font-weight:700;padding:12px 24px;border-radius:8px;text-decoration:none;">
+                  View your quote &amp; delivery details
+                </a>
+              </div>`
+									: ""
+							}
               <p style="margin:0;font-size:14px;line-height:1.7;color:#0f172a;">
                 ${phone ? `<strong>Customer Support:</strong> ${phone}<br/>` : ""}
                 ${email ? `<strong>Email:</strong> <a href="mailto:${email}" style="color:#0f766e;text-decoration:none;">${email}</a><br/>` : ""}

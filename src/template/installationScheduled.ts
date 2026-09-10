@@ -19,6 +19,7 @@ export type InstallationScheduledEmailData = {
 	panels: string;
 	battery: string;
 	evCharger: string;
+	quoteViewUrl?: string;
 };
 
 export function installationScheduledTemplate(
@@ -103,6 +104,15 @@ export function installationScheduledTemplate(
               <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#334155;">
                 If you need to change your installation appointment, please contact us at least <strong>24 hours</strong> before your scheduled date.
               </p>
+              ${
+								data.quoteViewUrl
+									? `<div style="text-align:center;margin:24px 0;">
+                <a href="${data.quoteViewUrl}" target="_blank" style="display:inline-block;background:#1d4ed8;color:#ffffff;font-size:15px;font-weight:700;padding:12px 24px;border-radius:8px;text-decoration:none;">
+                  View your quote &amp; installation details
+                </a>
+              </div>`
+									: ""
+							}
               <p style="margin:0;font-size:14px;line-height:1.7;color:#0f172a;">
                 ${phone ? `<strong>Phone:</strong> ${phone}<br/>` : ""}
                 ${email ? `<strong>Email:</strong> <a href="mailto:${email}" style="color:#1d4ed8;text-decoration:none;">${email}</a>` : ""}

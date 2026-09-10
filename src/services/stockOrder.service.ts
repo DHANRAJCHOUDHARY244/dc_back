@@ -118,6 +118,8 @@ class StockOrderService {
       }
 
       const cfg = await getCompanyConfig();
+      const quoteId = quote?.id || order?.quote_id;
+      const bypass = quote?.bypass_token;
       const html = stockDeliveryScheduledTemplate(
         {
           customerName,
@@ -131,6 +133,11 @@ class StockOrderService {
           driverPhone: order.driver_mob || "—",
           vehicleNumber: order.driver_vehicle_no || "—",
           trackingNumber: order.tracking_number || "—",
+          ...(quoteId && bypass
+            ? {
+                quoteViewUrl: `${FRONT}/#/quote/customer-view/${quoteId}/${bypass}`,
+              }
+            : {}),
         },
         cfg,
       );

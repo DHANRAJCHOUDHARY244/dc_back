@@ -14,6 +14,7 @@ import { UploadedFile } from "express-fileupload";
 import { sendEmail } from "@utils/email";
 import { salarySlipEmailTemplate } from "@template/eventTemplate";
 import { CreateSalaryBody } from "@constants/salary.constants";
+import { getCompanyConfig } from "@services/crmSettings.service";
 
 class SalaryController {
   async saveBankDetails(req: AuthenticatedRequest, res: Response) {
@@ -154,10 +155,11 @@ class SalaryController {
           ? bcc.split(",").map((e) => e.trim())
           : [];
 
+      const company = await getCompanyConfig();
       await sendEmail(
         email,
         `Salary Slip – ${salaryMonth}`,
-        salarySlipEmailTemplate(employee_name, salaryMonth),
+        salarySlipEmailTemplate(employee_name, salaryMonth, company.name),
         ccList,
         bccList,
         [
