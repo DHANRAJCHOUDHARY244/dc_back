@@ -25,6 +25,9 @@ export const COMPANY_CONFIG = {
 	invoiceLogoUrl: "",
 	companySignatureUrl: "",
 	emailLogoUrl: "",
+	/** Authorised signatory on salary slips, letters and contracts. */
+	directorName: "",
+	directorTitle: "Director",
 	referFriendEarnBonusPageUrl: "https://www.dccrm.example.com/refer",
 	contactUsPageUrl: "https://www.dccrm.example.com/contact",
 } as const;
@@ -69,6 +72,8 @@ export function getDefaultCrmSettings() {
 		invoice_logo_url: COMPANY_CONFIG.invoiceLogoUrl,
 		company_signature_url: COMPANY_CONFIG.companySignatureUrl,
 		email_logo_url: COMPANY_CONFIG.emailLogoUrl,
+		director_name: COMPANY_CONFIG.directorName,
+		director_title: COMPANY_CONFIG.directorTitle,
 		website: COMPANY_CONFIG.website,
 		website_display: COMPANY_CONFIG.websiteDisplay,
 		refer_friend_url: COMPANY_CONFIG.referFriendEarnBonusPageUrl,

@@ -143,6 +143,8 @@ class CrmSettingsController {
         "invoice_logo_url",
         "company_signature_url",
         "email_logo_url",
+        "director_name",
+        "director_title",
         "website",
         "website_display",
         "refer_friend_url",

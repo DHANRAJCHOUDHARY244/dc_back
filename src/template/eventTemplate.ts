@@ -163,32 +163,34 @@ export const otpRegSignEvents =(client_name:any,id:any,type:any,message:string,o
 
 export const salarySlipEmailTemplate = (
   employeeName: string,
-  salaryMonth: string
+  salaryMonth: string,
+  companyName = "HR Payroll Team",
 ) => `
-  <div style="font-family:Arial, sans-serif; line-height:1.6">
-    <h2>Salary Slip – ${salaryMonth}</h2>
+  <div style="font-family:Arial, sans-serif; line-height:1.6; color:#0f172a">
+    <h2 style="color:#0f766e;margin:0 0 12px">Salary Slip – ${salaryMonth}</h2>
 
     <p>Dear <b>${employeeName}</b>,</p>
 
     <p>
-      Please find attached your salary slip for the month of
+      Please find attached your official salary slip for the month of
       <b>${salaryMonth}</b>.
     </p>
 
     <p>
       If you have any questions regarding payroll,
-      please contact the HR department.
+      please contact us.
     </p>
 
     <br/>
 
     <p>
       Regards,<br/>
-      <b>HR Payroll Team</b>
+      <b>${companyName}</b><br/>
+      <span style="color:#64748b;font-size:13px">Payroll</span>
     </p>
 
-    <hr/>
-    <small>
+    <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0"/>
+    <small style="color:#94a3b8">
       This is a system-generated email. Please do not reply.
     </small>
   </div>

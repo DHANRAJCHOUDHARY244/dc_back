@@ -21,6 +21,8 @@ const CrmSettingsSchema = new Schema(
     invoice_logo_url: { type: String, default: COMPANY_CONFIG.invoiceLogoUrl },
     company_signature_url: { type: String, default: COMPANY_CONFIG.companySignatureUrl },
     email_logo_url: { type: String, default: COMPANY_CONFIG.emailLogoUrl },
+    director_name: { type: String, default: COMPANY_CONFIG.directorName },
+    director_title: { type: String, default: COMPANY_CONFIG.directorTitle },
     website: { type: String, default: COMPANY_CONFIG.website },
     website_display: { type: String, default: COMPANY_CONFIG.websiteDisplay },
     refer_friend_url: { type: String, default: COMPANY_CONFIG.referFriendEarnBonusPageUrl },

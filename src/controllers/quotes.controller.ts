@@ -2329,6 +2329,7 @@ class QuotesController {
             driverPhone: stageDetails.driver_phone,
             vehicleNumber: stageDetails.vehicle_number || "—",
             trackingNumber: stageDetails.tracking_number || "—",
+            quoteViewUrl: `${process.env.FRONT_URL}/#/quote/customer-view/${quote.id}/${quote.bypass_token}`,
           },
           cfg,
         );
@@ -2474,8 +2475,8 @@ class QuotesController {
         statusDate: parsedDate,
       });
 
-      const customerEmail = quote.customer?.email;
-      const customerName = quote.name || quote.customer?.name || "Customer";
+      const customerEmail = quote.customer?.email || quote.custEmail;
+      const customerName = quote.name || quote.customer?.name || quote.custName || "Customer";
       const shouldEmail = send_email === true || send_email === "true";
       let emailQueued = false;
 
@@ -2500,6 +2501,7 @@ class QuotesController {
             panels: schedule.panels,
             battery: schedule.battery,
             evCharger: schedule.ev_charger,
+            quoteViewUrl: `${process.env.FRONT_URL}/#/quote/customer-view/${quote.id}/${quote.bypass_token}`,
           },
           cfg,
         );
@@ -2661,8 +2663,8 @@ class QuotesController {
         statusDate: parsedDate,
       });
 
-      const customerEmail = quote.customer?.email;
-      const customerName = quote.name || quote.customer?.name || "Customer";
+      const customerEmail = quote.customer?.email || quote.custEmail;
+      const customerName = quote.name || quote.customer?.name || quote.custName || "Customer";
       const shouldEmail = send_email === true || send_email === "true";
       let emailQueued = false;
 
@@ -2682,6 +2684,7 @@ class QuotesController {
             installerPhone: schedule.installer_phone,
             saaNumber: schedule.saa_number || "—",
             electricalLicence: schedule.electrical_licence || "—",
+            quoteViewUrl: `${process.env.FRONT_URL}/#/quote/customer-view/${quote.id}/${quote.bypass_token}`,
           },
           cfg,
         );
