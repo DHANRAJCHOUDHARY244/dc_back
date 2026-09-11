@@ -5,6 +5,8 @@
  */
 
 import type { CrmMetadataField } from "../types/crmSettings.types";
+import { emptyLetterSignatorySettings } from "./letterSignatories.config";
+import { ensureAddressBook } from "./companyAddresses.config";
 
 export const COMPANY_CONFIG = {
 	name: "DC CRM Pty Ltd",
@@ -28,6 +30,29 @@ export const COMPANY_CONFIG = {
 	/** Authorised signatory on salary slips, letters and contracts. */
 	directorName: "",
 	directorTitle: "Director",
+	/** HR signatory for joining / offer / Letter Studio (falls back to director). */
+	hrName: "",
+	hrTitle: "HR Manager",
+	hrSignatureUrl: "",
+	/** Per-letter overrides (joining / offer / appointment). Empty → fall back to director / HR. */
+	joiningAuthName: "",
+	joiningAuthTitle: "",
+	joiningAuthSignatureUrl: "",
+	joiningHrName: "",
+	joiningHrTitle: "",
+	joiningHrSignatureUrl: "",
+	offerAuthName: "",
+	offerAuthTitle: "",
+	offerAuthSignatureUrl: "",
+	offerHrName: "",
+	offerHrTitle: "",
+	offerHrSignatureUrl: "",
+	appointmentAuthName: "",
+	appointmentAuthTitle: "",
+	appointmentAuthSignatureUrl: "",
+	appointmentHrName: "",
+	appointmentHrTitle: "",
+	appointmentHrSignatureUrl: "",
 	referFriendEarnBonusPageUrl: "https://www.dccrm.example.com/refer",
 	contactUsPageUrl: "https://www.dccrm.example.com/contact",
 } as const;
@@ -55,6 +80,7 @@ export const DEFAULT_CRM_METADATA: CrmMetadataField[] = [
 
 /** Payload used when no `crm_settings` document exists yet. */
 export function getDefaultCrmSettings() {
+	const seeded = ensureAddressBook([], COMPANY_CONFIG.address, "");
 	return {
 		company_name: COMPANY_CONFIG.name,
 		company_name_short: COMPANY_CONFIG.nameShort,
@@ -64,7 +90,13 @@ export function getDefaultCrmSettings() {
 		phone: COMPANY_CONFIG.phoneNumber,
 		email: COMPANY_CONFIG.email,
 		support_email: COMPANY_CONFIG.emailSupport,
-		address: COMPANY_CONFIG.address,
+		address: seeded.addresses[0]?.address || COMPANY_CONFIG.address,
+		company_addresses: seeded.addresses,
+		default_address_id: seeded.defaultAddressId,
+		salary_address_id: seeded.defaultAddressId,
+		salary_name: "",
+		salary_title: "",
+		salary_signature_url: "",
 		logo_url: COMPANY_CONFIG.companyLogoUrl,
 		watermark_logo_url: COMPANY_CONFIG.watermarkLogoUrl,
 		favicon_url: COMPANY_CONFIG.faviconUrl,
@@ -74,6 +106,10 @@ export function getDefaultCrmSettings() {
 		email_logo_url: COMPANY_CONFIG.emailLogoUrl,
 		director_name: COMPANY_CONFIG.directorName,
 		director_title: COMPANY_CONFIG.directorTitle,
+		hr_name: COMPANY_CONFIG.hrName,
+		hr_title: COMPANY_CONFIG.hrTitle,
+		hr_signature_url: COMPANY_CONFIG.hrSignatureUrl,
+		...emptyLetterSignatorySettings(),
 		website: COMPANY_CONFIG.website,
 		website_display: COMPANY_CONFIG.websiteDisplay,
 		refer_friend_url: COMPANY_CONFIG.referFriendEarnBonusPageUrl,

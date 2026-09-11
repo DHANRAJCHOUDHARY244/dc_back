@@ -11,6 +11,11 @@ import {
   getOrCreateSettings,
   pickPublicCompanyConfig,
 } from "@services/crmSettings.service";
+import {
+  ensureAddressBook,
+  normalizeCompanyAddresses,
+  resolveAddressText,
+} from "@config/companyAddresses.config";
 import { getRelativeFilePath, uploadFiles } from "@utils/fileUpload.helper";
 
 const BRANDING_IMAGE_TYPES = [
@@ -30,6 +35,14 @@ const ASSET_FIELDS = {
   quote_logo: "quote_logo_url",
   invoice_logo: "invoice_logo_url",
   signature: "company_signature_url",
+  hr_signature: "hr_signature_url",
+  salary_signature: "salary_signature_url",
+  joining_auth_signature: "joining_auth_signature_url",
+  joining_hr_signature: "joining_hr_signature_url",
+  offer_auth_signature: "offer_auth_signature_url",
+  offer_hr_signature: "offer_hr_signature_url",
+  appointment_auth_signature: "appointment_auth_signature_url",
+  appointment_hr_signature: "appointment_hr_signature_url",
   email_logo: "email_logo_url",
 } as const;
 
@@ -81,7 +94,7 @@ class CrmSettingsController {
         return ReE(
           res,
           BAD_REQUEST_CODE,
-          "type must be logo, favicon, watermark, quote_logo, invoice_logo, signature, or email_logo",
+          "type must be a known branding asset (logo, signature, joining_auth_signature, offer_hr_signature, …)",
         );
       }
 
@@ -136,6 +149,11 @@ class CrmSettingsController {
         "email",
         "support_email",
         "address",
+        "default_address_id",
+        "salary_address_id",
+        "salary_name",
+        "salary_title",
+        "salary_signature_url",
         "logo_url",
         "favicon_url",
         "watermark_logo_url",
@@ -145,6 +163,27 @@ class CrmSettingsController {
         "email_logo_url",
         "director_name",
         "director_title",
+        "hr_name",
+        "hr_title",
+        "hr_signature_url",
+        "joining_auth_name",
+        "joining_auth_title",
+        "joining_auth_signature_url",
+        "joining_hr_name",
+        "joining_hr_title",
+        "joining_hr_signature_url",
+        "offer_auth_name",
+        "offer_auth_title",
+        "offer_auth_signature_url",
+        "offer_hr_name",
+        "offer_hr_title",
+        "offer_hr_signature_url",
+        "appointment_auth_name",
+        "appointment_auth_title",
+        "appointment_auth_signature_url",
+        "appointment_hr_name",
+        "appointment_hr_title",
+        "appointment_hr_signature_url",
         "website",
         "website_display",
         "refer_friend_url",
@@ -162,6 +201,39 @@ class CrmSettingsController {
         const normalized = normalizeMetadataFields(body.metadata_fields);
         if (!normalized) return ReE(res, BAD_REQUEST_CODE, "metadata_fields must be an array");
         updates.metadata_fields = normalized.sort((a, b) => a.sort_order - b.sort_order);
+      }
+
+      if (body.company_addresses !== undefined) {
+        const list = normalizeCompanyAddresses(body.company_addresses);
+        const book = ensureAddressBook(
+          list,
+          String(body.address ?? settings.address ?? ""),
+          String(body.default_address_id ?? settings.default_address_id ?? ""),
+        );
+        updates.company_addresses = book.addresses;
+        updates.default_address_id = book.defaultAddressId;
+        updates.address = resolveAddressText(book.addresses, book.defaultAddressId, "");
+        const salaryId = String(body.salary_address_id ?? settings.salary_address_id ?? "").trim();
+        updates.salary_address_id =
+          salaryId && book.addresses.some((a) => a.id === salaryId)
+            ? salaryId
+            : book.defaultAddressId;
+      } else if (body.default_address_id !== undefined || body.salary_address_id !== undefined) {
+        const book = ensureAddressBook(
+          normalizeCompanyAddresses(settings.company_addresses),
+          String(settings.address || ""),
+          String(body.default_address_id ?? settings.default_address_id ?? ""),
+        );
+        updates.company_addresses = book.addresses;
+        updates.default_address_id = book.defaultAddressId;
+        updates.address = resolveAddressText(book.addresses, book.defaultAddressId, settings.address || "");
+        if (body.salary_address_id !== undefined) {
+          const salaryId = String(body.salary_address_id || "").trim();
+          updates.salary_address_id =
+            salaryId && book.addresses.some((a) => a.id === salaryId)
+              ? salaryId
+              : book.defaultAddressId;
+        }
       }
 
       const updated = await crmSettingsRepository.updateById(settings.id, { $set: updates });

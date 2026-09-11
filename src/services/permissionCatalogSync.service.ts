@@ -537,6 +537,7 @@ export async function ensureDocumentLetterRoleRoutes(): Promise<{ updated: numbe
     "offer-letter",
     "appointment-letter",
     "price-agreement",
+    "leave-attendance-policy",
     "user-doc-list",
     "user-doc-list/:userId",
   ];
@@ -545,7 +546,12 @@ export async function ensureDocumentLetterRoleRoutes(): Promise<{ updated: numbe
       deleted_at: null,
       $or: [
         { route: { $in: letterRoutes } },
-        { component: { $regex: "/documents/(offerLetter|JoiningLetter|appointmentLetter|letterPaid|userDocuments|priceAgreement)/" } },
+        {
+          component: {
+            $regex:
+              "/documents/(offerLetter|JoiningLetter|appointmentLetter|letterPaid|userDocuments|priceAgreement|leaveAttendancePolicy)/",
+          },
+        },
       ],
     },
     { lean: true },

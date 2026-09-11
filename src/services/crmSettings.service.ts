@@ -1,4 +1,10 @@
 import { getDefaultCrmSettings } from "@config/company.config";
+import {
+  ensureAddressBook,
+  normalizeCompanyAddresses,
+  resolveAddressText,
+  type CompanyAddressEntry,
+} from "@config/companyAddresses.config";
 import { crmSettingsRepository } from "@repositories";
 import { cacheDel, cacheGetJson, cacheSetJson } from "@services/redisCache.service";
 
@@ -14,6 +20,13 @@ export type CompanyConfigSnapshot = {
   website: string;
   websiteDisplay: string;
   address: string;
+  companyAddresses: CompanyAddressEntry[];
+  defaultAddressId: string;
+  salaryAddressId: string;
+  salaryAddress: string;
+  salaryName: string;
+  salaryTitle: string;
+  salarySignatureUrl: string;
   phoneNumber: string;
   mobile: string;
   phone: string;
@@ -26,6 +39,27 @@ export type CompanyConfigSnapshot = {
   emailLogoUrl: string;
   directorName: string;
   directorTitle: string;
+  hrName: string;
+  hrTitle: string;
+  hrSignatureUrl: string;
+  joiningAuthName: string;
+  joiningAuthTitle: string;
+  joiningAuthSignatureUrl: string;
+  joiningHrName: string;
+  joiningHrTitle: string;
+  joiningHrSignatureUrl: string;
+  offerAuthName: string;
+  offerAuthTitle: string;
+  offerAuthSignatureUrl: string;
+  offerHrName: string;
+  offerHrTitle: string;
+  offerHrSignatureUrl: string;
+  appointmentAuthName: string;
+  appointmentAuthTitle: string;
+  appointmentAuthSignatureUrl: string;
+  appointmentHrName: string;
+  appointmentHrTitle: string;
+  appointmentHrSignatureUrl: string;
   referFriendEarnBonusPageUrl: string;
   contactUsPageUrl: string;
   googleMapsApiKey: string;
@@ -44,6 +78,19 @@ export async function clearCrmSettingsCache() {
 
 export function mapSettingsToCompanyConfig(settings: any): CompanyConfigSnapshot {
   const mobile = settings?.mobile || settings?.phone || "";
+  const book = ensureAddressBook(
+    normalizeCompanyAddresses(settings?.company_addresses),
+    String(settings?.address || ""),
+    String(settings?.default_address_id || ""),
+  );
+  const salaryAddressId =
+    String(settings?.salary_address_id || "").trim() &&
+    book.addresses.some((a) => a.id === settings.salary_address_id)
+      ? String(settings.salary_address_id)
+      : book.defaultAddressId;
+  const address = resolveAddressText(book.addresses, book.defaultAddressId, settings?.address || "");
+  const salaryAddress = resolveAddressText(book.addresses, salaryAddressId, address);
+
   return {
     name: settings?.company_name || "DC CRM Pty Ltd",
     nameShort: settings?.company_name_short || settings?.company_name || "DC CRM",
@@ -54,7 +101,14 @@ export function mapSettingsToCompanyConfig(settings: any): CompanyConfigSnapshot
     emailSupport: settings?.support_email || settings?.email || "",
     website: settings?.website || "",
     websiteDisplay: settings?.website_display || settings?.website || "",
-    address: settings?.address || "",
+    address,
+    companyAddresses: book.addresses,
+    defaultAddressId: book.defaultAddressId,
+    salaryAddressId,
+    salaryAddress,
+    salaryName: settings?.salary_name || "",
+    salaryTitle: settings?.salary_title || "",
+    salarySignatureUrl: settings?.salary_signature_url || "",
     phoneNumber: mobile,
     mobile: settings?.mobile || "",
     phone: settings?.phone || "",
@@ -67,6 +121,27 @@ export function mapSettingsToCompanyConfig(settings: any): CompanyConfigSnapshot
     emailLogoUrl: settings?.email_logo_url || "",
     directorName: settings?.director_name || "",
     directorTitle: settings?.director_title || "Director",
+    hrName: settings?.hr_name || "",
+    hrTitle: settings?.hr_title || "HR Manager",
+    hrSignatureUrl: settings?.hr_signature_url || "",
+    joiningAuthName: settings?.joining_auth_name || "",
+    joiningAuthTitle: settings?.joining_auth_title || "",
+    joiningAuthSignatureUrl: settings?.joining_auth_signature_url || "",
+    joiningHrName: settings?.joining_hr_name || "",
+    joiningHrTitle: settings?.joining_hr_title || "",
+    joiningHrSignatureUrl: settings?.joining_hr_signature_url || "",
+    offerAuthName: settings?.offer_auth_name || "",
+    offerAuthTitle: settings?.offer_auth_title || "",
+    offerAuthSignatureUrl: settings?.offer_auth_signature_url || "",
+    offerHrName: settings?.offer_hr_name || "",
+    offerHrTitle: settings?.offer_hr_title || "",
+    offerHrSignatureUrl: settings?.offer_hr_signature_url || "",
+    appointmentAuthName: settings?.appointment_auth_name || "",
+    appointmentAuthTitle: settings?.appointment_auth_title || "",
+    appointmentAuthSignatureUrl: settings?.appointment_auth_signature_url || "",
+    appointmentHrName: settings?.appointment_hr_name || "",
+    appointmentHrTitle: settings?.appointment_hr_title || "",
+    appointmentHrSignatureUrl: settings?.appointment_hr_signature_url || "",
     referFriendEarnBonusPageUrl: settings?.refer_friend_url || "",
     contactUsPageUrl: settings?.contact_us_url || "",
     googleMapsApiKey: settings?.google_maps_api_key || "",
@@ -138,6 +213,19 @@ export function pickPublicCompanyConfig(settings: any) {
     email: cfg.email,
     support_email: cfg.emailSupport,
     address: cfg.address,
+    company_addresses: cfg.companyAddresses,
+    default_address_id: cfg.defaultAddressId,
+    salary_address_id: cfg.salaryAddressId,
+    companyAddresses: cfg.companyAddresses,
+    defaultAddressId: cfg.defaultAddressId,
+    salaryAddressId: cfg.salaryAddressId,
+    salaryAddress: cfg.salaryAddress,
+    salary_name: cfg.salaryName,
+    salary_title: cfg.salaryTitle,
+    salary_signature_url: cfg.salarySignatureUrl,
+    salaryName: cfg.salaryName,
+    salaryTitle: cfg.salaryTitle,
+    salarySignatureUrl: cfg.salarySignatureUrl,
     logo_url: cfg.companyLogoUrl,
     favicon_url: cfg.faviconUrl,
     watermark_logo_url: cfg.watermarkLogoUrl,
@@ -149,6 +237,48 @@ export function pickPublicCompanyConfig(settings: any) {
     director_title: cfg.directorTitle,
     directorName: cfg.directorName,
     directorTitle: cfg.directorTitle,
+    hr_name: cfg.hrName,
+    hr_title: cfg.hrTitle,
+    hr_signature_url: cfg.hrSignatureUrl,
+    hrName: cfg.hrName,
+    hrTitle: cfg.hrTitle,
+    hrSignatureUrl: cfg.hrSignatureUrl,
+    joining_auth_name: cfg.joiningAuthName,
+    joining_auth_title: cfg.joiningAuthTitle,
+    joining_auth_signature_url: cfg.joiningAuthSignatureUrl,
+    joining_hr_name: cfg.joiningHrName,
+    joining_hr_title: cfg.joiningHrTitle,
+    joining_hr_signature_url: cfg.joiningHrSignatureUrl,
+    offer_auth_name: cfg.offerAuthName,
+    offer_auth_title: cfg.offerAuthTitle,
+    offer_auth_signature_url: cfg.offerAuthSignatureUrl,
+    offer_hr_name: cfg.offerHrName,
+    offer_hr_title: cfg.offerHrTitle,
+    offer_hr_signature_url: cfg.offerHrSignatureUrl,
+    appointment_auth_name: cfg.appointmentAuthName,
+    appointment_auth_title: cfg.appointmentAuthTitle,
+    appointment_auth_signature_url: cfg.appointmentAuthSignatureUrl,
+    appointment_hr_name: cfg.appointmentHrName,
+    appointment_hr_title: cfg.appointmentHrTitle,
+    appointment_hr_signature_url: cfg.appointmentHrSignatureUrl,
+    joiningAuthName: cfg.joiningAuthName,
+    joiningAuthTitle: cfg.joiningAuthTitle,
+    joiningAuthSignatureUrl: cfg.joiningAuthSignatureUrl,
+    joiningHrName: cfg.joiningHrName,
+    joiningHrTitle: cfg.joiningHrTitle,
+    joiningHrSignatureUrl: cfg.joiningHrSignatureUrl,
+    offerAuthName: cfg.offerAuthName,
+    offerAuthTitle: cfg.offerAuthTitle,
+    offerAuthSignatureUrl: cfg.offerAuthSignatureUrl,
+    offerHrName: cfg.offerHrName,
+    offerHrTitle: cfg.offerHrTitle,
+    offerHrSignatureUrl: cfg.offerHrSignatureUrl,
+    appointmentAuthName: cfg.appointmentAuthName,
+    appointmentAuthTitle: cfg.appointmentAuthTitle,
+    appointmentAuthSignatureUrl: cfg.appointmentAuthSignatureUrl,
+    appointmentHrName: cfg.appointmentHrName,
+    appointmentHrTitle: cfg.appointmentHrTitle,
+    appointmentHrSignatureUrl: cfg.appointmentHrSignatureUrl,
     website: cfg.website,
     website_display: cfg.websiteDisplay,
     refer_friend_url: cfg.referFriendEarnBonusPageUrl,
