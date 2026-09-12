@@ -151,6 +151,10 @@ class CrmSettingsController {
         "address",
         "default_address_id",
         "salary_address_id",
+        "letter_address_id",
+        "joining_address_id",
+        "offer_address_id",
+        "appointment_address_id",
         "salary_name",
         "salary_title",
         "salary_signature_url",
@@ -213,12 +217,25 @@ class CrmSettingsController {
         updates.company_addresses = book.addresses;
         updates.default_address_id = book.defaultAddressId;
         updates.address = resolveAddressText(book.addresses, book.defaultAddressId, "");
-        const salaryId = String(body.salary_address_id ?? settings.salary_address_id ?? "").trim();
-        updates.salary_address_id =
-          salaryId && book.addresses.some((a) => a.id === salaryId)
-            ? salaryId
-            : book.defaultAddressId;
-      } else if (body.default_address_id !== undefined || body.salary_address_id !== undefined) {
+        const pickId = (raw: unknown) => {
+          const id = String(raw || "").trim();
+          return id && book.addresses.some((a) => a.id === id) ? id : book.defaultAddressId;
+        };
+        updates.salary_address_id = pickId(body.salary_address_id ?? settings.salary_address_id);
+        updates.letter_address_id = pickId(body.letter_address_id ?? settings.letter_address_id);
+        updates.joining_address_id = pickId(body.joining_address_id ?? settings.joining_address_id ?? settings.letter_address_id);
+        updates.offer_address_id = pickId(body.offer_address_id ?? settings.offer_address_id ?? settings.letter_address_id);
+        updates.appointment_address_id = pickId(
+          body.appointment_address_id ?? settings.appointment_address_id ?? settings.letter_address_id,
+        );
+      } else if (
+        body.default_address_id !== undefined ||
+        body.salary_address_id !== undefined ||
+        body.letter_address_id !== undefined ||
+        body.joining_address_id !== undefined ||
+        body.offer_address_id !== undefined ||
+        body.appointment_address_id !== undefined
+      ) {
         const book = ensureAddressBook(
           normalizeCompanyAddresses(settings.company_addresses),
           String(settings.address || ""),
@@ -227,12 +244,16 @@ class CrmSettingsController {
         updates.company_addresses = book.addresses;
         updates.default_address_id = book.defaultAddressId;
         updates.address = resolveAddressText(book.addresses, book.defaultAddressId, settings.address || "");
-        if (body.salary_address_id !== undefined) {
-          const salaryId = String(body.salary_address_id || "").trim();
-          updates.salary_address_id =
-            salaryId && book.addresses.some((a) => a.id === salaryId)
-              ? salaryId
-              : book.defaultAddressId;
+        const pickId = (raw: unknown) => {
+          const id = String(raw || "").trim();
+          return id && book.addresses.some((a) => a.id === id) ? id : book.defaultAddressId;
+        };
+        if (body.salary_address_id !== undefined) updates.salary_address_id = pickId(body.salary_address_id);
+        if (body.letter_address_id !== undefined) updates.letter_address_id = pickId(body.letter_address_id);
+        if (body.joining_address_id !== undefined) updates.joining_address_id = pickId(body.joining_address_id);
+        if (body.offer_address_id !== undefined) updates.offer_address_id = pickId(body.offer_address_id);
+        if (body.appointment_address_id !== undefined) {
+          updates.appointment_address_id = pickId(body.appointment_address_id);
         }
       }
 

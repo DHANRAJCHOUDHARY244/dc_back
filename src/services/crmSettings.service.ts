@@ -24,6 +24,14 @@ export type CompanyConfigSnapshot = {
   defaultAddressId: string;
   salaryAddressId: string;
   salaryAddress: string;
+  letterAddressId: string;
+  letterAddress: string;
+  joiningAddressId: string;
+  joiningAddress: string;
+  offerAddressId: string;
+  offerAddress: string;
+  appointmentAddressId: string;
+  appointmentAddress: string;
   salaryName: string;
   salaryTitle: string;
   salarySignatureUrl: string;
@@ -83,13 +91,21 @@ export function mapSettingsToCompanyConfig(settings: any): CompanyConfigSnapshot
     String(settings?.address || ""),
     String(settings?.default_address_id || ""),
   );
-  const salaryAddressId =
-    String(settings?.salary_address_id || "").trim() &&
-    book.addresses.some((a) => a.id === settings.salary_address_id)
-      ? String(settings.salary_address_id)
-      : book.defaultAddressId;
+  const pickAddressId = (raw: unknown) => {
+    const id = String(raw || "").trim();
+    return id && book.addresses.some((a) => a.id === id) ? id : book.defaultAddressId;
+  };
+  const salaryAddressId = pickAddressId(settings?.salary_address_id);
+  const letterAddressId = pickAddressId(settings?.letter_address_id);
+  const joiningAddressId = pickAddressId(settings?.joining_address_id || settings?.letter_address_id);
+  const offerAddressId = pickAddressId(settings?.offer_address_id || settings?.letter_address_id);
+  const appointmentAddressId = pickAddressId(settings?.appointment_address_id || settings?.letter_address_id);
   const address = resolveAddressText(book.addresses, book.defaultAddressId, settings?.address || "");
   const salaryAddress = resolveAddressText(book.addresses, salaryAddressId, address);
+  const letterAddress = resolveAddressText(book.addresses, letterAddressId, address);
+  const joiningAddress = resolveAddressText(book.addresses, joiningAddressId, letterAddress);
+  const offerAddress = resolveAddressText(book.addresses, offerAddressId, letterAddress);
+  const appointmentAddress = resolveAddressText(book.addresses, appointmentAddressId, letterAddress);
 
   return {
     name: settings?.company_name || "DC CRM Pty Ltd",
@@ -106,6 +122,14 @@ export function mapSettingsToCompanyConfig(settings: any): CompanyConfigSnapshot
     defaultAddressId: book.defaultAddressId,
     salaryAddressId,
     salaryAddress,
+    letterAddressId,
+    letterAddress,
+    joiningAddressId,
+    joiningAddress,
+    offerAddressId,
+    offerAddress,
+    appointmentAddressId,
+    appointmentAddress,
     salaryName: settings?.salary_name || "",
     salaryTitle: settings?.salary_title || "",
     salarySignatureUrl: settings?.salary_signature_url || "",
@@ -216,10 +240,22 @@ export function pickPublicCompanyConfig(settings: any) {
     company_addresses: cfg.companyAddresses,
     default_address_id: cfg.defaultAddressId,
     salary_address_id: cfg.salaryAddressId,
+    letter_address_id: cfg.letterAddressId,
+    joining_address_id: cfg.joiningAddressId,
+    offer_address_id: cfg.offerAddressId,
+    appointment_address_id: cfg.appointmentAddressId,
     companyAddresses: cfg.companyAddresses,
     defaultAddressId: cfg.defaultAddressId,
     salaryAddressId: cfg.salaryAddressId,
     salaryAddress: cfg.salaryAddress,
+    letterAddressId: cfg.letterAddressId,
+    letterAddress: cfg.letterAddress,
+    joiningAddressId: cfg.joiningAddressId,
+    joiningAddress: cfg.joiningAddress,
+    offerAddressId: cfg.offerAddressId,
+    offerAddress: cfg.offerAddress,
+    appointmentAddressId: cfg.appointmentAddressId,
+    appointmentAddress: cfg.appointmentAddress,
     salary_name: cfg.salaryName,
     salary_title: cfg.salaryTitle,
     salary_signature_url: cfg.salarySignatureUrl,
